@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screenshot</title>
+    <style>
+      /* 透明窗口要求 html/body 全部透明，否则 Windows 上 wry 会渲染白底 */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: crosshair;
+      }
+      #screenshot-root {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+      }
+      #screenshot-root img {
+        position: absolute;
+        pointer-events: none;
+        -webkit-user-drag: none;
+      }
+      #overlay-canvas {
+        position: absolute;
+        inset: 0;
+        cursor: crosshair;
+      }
+      /* UI 层默认不拦截鼠标，具体控件自行开启 pointer-events */
+      #ui-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .ui-interactive {
+        pointer-events: auto;
+      }
+
+      /* ============ 浮动工具栏 ============ */
+      .toolbar {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px;
+        background: #fff;
+        border: 1px solid #d0d0d0;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      .toolbar button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        cursor: pointer;
+        color: #333;
+      }
+      .toolbar button:hover {
+        background: #f0f0f0;
+      }
+      .toolbar button.active {
+        background: #e3f0ff;
+        color: #0b6bd3;
+      }
+      .toolbar button svg {
+        width: 20px;
+        height: 20px;
+      }
+      .toolbar .divider {
+        width: 1px;
+        height: 20px;
+        margin: 0 4px;
+        background: #e0e0e0;
+      }
+      .toolbar .swatch {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        box-sizing: border-box;
+      }
+      .toolbar .width-dot {
+        border-radius: 50%;
+        background: #333;
+      }
+
+      /* ============ 弹出面板 ============ */
+      .popup {
+        position: absolute;
+        background: #fff;
+        border: 1px solid #d0d0d0;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        padding: 8px;
+        display: none;
+      }
+      .popup.open {
+        display: block;
+      }
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(5, 22px);
+        gap: 6px;
+      }
+      .palette .cell {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        border: 1px solid rgba(0, 0, 0, 0.18);
+        cursor: pointer;
+        box-sizing: border-box;
+      }
+      .palette .cell.sel {
+        outline: 2px solid #0b6bd3;
+        outline-offset: 1px;
+      }
+      .palette .native {
+        grid-column: 1 / -1;
+        width: 100%;
+        height: 24px;
+        border: none;
+        padding: 0;
+        background: none;
+        cursor: pointer;
+      }
+      .width-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .width-list .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .width-list .row:hover {
+        background: #f0f0f0;
+      }
+      .width-list .row .bar {
+        height: 4px;
+        border-radius: 2px;
+        background: #333;
+      }
+
+      /* ============ 文本输入 ============ */
+      #text-input {
+        position: absolute;
+        min-width: 60px;
+        min-height: 28px;
+        background: transparent;
+        border: 1px dashed #0b6bd3;
+        outline: none;
+        resize: none;
+        overflow: hidden;
+        color: inherit;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        line-height: 1.2;
+        padding: 0;
+        caret-color: #0b6bd3;
+        display: none;
+        pointer-events: auto;
+      }
+      #text-input.editing {
+        display: block;
+      }
+
+      /* ============ 帮助框 ============ */
+      #help-box {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        white-space: pre;
+      }
+
+      /* ============ OCR 结果面板 ============ */
+      #ocr-panel {
+        position: absolute;
+        flex-direction: column;
+        background: #fff;
+        border: 1px solid #d0d0d0;
+        border-radius: 8px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+        font-family: "Segoe UI", system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #ocr-panel .ocr-header {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
+        background: #fafafa;
+      }
+      #ocr-panel .ocr-title {
+        flex: 1;
+        font-size: 12px;
+        font-weight: 600;
+        color: #555;
+        padding-left: 2px;
+      }
+      #ocr-panel .ocr-header button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        cursor: pointer;
+        color: #333;
+      }
+      #ocr-panel .ocr-header button:hover {
+        background: #ececec;
+      }
+      #ocr-panel .ocr-header button svg {
+        width: 17px;
+        height: 17px;
+      }
+      #ocr-panel .ocr-body {
+        flex: 1;
+        overflow: auto;
+        padding: 10px 12px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #222;
+        white-space: pre-wrap;
+        word-break: break-all;
+        user-select: text;
+        -webkit-user-select: text;
+        cursor: text;
+      }
+      #ocr-panel .ocr-body.error {
+        color: #c00;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="screenshot-root">
+      <canvas id="overlay-canvas"></canvas>
+      <div id="ui-layer"></div>
+    </div>
+    <script type="module" src="/src/screenshot.ts"></script>
+  </body>
+</html>

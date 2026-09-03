@@ -1,0 +1,70 @@
+[package]
+name = "cloverviewer-tauri"
+version = "0.1.0"
+description = "CloverViewer 的 Tauri 2 重实现（Rust 后端 + Web 前端）"
+edition = "2021"
+
+[lib]
+name = "cloverviewer_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+dirs = "6"
+sys-locale = "0.3"
+rayon = "1"
+image = { version = "0.25", features = [
+    "png", "jpeg", "gif", "bmp", "webp", "tiff",
+], default-features = false }
+lru = "0.18"
+kamadak-exif = "0.6"
+xcap = "0.9"
+arboard = "3"
+imageproc = "0.27"
+pollster = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+# MCP server（Phase 3）：rmcp 工具服务器 + stdio/HTTP 传输 + axum HTTP
+rmcp = { version = "1.7", features = ["server", "transport-io", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+axum = "0.8"
+single-instance = "0.3"
+
+# Windows UWP OCR（Phase 3），与 xcap 已在依赖树中的 windows 0.62 统一
+# Storage_Streams：CryptographicBuffer::CreateFromByteArray / SoftwareBitmap::CreateCopyFromBuffer 依赖
+# Win32_System_Console + Win32_UI_WindowsAndMessaging：MCP stdio 模式下隐藏控制台窗口
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Media_Ocr",
+    "Graphics_Imaging",
+    "Globalization",
+    "Foundation",
+    "Security_Cryptography",
+    "Storage_Streams",
+    "Win32_System_Console",
+    "Win32_UI_WindowsAndMessaging",
+] }
+# 开机自启：写 HKCU\...\Run 注册表
+winreg = "0.56"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+
+# rustc 1.97.1 对 Tauri crate 的增量编译会偶发 ICE（rmeta encoder panic），
+# 关闭增量编译换取稳定（本 crate 单次全量编译约 13s，可接受）
+[profile.dev]
+incremental = false

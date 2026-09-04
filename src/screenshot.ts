@@ -339,9 +339,9 @@ function positionOcrPanel() {
   const r = root.getBoundingClientRect();
   const kx = r.width / totalW, ky = r.height / totalH;
   const pw = 320, ph = 220; // 逻辑像素
-  let px = (selection.x - minX) * kx;
-  let py = (selection.y + selection.h - minY) * ky + 10;
-  if (py + ph > r.height) py = (selection.y - minY) * ky - ph - 10;
+  let px = selection.x * kx;
+  let py = (selection.y + selection.h) * ky + 10;
+  if (py + ph > r.height) py = selection.y * ky - ph - 10;
   px = Math.max(8, Math.min(px, r.width - pw - 8));
   py = Math.max(8, Math.min(py, r.height - ph - 8));
   ocrPanel.style.left = `${px}px`;
@@ -643,9 +643,9 @@ function render() {
     const tbH = toolbar.offsetHeight || 44;
     const rw = r.width, rh = r.height;
     const kx = rw / totalW, ky = rh / totalH;
-    let tx = (selection.x + selection.w - minX) * kx - tbW;
-    let ty = (selection.y + selection.h - minY) * ky + 10;
-    if (ty + tbH > rh) ty = (selection.y - minY) * ky - tbH - 10;
+    let tx = (selection.x + selection.w) * kx - tbW;
+    let ty = (selection.y + selection.h) * ky + 10;
+    if (ty + tbH > rh) ty = selection.y * ky - tbH - 10;
     tx = Math.max(8, Math.min(tx, rw - tbW - 8));
     ty = Math.max(8, Math.min(ty, rh - tbH - 8));
     toolbar.style.left = `${tx}px`;
@@ -714,8 +714,8 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   const kx = r.width / totalW, ky = r.height / totalH;
 
   // 光标逻辑坐标
-  const cx = (px - minX) * kx;
-  const cy = (py - minY) * ky;
+  const cx = px * kx;
+  const cy = py * ky;
 
   // 卡片位置（逻辑像素），靠近边缘翻转
   let cardX = cx + MAG_OFFSET;
@@ -1078,7 +1078,7 @@ function applyResize(s: Shape, handle: number, p: Pt) {
 function showTextInput(p: Pt) {
   const r = root.getBoundingClientRect();
   const kx = r.width / totalW, ky = r.height / totalH;
-  const lx = (p.x - minX) * kx, ly = (p.y - minY) * ky;
+  const lx = p.x * kx, ly = p.y * ky;
   const fs = 20 + strokeWidth * 2;
   textInput.value = "";
   textInput.style.left = `${lx}px`;
@@ -1097,8 +1097,8 @@ function commitText() {
 
   const r = root.getBoundingClientRect();
   const kx = totalW / r.width, ky = totalH / r.height;
-  const sx = parseFloat(textInput.style.left) * kx + minX;
-  const sy = parseFloat(textInput.style.top) * ky + minY;
+  const sx = parseFloat(textInput.style.left) * kx;
+  const sy = parseFloat(textInput.style.top) * ky;
   const fs = (20 + strokeWidth * 2) * physScale();
   ctx.font = `600 ${fs}px "Segoe UI", system-ui, sans-serif`;
   const lines = val.split("\n");

@@ -654,6 +654,11 @@ function render() {
     toolbar.style.display = "none";
   }
 
+  // OCR 面板跟随选区 —— 选区移动/重选时同步刷新位置（之前只 showOcrPanel 调一次）。
+  if (selection && ocrPanel.style.display !== "none") {
+    positionOcrPanel();
+  }
+
   // 放大镜（跟随光标，悬停于 UI 上时不显示）
   if (magnifierActive && lastMousePos && !overUI) {
     drawMagnifier(ctx, lastMousePos.x, lastMousePos.y);

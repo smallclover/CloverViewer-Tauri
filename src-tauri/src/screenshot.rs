@@ -20,10 +20,11 @@
 //! - Tauri 2 builder 的 `.position(x, y)` 是 logical 像素；换算：logical = physical / scale。
 
 use base64::Engine;
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+use image::{ExtendedColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScreenData {
@@ -70,6 +71,8 @@ pub fn get_screenshot_data(store: State<'_, ScreenshotStore>) -> Option<Screensh
 #[tauri::command]
 pub fn close_screenshot(app: AppHandle) {
     if let Some(w) = app.get_webview_window("screenshot") {
+        // 先让前端清掉画面（移除 body.ready），避免下次 show 时闪旧截图
+        let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
     }
 }
@@ -131,6 +134,8 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
     }
 
     if let Some(w) = app.get_webview_window("screenshot") {
+        // 同上：隐藏前清画面，避免下次复用时闪旧截图
+        let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
     }
     Ok(())
@@ -166,51 +171,56 @@ pub fn start_screenshot(app: &AppHandle) {
             *store.data.lock().unwrap() = Some(data.clone());
         }
 
-        // 销毁旧窗口（如果有）后重建 —— 消除 show 后 set_position 的 race 与 stale state。
-        if let Some(w) = app.get_webview_window("screenshot") {
-            let _ = w.close();
-        }
+        // 窗口缓存复用：首次用 builder 创建（一次到位），之后 hide 留存、
+        // Alt+S 时 set_position/set_size（物理像素）+ show。
+        // 位置 bug 的真正根因是前端 canvas CSS 不拉伸（已修），set_position(PhysicalPosition)
+        // 本身行为正常 —— 之前误删缓存导致每次 cold start WebView2 1-3s。
+        let win = if let Some(w) = app.get_webview_window("screenshot") {
+            let _ = w.set_position(PhysicalPosition::new(data.min_x, data.min_y));
+            let _ = w.set_size(PhysicalSize::new(data.total_width, data.total_height));
+            w
+        } else {
+            // 取主屏 scale —— builder 上 position/inner_size 是 logical，
+            // wry 内部按窗口所在 monitor 的 scale 反算 physical → SetWindowPos。
+            let scale = app
+                .primary_monitor()
+                .ok()
+                .flatten()
+                .map(|m| m.scale_factor())
+                .unwrap_or(1.0)
+                .max(0.5);
+            let s = scale as f64;
 
-        // 取主屏 scale —— builder 上 position/inner_size 是 logical，
-        // wry 内部按窗口所在 monitor 的 scale 反算 physical → SetWindowPos。
-        // 用 primary monitor 近似（截图窗口虽然跨屏，但 wry 创建时按主屏 anchor）。
-        let scale = app
-            .primary_monitor()
-            .ok()
-            .flatten()
-            .map(|m| m.scale_factor())
-            .unwrap_or(1.0)
-            .max(0.5); // 防 div-by-zero / 异常极小值导致 huge 偏移
-        let s = scale as f64;
-
-        let win = match WebviewWindowBuilder::new(
-            &app,
-            "screenshot",
-            WebviewUrl::App("screenshot.html".into()),
-        )
-        .title("screenshot")
-        .transparent(true)
-        .decorations(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .resizable(false)
-        .position(data.min_x as f64 / s, data.min_y as f64 / s)
-        .inner_size(data.total_width as f64 / s, data.total_height as f64 / s)
-        .visible(true)
-        .build()
-        {
-            Ok(w) => w,
-            Err(e) => {
-                tracing::error!("创建截图窗口失败: {e}");
-                let store = app.state::<ScreenshotStore>();
-                *store.capturing.lock().unwrap() = false;
-                return;
+            match WebviewWindowBuilder::new(
+                &app,
+                "screenshot",
+                WebviewUrl::App("screenshot.html".into()),
+            )
+            .title("screenshot")
+            .transparent(true)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .position(data.min_x as f64 / s, data.min_y as f64 / s)
+            .inner_size(data.total_width as f64 / s, data.total_height as f64 / s)
+            .visible(true)
+            .build()
+            {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::error!("创建截图窗口失败: {e}");
+                    let store = app.state::<ScreenshotStore>();
+                    *store.capturing.lock().unwrap() = false;
+                    return;
+                }
             }
         };
 
+        let _ = win.show();
         let _ = win.set_focus();
 
-        // 通知前端刷新：每次新窗口 main() 都会重跑，无需显式 load。
+        // 通知前端刷新：复用窗口下 main() 不会重跑，由事件触发 loadScreenshot。
         if let Err(e) = win.emit("screenshot-refresh", ()) {
             tracing::warn!("emit screenshot-refresh 失败: {e}");
         }
@@ -236,10 +246,16 @@ fn capture_all() -> Result<ScreenshotData, String> {
             continue;
         }
 
+        // PNG 用 Fast 压缩 + NoFilter：默认设置（Best/Adaptive）在 4K 屏上
+        // 单张编码要几百 ms，是 Alt+S 延迟的大头之一。
         let mut png = Vec::new();
-        image::DynamicImage::ImageRgba8(img)
-            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
-            .map_err(|e| e.to_string())?;
+        PngEncoder::new_with_quality(
+            &mut png,
+            CompressionType::Fast,
+            FilterType::NoFilter,
+        )
+        .write_image(img.as_raw(), width, height, ExtendedColorType::Rgba8)
+        .map_err(|e| e.to_string())?;
         let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
 
         min_x = min_x.min(x);

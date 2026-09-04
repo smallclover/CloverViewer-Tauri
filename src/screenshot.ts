@@ -1372,6 +1372,9 @@ async function loadScreenshot() {
     return;
   }
 
+  // 换图期间隐藏：避免复用窗口时闪旧画面 / 半加载画面
+  document.body.classList.remove("ready");
+
   // 清旧状态（旧 img 元素 + 标注历史）
   root.querySelectorAll("img").forEach((el) => el.remove());
   shapes = [];
@@ -1400,6 +1403,7 @@ async function loadScreenshot() {
   canvas.height = totalH;
 
   // 拼接多屏截图（定位到虚拟桌面逻辑坐标）
+  const pending: Promise<unknown>[] = [];
   for (const s of data.screens) {
     const img = document.createElement("img");
     img.src = s.data_url;
@@ -1409,7 +1413,16 @@ async function loadScreenshot() {
     img.style.height = `${s.height / physScale()}px`;
     root.insertBefore(img, canvas);
     screens.push({ img, x: s.x, y: s.y, w: s.width, h: s.height });
+    // 等解码完成再显示，避免逐张出现的闪烁（decode 失败时退化为 onload/onerror）
+    pending.push(
+      typeof img.decode === "function"
+        ? img.decode().catch(() => undefined)
+        : new Promise((r) => {
+            img.onload = img.onerror = () => r(undefined);
+          }),
+    );
   }
+  await Promise.all(pending);
 
   console.info(
     "[screenshot] bounds", data.min_x, data.min_y, data.total_width, data.total_height,
@@ -1417,6 +1430,11 @@ async function loadScreenshot() {
   );
 
   render();
+
+  // 首帧就绪：CSS/布局完成后再显示，避免初始化期间 FOUC（元素挤在左上角）
+  if (!document.body.classList.contains("ready")) {
+    document.body.classList.add("ready");
+  }
 }
 
 async function main() {
@@ -1434,6 +1452,22 @@ async function main() {
   // 后端复用窗口时 main() 不会重跑，但会 emit screenshot-refresh 触发 loadScreenshot
   await listen("screenshot-refresh", () => {
     void loadScreenshot();
+  });
+
+  // 后端隐藏窗口前 emit：清掉画面，避免下次 show 时闪旧截图
+  await listen("screenshot-clear", () => {
+    root.querySelectorAll("img").forEach((el) => el.remove());
+    screens = [];
+    shapes = [];
+    selection = null;
+    curShape = null;
+    dragStart = dragCur = null;
+    dragMode = "none";
+    selectedIndex = null;
+    ocrPanel.style.display = "none";
+    textInput.classList.remove("editing");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.body.classList.remove("ready");
   });
 
   await loadScreenshot();

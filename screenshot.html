@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Screenshot</title>
     <style>
+      /* 初始化前隐藏：避免 CSS/JS 未就绪时 HTML 骨架裸渲染（元素挤在左上角）。
+         loadScreenshot() 完成后由 JS 加 .ready 显示。 */
+      body {
+        opacity: 0;
+      }
+      body.ready {
+        opacity: 1;
+        transition: opacity 60ms linear;
+      }
       /* 透明窗口要求 html/body 全部透明，否则 Windows 上 wry 会渲染白底 */
       html,
       body {

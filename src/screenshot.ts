@@ -1009,6 +1009,10 @@ function onMouseMove(e: MouseEvent) {
     hoverIndex = hit;
     canvas.style.cursor = hit != null ? "move" : "crosshair";
   }
+
+  // 无拖拽/绘制分支命中时也要重绘：放大镜跟随鼠标 + overUI 切换都需要刷新。
+  // （原版 egui 是 immediate mode 每帧重绘，Tauri 版必须显式触发）
+  render();
 }
 
 function onMouseUp(e: MouseEvent) {

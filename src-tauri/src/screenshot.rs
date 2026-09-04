@@ -1,16 +1,20 @@
-//! 截图覆盖窗 PoC —— 移植自 CloverViewer feature/screenshot/capture 的截屏 + 窗口逻辑。
+//! 截图覆盖窗 —— 移植自 CloverViewer feature/screenshot/capture 的截屏 + 窗口逻辑。
 //!
 //! 与 egui 版的关键差异：egui 版复用主窗口 viewport 切换透明态；Tauri 版改为**独立截图窗口**
 //! （独立 HWND，规避与主窗口共享 HWND 导致的样式/状态泄漏——Xiangxu 项目已验证的教训）。
 //!
-//! PoC 范围：xcap 逐屏截取 → 创建透明无边框 AlwaysOnTop 全屏窗（覆盖多屏虚拟桌面）→
-//! 前端拼接显示 + Canvas 选区 + Esc 关闭。若透明/多屏坐标验证通过，再移植完整标注。
+//! 性能策略：
+//! - 物理像素直接传给 `position()`/`inner_size()`（Tauri 2 Windows 上这两 API 都用物理像素，
+//!   旧版除以 scale_factor 会让窗口在非 100% DPI 屏上错位+尺寸偏小 → 截图坐标与实际不吻合）。
+//! - 复用截图窗口（hide 代替 close），省去每次重建 WebView2 的开销（首屏 200-500ms）。
+//! - 截屏完成 → 写 store → `emit("screenshot-refresh")`，前端监听后清状态+重载截图。
+//! - `capturing` 互斥锁避免重叠 Alt+S。
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScreenData {
@@ -35,12 +39,14 @@ pub struct ScreenshotData {
 
 pub struct ScreenshotStore {
     data: Mutex<Option<ScreenshotData>>,
+    capturing: Mutex<bool>,
 }
 
 impl ScreenshotStore {
     pub fn new() -> Self {
         Self {
             data: Mutex::new(None),
+            capturing: Mutex::new(false),
         }
     }
 }
@@ -51,11 +57,11 @@ pub fn get_screenshot_data(store: State<'_, ScreenshotStore>) -> Option<Screensh
     store.data.lock().unwrap().clone()
 }
 
-/// 关闭截图窗口（前端 Esc 时调用，避免依赖 window close 权限）
+/// 关闭截图窗口（前端 Esc 时调用）—— 仅隐藏窗口（不销毁），保留供下次复用。
 #[tauri::command]
 pub fn close_screenshot(app: AppHandle) {
     if let Some(w) = app.get_webview_window("screenshot") {
-        let _ = w.close();
+        let _ = w.hide();
     }
 }
 
@@ -67,7 +73,7 @@ pub fn copy_text(text: String) -> Result<(), String> {
 }
 
 /// 前端导出完成后的收尾请求：PNG 已由前端 Canvas 合成（裁剪 + 标注），
-/// Rust 侧只负责「落盘」或「写剪贴板」，然后关闭截图窗口。
+/// Rust 侧只负责「落盘」或「写剪贴板」，然后隐藏截图窗口。
 #[derive(Debug, Deserialize)]
 pub struct FinishRequest {
     /// "save" | "clipboard"
@@ -116,65 +122,82 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
     }
 
     if let Some(w) = app.get_webview_window("screenshot") {
-        let _ = w.close();
+        let _ = w.hide();
     }
     Ok(())
 }
 
-/// 进入截图模式：后台截屏 + 创建透明全屏窗（由全局热键触发）
+/// 进入截图模式：截屏 + 复用/创建截图窗口（由全局热键触发）
 pub fn start_screenshot(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
-        // 先关闭可能残留的旧截图窗口
-        if let Some(old) = app.get_webview_window("screenshot") {
-            let _ = old.close();
+        // 防并发：若上一次截屏尚未结束则丢弃本次
+        let store = app.state::<ScreenshotStore>();
+        {
+            let mut cap = store.capturing.lock().unwrap();
+            if *cap {
+                return;
+            }
+            *cap = true;
         }
 
         let data = match capture_all() {
             Ok(d) => d,
             Err(e) => {
                 tracing::error!("截屏失败: {e}");
+                let store = app.state::<ScreenshotStore>();
+                *store.capturing.lock().unwrap() = false;
                 return;
             }
         };
 
+        // 写 store
         {
             let store = app.state::<ScreenshotStore>();
             *store.data.lock().unwrap() = Some(data.clone());
         }
 
-        // 主窗口 DPI 缩放因子：builder 的 position/inner_size 用逻辑像素，
-        // 需将 xcap 的物理像素换算（多屏 per-monitor DPI 差异 PoC 暂忽略）
-        let scale = app
-            .get_webview_window("main")
-            .and_then(|w| w.scale_factor().ok())
-            .unwrap_or(1.0)
-            .max(0.1);
-
-        let win = WebviewWindowBuilder::new(
-            &app,
-            "screenshot",
-            WebviewUrl::App("screenshot.html".into()),
-        )
-        .title("screenshot")
-        .transparent(true)
-        .decorations(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .resizable(false)
-        .inner_size(
-            data.total_width as f64 / scale,
-            data.total_height as f64 / scale,
-        )
-        .position(data.min_x as f64 / scale, data.min_y as f64 / scale)
-        .build();
-
-        match win {
-            Ok(w) => {
-                let _ = w.set_focus();
+        // 获取或创建截图窗口（缓存复用，省掉首次之后的窗口创建开销）
+        let win = if let Some(w) = app.get_webview_window("screenshot") {
+            w
+        } else {
+            match WebviewWindowBuilder::new(
+                &app,
+                "screenshot",
+                WebviewUrl::App("screenshot.html".into()),
+            )
+            .title("screenshot")
+            .transparent(true)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .visible(false) // 先隐藏，定位后再显示，避免初始闪动
+            .build()
+            {
+                Ok(w) => w,
+                Err(e) => {
+                    tracing::error!("创建截图窗口失败: {e}");
+                    let store = app.state::<ScreenshotStore>();
+                    *store.capturing.lock().unwrap() = false;
+                    return;
+                }
             }
-            Err(e) => tracing::error!("创建截图窗口失败: {e}"),
+        };
+
+        // 物理像素定位（Windows 上 Tauri 2 的 set_position/set_size 默认就是物理像素）
+        let _ = win.set_position(PhysicalPosition::new(data.min_x, data.min_y));
+        let _ = win.set_size(PhysicalSize::new(data.total_width, data.total_height));
+        let _ = win.show();
+        let _ = win.set_focus();
+
+        // 通知前端刷新：复用窗口下 main() 不会再执行，需要前端监听此事件重置状态
+        if let Err(e) = win.emit("screenshot-refresh", ()) {
+            tracing::warn!("emit screenshot-refresh 失败: {e}");
         }
+
+        let store = app.state::<ScreenshotStore>();
+        *store.capturing.lock().unwrap() = false;
     });
 }
 

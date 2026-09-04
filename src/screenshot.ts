@@ -1,5 +1,6 @@
 import { closeScreenshot, copyText, finishScreenshot, getConfig, getScreenshotData, ocrImage } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
+import { listen } from "@tauri-apps/api/event";
 
 // ============================================================
 // 截图标注器 —— 移植自 CloverViewer feature/screenshot 的 Canvas 2D 重写
@@ -1317,23 +1318,31 @@ window.addEventListener("mousedown", (e) => {
   closePopups();
 });
 
-async function main() {
+async function loadScreenshot() {
   const data = await getScreenshotData();
   if (!data) {
     await closeScreenshot();
     return;
   }
 
-  // 读配置：放大镜开关 + 语言 + 取色热键
-  try {
-    const cfg = await getConfig();
-    magnifierActive = cfg.magnifier_enabled;
-    setLang(cfg.language);
-    if (cfg.hotkeys?.copy_color) copyColorHotkey = cfg.hotkeys.copy_color;
-  } catch {
-    // 读配置失败则保持默认
-  }
-  applyI18n(document);
+  // 清旧状态（旧 img 元素 + 标注历史）
+  root.querySelectorAll("img").forEach((el) => el.remove());
+  shapes = [];
+  undoStack = [];
+  redoStack = [];
+  selection = null;
+  dragStart = dragCur = null;
+  dragMode = "none";
+  curShape = null;
+  selectedIndex = null;
+  hoverIndex = null;
+  moveStart = null;
+  moveOrigShape = null;
+  resizeOrig = null;
+  resizeHandle = -1;
+  textInput.classList.remove("editing");
+  ocrPanel.style.display = "none";
+  screens = [];
 
   totalW = data.total_width;
   totalH = data.total_height;
@@ -1361,6 +1370,26 @@ async function main() {
   );
 
   render();
+}
+
+async function main() {
+  // 读配置（每次刷新都要重新读，比如用户切换了语言/取色热键）
+  try {
+    const cfg = await getConfig();
+    magnifierActive = cfg.magnifier_enabled;
+    setLang(cfg.language);
+    if (cfg.hotkeys?.copy_color) copyColorHotkey = cfg.hotkeys.copy_color;
+  } catch {
+    // 读配置失败则保持默认
+  }
+  applyI18n(document);
+
+  // 后端复用窗口时 main() 不会重跑，但会 emit screenshot-refresh 触发 loadScreenshot
+  await listen("screenshot-refresh", () => {
+    void loadScreenshot();
+  });
+
+  await loadScreenshot();
 }
 
 void main();

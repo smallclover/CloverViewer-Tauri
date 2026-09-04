@@ -4,17 +4,26 @@
 //! （独立 HWND，规避与主窗口共享 HWND 导致的样式/状态泄漏——Xiangxu 项目已验证的教训）。
 //!
 //! 性能策略：
-//! - 物理像素直接传给 `position()`/`inner_size()`（Tauri 2 Windows 上这两 API 都用物理像素，
-//!   旧版除以 scale_factor 会让窗口在非 100% DPI 屏上错位+尺寸偏小 → 截图坐标与实际不吻合）。
-//! - 复用截图窗口（hide 代替 close），省去每次重建 WebView2 的开销（首屏 200-500ms）。
-//! - 截屏完成 → 写 store → `emit("screenshot-refresh")`，前端监听后清状态+重载截图。
+//! - **改用 builder API 在 build 阶段一次性设置 position + inner_size**（logical 像素）。
+//!   早期版本用 `set_position(PhysicalPosition)` 在 show 后再移动，wry Windows 后端有时不
+//!   按 physical 单位消费、外加 OS relayout race，窗口外框偏离 + 内部 viewport 不对齐。
+//!   builder 上 `position`/`inner_size` 是 logical，wry 内部按窗口所在 monitor 的 scale
+//!   自动换算成 raw pixel 调 SetWindowPos，定位最稳。
+//! - 每次 Alt+S 销毁旧窗口重新 build。首次 WebView2 启动 200-500ms 不可避免，但彻底消除
+//!   位置 race 与 stash 缓存带来的 stale-state bug。
+//! - 截屏完成 → 写 store → `emit("screenshot-refresh")`，前端监听后清状态 + 重载截图。
 //! - `capturing` 互斥锁避免重叠 Alt+S。
+//!
+//! 坐标约定：
+//! - xcap 的 `Monitor::x()/y()/width()/height()` 在 per-monitor DPI aware 进程下是
+//!   **虚拟桌面物理像素**（raw PIXELS），与 `Cursor::position()` 同坐标系统。
+//! - Tauri 2 builder 的 `.position(x, y)` 是 logical 像素；换算：logical = physical / scale。
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScreenData {
@@ -157,41 +166,51 @@ pub fn start_screenshot(app: &AppHandle) {
             *store.data.lock().unwrap() = Some(data.clone());
         }
 
-        // 获取或创建截图窗口（缓存复用，省掉首次之后的窗口创建开销）
-        let win = if let Some(w) = app.get_webview_window("screenshot") {
-            w
-        } else {
-            match WebviewWindowBuilder::new(
-                &app,
-                "screenshot",
-                WebviewUrl::App("screenshot.html".into()),
-            )
-            .title("screenshot")
-            .transparent(true)
-            .decorations(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .resizable(false)
-            .visible(false) // 先隐藏，定位后再显示，避免初始闪动
-            .build()
-            {
-                Ok(w) => w,
-                Err(e) => {
-                    tracing::error!("创建截图窗口失败: {e}");
-                    let store = app.state::<ScreenshotStore>();
-                    *store.capturing.lock().unwrap() = false;
-                    return;
-                }
+        // 销毁旧窗口（如果有）后重建 —— 消除 show 后 set_position 的 race 与 stale state。
+        if let Some(w) = app.get_webview_window("screenshot") {
+            let _ = w.close();
+        }
+
+        // 取主屏 scale —— builder 上 position/inner_size 是 logical，
+        // wry 内部按窗口所在 monitor 的 scale 反算 physical → SetWindowPos。
+        // 用 primary monitor 近似（截图窗口虽然跨屏，但 wry 创建时按主屏 anchor）。
+        let scale = app
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .map(|m| m.scale_factor())
+            .unwrap_or(1.0)
+            .max(0.5); // 防 div-by-zero / 异常极小值导致 huge 偏移
+        let s = scale as f64;
+
+        let win = match WebviewWindowBuilder::new(
+            &app,
+            "screenshot",
+            WebviewUrl::App("screenshot.html".into()),
+        )
+        .title("screenshot")
+        .transparent(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .position(data.min_x as f64 / s, data.min_y as f64 / s)
+        .inner_size(data.total_width as f64 / s, data.total_height as f64 / s)
+        .visible(true)
+        .build()
+        {
+            Ok(w) => w,
+            Err(e) => {
+                tracing::error!("创建截图窗口失败: {e}");
+                let store = app.state::<ScreenshotStore>();
+                *store.capturing.lock().unwrap() = false;
+                return;
             }
         };
 
-        // 物理像素定位（Windows 上 Tauri 2 的 set_position/set_size 默认就是物理像素）
-        let _ = win.set_position(PhysicalPosition::new(data.min_x, data.min_y));
-        let _ = win.set_size(PhysicalSize::new(data.total_width, data.total_height));
-        let _ = win.show();
         let _ = win.set_focus();
 
-        // 通知前端刷新：复用窗口下 main() 不会再执行，需要前端监听此事件重置状态
+        // 通知前端刷新：每次新窗口 main() 都会重跑，无需显式 load。
         if let Err(e) = win.emit("screenshot-refresh", ()) {
             tracing::warn!("emit screenshot-refresh 失败: {e}");
         }

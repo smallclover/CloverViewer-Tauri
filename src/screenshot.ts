@@ -33,12 +33,19 @@ interface Shape {
   points?: Pt[];
 }
 
-const SCALE = window.devicePixelRatio || 1;
-const MIN_SHAPE_SIZE = 4; // 逻辑像素
-const HANDLE_HIT = 12 * SCALE; // 控制点命中半径（物理）
+const MIN_SHAPE_SIZE = 4; // 物理像素
+const HANDLE_HIT = 12; // 控制点命中半径（物理像素；不再随 devicePixelRatio 缩放）
 const DEFAULT_COLOR = "#cc0000";
 const DEFAULT_STROKE = 2;
 const DEFAULT_MOSAIC = 16;
+
+// 物理像素 / CSS 像素 —— 实时计算（不再用 devicePixelRatio 单值，
+// multi-monitor mixed-DPI 时单值不可靠，会让 outer frame 与 inner viewport 比例同步错位）。
+function physScale(): number {
+  if (totalW <= 0) return 1;
+  const w = root.getBoundingClientRect().width;
+  return w > 0 ? totalW / w : 1;
+}
 const PALETTE = [
   "#cc0000", "#ff0000", "#ff6600", "#ffcc00", "#00cc00",
   "#0099ff", "#0000ff", "#9900ff", "#000000", "#ffffff",
@@ -384,7 +391,7 @@ function distToSegment(p: Pt, a: Pt, b: Pt): number {
 }
 
 function hitShape(s: Shape, p: Pt): boolean {
-  const tol = 8 * SCALE;
+  const tol = 8 * physScale();
   const bb = shapeBBox(s);
   switch (s.tool) {
     case "arrow":
@@ -467,7 +474,7 @@ function drawArrowShape(c: CanvasRenderingContext2D, start: Pt, end: Pt, sw: num
   const len = Math.hypot(dx, dy);
   if (len === 0) return;
   const ux = dx / len, uy = dy / len;
-  const asz = (12 + sw * 2) * SCALE;
+  const asz = (12 + sw * 2) * physScale();
   const px = -uy * asz * 0.5, py = ux * asz * 0.5;
   c.beginPath();
   c.moveTo(end.x - ux * asz + px, end.y - uy * asz + py);
@@ -477,11 +484,11 @@ function drawArrowShape(c: CanvasRenderingContext2D, start: Pt, end: Pt, sw: num
 }
 
 function textFontSize(s: Shape): number {
-  return (20 + s.strokeWidth * 2) * SCALE;
+  return (20 + s.strokeWidth * 2) * physScale();
 }
 
 function drawShape(c: CanvasRenderingContext2D, s: Shape) {
-  const sw = s.strokeWidth * SCALE;
+  const sw = s.strokeWidth * physScale();
   c.strokeStyle = s.color;
   c.fillStyle = s.color;
   c.lineWidth = sw;
@@ -608,25 +615,25 @@ function render() {
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#3c3c3c";
       ctx.lineWidth = 1;
-      ctx.fillRect(h.x - 5 * SCALE, h.y - 5 * SCALE, 10 * SCALE, 10 * SCALE);
-      ctx.strokeRect(h.x - 5 * SCALE, h.y - 5 * SCALE, 10 * SCALE, 10 * SCALE);
+      ctx.fillRect(h.x - 5 * physScale(), h.y - 5 * physScale(), 10 * physScale(), 10 * physScale());
+      ctx.strokeRect(h.x - 5 * physScale(), h.y - 5 * physScale(), 10 * physScale(), 10 * physScale());
     }
   }
 
   // 尺寸标签
   if (selRect && selRect.w > 0) {
     const label = `${Math.round(selRect.w)} × ${Math.round(selRect.h)}`;
-    const fs = 12 * SCALE;
+    const fs = 12 * physScale();
     ctx.font = `${fs}px "Segoe UI", sans-serif`;
     const tw = ctx.measureText(label).width;
     let lx = selRect.x;
-    let ly = selRect.y - fs - 12 * SCALE;
-    if (ly < 4 * SCALE) ly = selRect.y + 8 * SCALE;
+    let ly = selRect.y - fs - 12 * physScale();
+    if (ly < 4 * physScale()) ly = selRect.y + 8 * physScale();
     ctx.fillStyle = "rgba(0,0,0,0.65)";
-    ctx.fillRect(lx, ly, tw + 12 * SCALE, fs + 8 * SCALE);
+    ctx.fillRect(lx, ly, tw + 12 * physScale(), fs + 8 * physScale());
     ctx.fillStyle = "#fff";
     ctx.textBaseline = "top";
-    ctx.fillText(label, lx + 6 * SCALE, ly + 4 * SCALE);
+    ctx.fillText(label, lx + 6 * physScale(), ly + 4 * physScale());
   }
 
   // 工具栏定位
@@ -657,7 +664,7 @@ function drawStyleBox(c: CanvasRenderingContext2D, r: Rect) {
   c.strokeStyle = "#00ff00";
   c.lineWidth = 1;
   c.strokeRect(r.x, r.y, r.w, r.h);
-  const asz = 6 * SCALE;
+  const asz = 6 * physScale();
   if (r.w > asz * 3 && r.h > asz * 3) {
     const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     const pts = [
@@ -718,8 +725,8 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   if (cardX + cardW > r.width) cardX = cx - MAG_OFFSET - cardW;
   if (cardY + cardH > r.height) cardY = cy - MAG_OFFSET - cardH;
 
-  // 逻辑 → 物理
-  const s = r.width / totalW; // == 1/SCALE 近似，用 rect 比例更稳
+  // 物理 → CSS
+  const s = r.width / totalW;
   const ps = (v: number) => v / s;
 
   c.save();
@@ -727,7 +734,7 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
 
   // 卡片背景
   c.fillStyle = "#ffffff";
-  roundRect(c, ps(cardX), ps(cardY), ps(cardW), ps(cardH), 4 * SCALE);
+  roundRect(c, ps(cardX), ps(cardY), ps(cardW), ps(cardH), 4 * physScale());
   c.fill();
 
   // 15×15 像素块
@@ -758,7 +765,7 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   const centerBlockX = ps(cardX) + half * block;
   const centerBlockY = ps(cardY) + half * block;
   c.strokeStyle = "#00ffff";
-  c.lineWidth = 1.5 * SCALE;
+  c.lineWidth = 1.5 * physScale();
   c.strokeRect(centerBlockX, centerBlockY, block, block);
   c.strokeStyle = "rgba(0,255,255,0.4)";
   c.lineWidth = 1;
@@ -781,26 +788,26 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
 
   const hex = centerColorHex(data);
   const rowH = infoH / 3;
-  const pad = 8 * SCALE;
+  const pad = 8 * physScale();
   c.textBaseline = "middle";
   c.fillStyle = "#282828";
-  c.font = `${12 * SCALE}px "Segoe UI", sans-serif`;
+  c.font = `${12 * physScale()}px "Segoe UI", sans-serif`;
   c.textAlign = "left";
-  c.fillText(`(${Math.round(px)}, ${Math.round(py)})`, ps(cardX) + pad, infoY + rowH * 0.5 + 2 * SCALE);
+  c.fillText(`(${Math.round(px)}, ${Math.round(py)})`, ps(cardX) + pad, infoY + rowH * 0.5 + 2 * physScale());
 
   const recently = performance.now() - copiedAt < 1500;
   const row2Text = recently ? t("shot.copied") : hex;
   const row2Color = recently ? "#28a03c" : "#282828";
   c.fillStyle = row2Color;
-  c.fillText(row2Text, ps(cardX) + pad, infoY + rowH * 1.5 + 2 * SCALE);
+  c.fillText(row2Text, ps(cardX) + pad, infoY + rowH * 1.5 + 2 * physScale());
 
   // 色块预览
   const textW = c.measureText(row2Text).width;
-  const prevSize = 12 * SCALE;
-  const prevX = ps(cardX) + pad + textW + 8 * SCALE;
-  const prevY = infoY + rowH * 1.5 + 2 * SCALE;
+  const prevSize = 12 * physScale();
+  const prevX = ps(cardX) + pad + textW + 8 * physScale();
+  const prevY = infoY + rowH * 1.5 + 2 * physScale();
   c.fillStyle = hex;
-  roundRect(c, prevX, prevY - prevSize / 2, prevSize, prevSize, 2 * SCALE);
+  roundRect(c, prevX, prevY - prevSize / 2, prevSize, prevSize, 2 * physScale());
   c.fill();
   c.strokeStyle = "#c8c8c8";
   c.lineWidth = 1;
@@ -808,7 +815,7 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
 
   // 复制提示
   c.fillStyle = "#969696";
-  c.font = `${10 * SCALE}px "Segoe UI", sans-serif`;
+  c.font = `${10 * physScale()}px "Segoe UI", sans-serif`;
   c.fillText(t("shot.copyColorHint", { key: copyColorHotkey }), ps(cardX) + pad, infoY + rowH * 2.5);
 
   c.restore();
@@ -1092,7 +1099,7 @@ function commitText() {
   const kx = totalW / r.width, ky = totalH / r.height;
   const sx = parseFloat(textInput.style.left) * kx + minX;
   const sy = parseFloat(textInput.style.top) * ky + minY;
-  const fs = (20 + strokeWidth * 2) * SCALE;
+  const fs = (20 + strokeWidth * 2) * physScale();
   ctx.font = `600 ${fs}px "Segoe UI", system-ui, sans-serif`;
   const lines = val.split("\n");
   const maxW = Math.max(...lines.map((l) => ctx.measureText(l).width));
@@ -1356,17 +1363,17 @@ async function loadScreenshot() {
   for (const s of data.screens) {
     const img = document.createElement("img");
     img.src = s.data_url;
-    img.style.left = `${(s.x - minX) / SCALE}px`;
-    img.style.top = `${(s.y - minY) / SCALE}px`;
-    img.style.width = `${s.width / SCALE}px`;
-    img.style.height = `${s.height / SCALE}px`;
+    img.style.left = `${(s.x - minX) / physScale()}px`;
+    img.style.top = `${(s.y - minY) / physScale()}px`;
+    img.style.width = `${s.width / physScale()}px`;
+    img.style.height = `${s.height / physScale()}px`;
     root.insertBefore(img, canvas);
     screens.push({ img, x: s.x, y: s.y, w: s.width, h: s.height });
   }
 
   console.info(
     "[screenshot] bounds", data.min_x, data.min_y, data.total_width, data.total_height,
-    "scale", SCALE, "screens", data.screens.length,
+    "scale", physScale().toFixed(2), "screens", data.screens.length,
   );
 
   render();

@@ -30,7 +30,13 @@
       }
       #overlay-canvas {
         position: absolute;
-        inset: 0;
+        left: 0;
+        top: 0;
+        /* canvas 是 replaced element：absolute + inset:0 不会拉伸它，
+           会用 attribute（物理像素）当 CSS 尺寸 → dpr≠1 时 canvas 比 viewport
+           大 dpr 倍，绘制与鼠标错位。必须显式 width/height 100%。 */
+        width: 100%;
+        height: 100%;
         cursor: crosshair;
       }
       /* UI 层默认不拦截鼠标，具体控件自行开启 pointer-events */

@@ -848,6 +848,16 @@ function physPos(e: MouseEvent): Pt {
   };
 }
 
+/// 将位置限制在选区内（移植自 egui 版 shape.rs clamp_pos_to_rect；
+/// 无选区时不限制 —— 与原版 Rect::EVERYTHING 语义一致）
+function clampToSelection(p: Pt): Pt {
+  if (!selection) return p;
+  return {
+    x: Math.min(Math.max(p.x, selection.x), selection.x + selection.w),
+    y: Math.min(Math.max(p.y, selection.y), selection.y + selection.h),
+  };
+}
+
 // ============================================================
 // 历史
 // ============================================================
@@ -906,21 +916,22 @@ function onMouseDown(e: MouseEvent) {
     return;
   }
 
-  // 3. 有工具 → 开始绘制
+  // 3. 有工具 → 开始绘制（起点 clamp 到选区内 —— 原版 clamp_pos_to_rect 行为）
   if (tool) {
     selectedIndex = null;
     dragMode = "none";
     if (tool === "text") {
-      showTextInput(p);
+      showTextInput(clampToSelection(p));
       return;
     }
+    const cp = clampToSelection(p);
     curShape = {
       tool,
-      start: { ...p },
-      end: { ...p },
+      start: { ...cp },
+      end: { ...cp },
       color,
       strokeWidth: tool === "mosaic" ? mosaicWidth : strokeWidth,
-      points: tool === "pen" ? [{ ...p }] : undefined,
+      points: tool === "pen" ? [{ ...cp }] : undefined,
     };
     render();
     return;
@@ -948,26 +959,46 @@ function onMouseMove(e: MouseEvent) {
     return;
   }
   if (dragMode === "move" && moveStart && moveOrigShape && selectedIndex != null) {
+    // 移动也 clamp：算出移动后的 bbox，把 delta 收敛到选区内（原版 move_shape 行为）
     const dx = p.x - moveStart.x, dy = p.y - moveStart.y;
+    const orig = moveOrigShape;
+    let ddx = dx, ddy = dy;
+    if (selection) {
+      const selR = selection;
+      const minX0 = Math.min(orig.start.x, orig.end.x), maxX0 = Math.max(orig.start.x, orig.end.x);
+      const minY0 = Math.min(orig.start.y, orig.end.y), maxY0 = Math.max(orig.start.y, orig.end.y);
+      if (minX0 + dx < selR.x) ddx = selR.x - minX0;
+      if (maxX0 + dx > selR.x + selR.w) ddx = selR.x + selR.w - maxX0;
+      if (minY0 + dy < selR.y) ddy = selR.y - minY0;
+      if (maxY0 + dy > selR.y + selR.h) ddy = selR.y + selR.h - maxY0;
+    }
     const s = shapes[selectedIndex];
-    s.start = { x: moveOrigShape.start.x + dx, y: moveOrigShape.start.y + dy };
-    s.end = { x: moveOrigShape.end.x + dx, y: moveOrigShape.end.y + dy };
-    if (s.points && moveOrigShape.points) {
-      s.points = moveOrigShape.points.map((q) => ({ x: q.x + dx, y: q.y + dy }));
+    s.start = { x: orig.start.x + ddx, y: orig.start.y + ddy };
+    s.end = { x: orig.end.x + ddx, y: orig.end.y + ddy };
+    if (s.points && orig.points) {
+      s.points = orig.points.map((q) => ({ x: q.x + ddx, y: q.y + ddy }));
     }
     render();
     return;
   }
   if (dragMode === "resize" && resizeOrig && selectedIndex != null) {
-    applyResize(shapes[selectedIndex], resizeHandle, p);
+    // 缩放的控制点也 clamp 到选区（原版 apply_resize 行为）
+    applyResize(shapes[selectedIndex], resizeHandle, clampToSelection(p));
     render();
     return;
   }
 
-  // 绘制中
+  // 绘制中（终点/笔迹点 clamp 到选区 —— 原版 drag.rs 行为）
   if (curShape) {
-    curShape.end = p;
-    if (curShape.tool === "pen" && curShape.points) curShape.points.push({ ...p });
+    const cp = clampToSelection(p);
+    curShape.end = cp;
+    if (curShape.tool === "pen" && curShape.points) {
+      // 与原版一致：距上一点 > 2 物理像素才记录，避免密集采样
+      const last = curShape.points[curShape.points.length - 1];
+      if (!last || Math.hypot(cp.x - last.x, cp.y - last.y) > 2) {
+        curShape.points.push({ ...cp });
+      }
+    }
     render();
     return;
   }

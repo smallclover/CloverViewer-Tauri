@@ -699,6 +699,7 @@ const magTemp = document.createElement("canvas");
 magTemp.width = MAG_GRID;
 magTemp.height = MAG_GRID;
 const magTempCtx = magTemp.getContext("2d")!;
+let magWarnedZero = false;
 
 function sampleMagnifier(cx: number, cy: number): Uint8ClampedArray | null {
   const half = Math.floor(MAG_GRID / 2);
@@ -706,11 +707,24 @@ function sampleMagnifier(cx: number, cy: number): Uint8ClampedArray | null {
   const sy = Math.round(cy) - half;
   magTempCtx.clearRect(0, 0, MAG_GRID, MAG_GRID);
   blitRegion(magTempCtx, sx, sy, MAG_GRID, MAG_GRID, 0, 0, MAG_GRID, MAG_GRID);
+  let data: Uint8ClampedArray;
   try {
-    return magTempCtx.getImageData(0, 0, MAG_GRID, MAG_GRID).data;
+    data = magTempCtx.getImageData(0, 0, MAG_GRID, MAG_GRID).data;
   } catch {
     return null;
   }
+  // 诊断：如果所有像素 alpha=0（采样失败/越界/跨屏），第一次打印一次
+  if (!magWarnedZero && data.every((v, i) => i % 4 !== 3 || v === 0)) {
+    magWarnedZero = true;
+    const zero = data.every((v) => v === 0);
+    console.warn(
+      "[screenshot] magnifier all-zero sample at", sx, sy,
+      "allZero=" + zero,
+      "screensN=" + screens.length,
+      "screensReady=" + screens.map((s) => s.img.naturalWidth + "x" + s.img.naturalHeight).join(","),
+    );
+  }
+  return data;
 }
 
 function centerColorHex(data: Uint8ClampedArray): string {
@@ -1445,6 +1459,15 @@ async function loadScreenshot() {
   console.info(
     "[screenshot] bounds", data.min_x, data.min_y, data.total_width, data.total_height,
     "scale", physScale().toFixed(2), "screens", data.screens.length,
+  );
+  console.info(
+    "[screenshot] root rect:", JSON.stringify({
+      w: root.getBoundingClientRect().width.toFixed(1),
+      h: root.getBoundingClientRect().height.toFixed(1),
+      dpr: window.devicePixelRatio,
+      physScale: physScale().toFixed(3),
+    }),
+    "monitors:", JSON.stringify(data.monitor_info),
   );
 
   render();

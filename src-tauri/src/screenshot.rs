@@ -45,6 +45,21 @@ pub struct ScreenshotData {
     pub total_width: u32,
     pub total_height: u32,
     pub screens: Vec<ScreenData>,
+    /// 每个 monitor 的原始 xcap 元数据（物理像素、scale factor），
+    /// 用于诊断多屏混合 DPI / 跨屏坐标偏移问题。
+    pub monitor_info: Vec<MonitorInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MonitorInfo {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub img_width: u32,
+    pub img_height: u32,
+    pub scale_factor: f32,
+    pub is_primary: bool,
 }
 
 pub struct ScreenshotStore {
@@ -234,6 +249,7 @@ fn capture_all() -> Result<ScreenshotData, String> {
     let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
 
     let mut screens = Vec::new();
+    let mut monitor_info = Vec::new();
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
 
     for m in monitors {
@@ -242,6 +258,10 @@ fn capture_all() -> Result<ScreenshotData, String> {
         let height = img.height();
         let x = m.x().unwrap_or(0);
         let y = m.y().unwrap_or(0);
+        let m_w = m.width().unwrap_or(0);
+        let m_h = m.height().unwrap_or(0);
+        let scale = m.scale_factor().unwrap_or(1.0);
+        let is_primary = m.is_primary().unwrap_or(false);
         if width == 0 || height == 0 {
             continue;
         }
@@ -270,11 +290,35 @@ fn capture_all() -> Result<ScreenshotData, String> {
             height,
             data_url: format!("data:image/png;base64,{b64}"),
         });
+        monitor_info.push(MonitorInfo {
+            x,
+            y,
+            width: m_w,
+            height: m_h,
+            img_width: width,
+            img_height: height,
+            scale_factor: scale,
+            is_primary,
+        });
     }
 
     if screens.is_empty() {
         return Err("未检测到显示器".to_string());
     }
+
+    // 诊断日志（dev 模式必看）：每个 monitor 的物理像素坐标 + scale factor + image 尺寸
+    // 用于排查多屏混合 DPI / 跨屏截图偏移 / 跨屏放大镜采样错位等问题。
+    eprintln!("[screenshot] monitors (raw, all values physical px):");
+    for (i, mi) in monitor_info.iter().enumerate() {
+        eprintln!(
+            "  [{}] x={} y={} m.w={} m.h={} img={}x{} scale={} primary={}",
+            i, mi.x, mi.y, mi.width, mi.height, mi.img_width, mi.img_height, mi.scale_factor, mi.is_primary
+        );
+    }
+    eprintln!(
+        "[screenshot] virtual desktop: minX={} minY={} totalW={} totalH={}",
+        min_x, min_y, max_x - min_x, max_y - min_y
+    );
 
     Ok(ScreenshotData {
         min_x,
@@ -282,5 +326,6 @@ fn capture_all() -> Result<ScreenshotData, String> {
         total_width: (max_x - min_x).max(1) as u32,
         total_height: (max_y - min_y).max(1) as u32,
         screens,
+        monitor_info,
     })
 }

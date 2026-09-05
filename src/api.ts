@@ -77,6 +77,18 @@ export interface ScreenshotData {
   total_width: number;
   total_height: number;
   screens: ScreenData[];
+  monitor_info: MonitorInfo[];
+}
+
+export interface MonitorInfo {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  img_width: number;
+  img_height: number;
+  scale_factor: number;
+  is_primary: boolean;
 }
 
 export const getScreenshotData = () =>

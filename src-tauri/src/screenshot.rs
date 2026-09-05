@@ -37,19 +37,9 @@ pub struct ScreenData {
     pub data_url: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct ScreenshotData {
-    /// 虚拟桌面包围盒（物理像素）
-    pub min_x: i32,
-    pub min_y: i32,
-    pub total_width: u32,
-    pub total_height: u32,
-    pub screens: Vec<ScreenData>,
-    /// 每个 monitor 的原始 xcap 元数据（物理像素、scale factor），
-    /// 用于诊断多屏混合 DPI / 跨屏坐标偏移问题。
-    pub monitor_info: Vec<MonitorInfo>,
-}
-
+/// 每个 monitor 的原始 xcap 元数据（物理像素 + scale factor + primary）。
+/// 暴露给前端仅用于 console.info 排查多屏混合 DPI / 跨屏坐标偏移问题，
+/// 不参与运行逻辑。运行时零开销（只在 `get_screenshot_data` 里走一次 clone）。
 #[derive(Debug, Clone, Serialize)]
 pub struct MonitorInfo {
     pub x: i32,
@@ -60,6 +50,18 @@ pub struct MonitorInfo {
     pub img_height: u32,
     pub scale_factor: f32,
     pub is_primary: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ScreenshotData {
+    /// 虚拟桌面包围盒（物理像素）
+    pub min_x: i32,
+    pub min_y: i32,
+    pub total_width: u32,
+    pub total_height: u32,
+    pub screens: Vec<ScreenData>,
+    /// 见 `MonitorInfo` 说明。
+    pub monitor_info: Vec<MonitorInfo>,
 }
 
 pub struct ScreenshotStore {
@@ -306,18 +308,30 @@ fn capture_all() -> Result<ScreenshotData, String> {
         return Err("未检测到显示器".to_string());
     }
 
-    // 诊断日志（dev 模式必看）：每个 monitor 的物理像素坐标 + scale factor + image 尺寸
-    // 用于排查多屏混合 DPI / 跨屏截图偏移 / 跨屏放大镜采样错位等问题。
+    // 诊断日志：每个 monitor 的原始 xcap 元数据（物理像素、scale factor、image 尺寸）。
+    // 多屏/混合 DPI 的坐标问题靠猜是修不掉的（已经返工三轮），输出到 stderr，
+    // 让用户截图发回或下一步接 tracing 都方便。release 构建下也能保留。
     eprintln!("[screenshot] monitors (raw, all values physical px):");
     for (i, mi) in monitor_info.iter().enumerate() {
         eprintln!(
-            "  [{}] x={} y={} m.w={} m.h={} img={}x{} scale={} primary={}",
-            i, mi.x, mi.y, mi.width, mi.height, mi.img_width, mi.img_height, mi.scale_factor, mi.is_primary
+            "[screenshot]   [{}] x={} y={} m.w={} m.h={} img={}x{} scale={} primary={}",
+            i,
+            mi.x,
+            mi.y,
+            mi.width,
+            mi.height,
+            mi.img_width,
+            mi.img_height,
+            mi.scale_factor,
+            mi.is_primary
         );
     }
     eprintln!(
         "[screenshot] virtual desktop: minX={} minY={} totalW={} totalH={}",
-        min_x, min_y, max_x - min_x, max_y - min_y
+        min_x,
+        min_y,
+        max_x - min_x,
+        max_y - min_y
     );
 
     Ok(ScreenshotData {

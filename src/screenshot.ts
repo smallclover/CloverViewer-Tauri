@@ -1460,14 +1460,22 @@ async function loadScreenshot() {
     "[screenshot] bounds", data.min_x, data.min_y, data.total_width, data.total_height,
     "scale", physScale().toFixed(2), "screens", data.screens.length,
   );
+  // 一次性诊断：完整 viewport + 每屏 img 状态，在跨屏/混合 DPI 异常时可一眼定位。
+  // 数据来源完全靠前端能拿到的字段（getBoundingClientRect + data.monitor_info），
+  // 正常运行时零开销。
+  const rr = root.getBoundingClientRect();
   console.info(
-    "[screenshot] root rect:", JSON.stringify({
-      w: root.getBoundingClientRect().width.toFixed(1),
-      h: root.getBoundingClientRect().height.toFixed(1),
+    "[screenshot] viewport:",
+    JSON.stringify({
+      totalW, totalH, minX: data.min_x, minY: data.min_y,
+      rootW: +rr.width.toFixed(1), rootH: +rr.height.toFixed(1),
+      rootLeft: +rr.left.toFixed(1), rootTop: +rr.top.toFixed(1),
       dpr: window.devicePixelRatio,
-      physScale: physScale().toFixed(3),
+      physScale: +physScale().toFixed(4),
+      canvasAttr: `${canvas.width}x${canvas.height}`,
+      canvasCss: `${+canvas.getBoundingClientRect().width.toFixed(1)}x${+canvas.getBoundingClientRect().height.toFixed(1)}`,
+      monitors: data.monitor_info,
     }),
-    "monitors:", JSON.stringify(data.monitor_info),
   );
 
   render();

@@ -69,10 +69,16 @@ pub fn run() {
             // 恢复上次窗口位置/尺寸
             if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
                 if let Some((x, y)) = startup_pos {
-                    let _ = win.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+                    // 跳过 Windows 最小化虚拟坐标（±32000），否则主窗口被
+                    // set 到屏幕外，表现为「主窗口消失」。
+                    if x > -32000.0 && y > -32000.0 {
+                        let _ = win.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+                    }
                 }
                 if let Some((w, h)) = startup_size {
-                    let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
+                    if w > 0.0 && h > 0.0 {
+                        let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
+                    }
                 }
             }
 
@@ -158,12 +164,22 @@ pub fn run() {
                     }
                 }
                 // 记录窗口位置/尺寸（退出时统一落盘）
+                // 过滤 Windows 最小化虚拟坐标（±32000）与零尺寸：窗口被
+                // hide/minimize 时 Windows 会发出 Moved(-32000,-32000) /
+                // Resized(0,0)，若原样持久化，下次启动会恢复到屏幕外 / 零
+                // 尺寸，表现为「主窗口消失」。
                 tauri::WindowEvent::Moved(pos) => {
+                    if pos.x <= -32000 || pos.y <= -32000 {
+                        return;
+                    }
                     let mut cfg = (*store.snapshot()).clone();
                     cfg.window_pos = Some((pos.x as f32, pos.y as f32));
                     store.replace(cfg);
                 }
                 tauri::WindowEvent::Resized(size) => {
+                    if size.width == 0 || size.height == 0 {
+                        return;
+                    }
                     let mut cfg = (*store.snapshot()).clone();
                     cfg.window_size = Some((size.width as f32, size.height as f32));
                     store.replace(cfg);

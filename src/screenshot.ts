@@ -102,20 +102,36 @@ const uiLayer = document.getElementById("ui-layer")!;
 // 图标
 // ============================================================
 const ICONS: Record<string, string> = {
-  rect: '<rect x="3.5" y="5" width="17" height="14" rx="1.5"/>',
-  circle: '<ellipse cx="12" cy="12" rx="8.5" ry="7.5"/>',
-  arrow: '<path d="M5 17 L19 5 M19 5 h-5 M19 5 v5"/>',
-  pen: '<path d="M4 20 l5-1.5L20.5 7a2 2 0 0 0-2.8-2.8L6 15.5 4 20z"/>',
-  // 马赛克：4 格中左上/右下**实心**、右上/左下描边，对齐原版 egui 的
-  // paint_mosaic_icon（对角填充），否则 4 个描边框看起来跟别的图标没区别。
+  rect: '<rect x="4" y="5" width="16" height="14" rx="2"/>',
+  circle: '<circle cx="12" cy="12" r="7.5"/>',
+  // 双向端帽（贴齐 egui paint_arrow_icon：line + end 两侧各一段短斜线）
+  arrow: '<path d="M5 19 L19 5 M13 5 H19 V11"/>',
+  // 正弦波笔触（贴齐 egui paint_pencil_icon：base_y + sin(t·π·2.5)·h·0.25）。
+  // SVG 里用 3 段 Q/T 沿 x 等距升高抄此几何，比 lucide 钢笔更"画线"而
+  // 不是"持笔"。
+  pen: '<path d="M4 19 Q 6 7 8.5 13 T 12 12 T 15.5 13 T 20 5"/>',
+  // 马赛克：对角填充（左上 + 右下 fill="currentColor" stroke="none"），
+  // 另两角只描边（fill="none"），与原版 egui `paint_mosaic_icon` 的对角逻辑一致。
   mosaic:
-    '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>' +
-    '<path d="M4 4h7v7H4zM13 13h7v7h-7z" fill="currentColor" stroke="none"/>',
-  text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
-  cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
-  copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
-  save: '<path d="M5 4h11l3 3v13H5zM8 4v5h8V4M8 20v-6h8v6"/>',
-  ocr: '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M7 9h10M7 12.5h10M7 16h6"/>',
+    '<rect x="4" y="4" width="7" height="7" rx="1" fill="none"/>' +
+    '<rect x="13" y="4" width="7" height="7" rx="1" fill="none"/>' +
+    '<rect x="4" y="13" width="7" height="7" rx="1" fill="none"/>' +
+    '<rect x="13" y="13" width="7" height="7" rx="1" fill="none"/>' +
+    '<rect x="4" y="4" width="7" height="7" rx="1" fill="currentColor" stroke="none"/>' +
+    '<rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor" stroke="none"/>',
+  // 仅 T（贴齐 egui `paint_text_icon`：顶横 + 中竖，无底横脚）
+  text: '<path d="M5 5 V3 H19 V5 M12 3 V21"/>',
+  cancel: '<path d="M6 6 L18 18 M18 6 L6 18"/>',
+  // 双错位矩形 + 前层 fill="#fff"（白底覆盖，露出后层轮廓；工具栏白底背景下成立）
+  copy:
+    '<rect x="8" y="8" width="11" height="11" rx="1.5" fill="none"/>' +
+    '<rect x="5" y="5" width="11" height="11" rx="1.5" fill="#ffffff" stroke="none"/>' +
+    '<rect x="5" y="5" width="11" height="11" rx="1.5"/>',
+  // 下载箭头（贴齐 egui `paint_save_icon`：中线 + 末端 V 头 + 顶横）
+  save:
+    '<path d="M12 4 V15 M9 12 L12 15 L15 12"/>' +
+    '<path d="M5 6 H19"/>',
+  ocr: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M7 9 H17 M7 13 H14 M7 17 H17"/>',
 };
 
 function svgIcon(name: string): string {

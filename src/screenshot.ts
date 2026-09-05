@@ -170,7 +170,9 @@ for (const { t, icon, title } of TOOLS) {
   });
   b.addEventListener("click", (e) => {
     e.stopPropagation();
-    setTool(tool === t ? null : t);
+    // 再点同一工具保持选中（避免误以为「截图状态被重置」）。
+    // 想取消选区 → 用 cancel/OCR 旁边那个退出键，或按 Esc。
+    if (tool !== t) setTool(t);
   });
   toolBtns.set(t, b);
   toolbar.appendChild(b);

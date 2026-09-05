@@ -132,6 +132,8 @@ const ICONS: Record<string, string> = {
     '<path d="M12 4 V15 M9 12 L12 15 L15 12"/>' +
     '<path d="M5 6 H19"/>',
   ocr: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M7 9 H17 M7 13 H14 M7 17 H17"/>',
+  // 重新截图：刷新环箭头（lucide rotate-cw 风格），点它清空选区回到拉框
+  reselect: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
 };
 
 function svgIcon(name: string): string {
@@ -206,6 +208,17 @@ toolbar.appendChild(widthBtn);
 const divider2 = document.createElement("div");
 divider2.className = "divider";
 toolbar.appendChild(divider2);
+
+// 重新截图：清空选区回到拉框状态（微信式交互的出口）
+const reselectBtn = makeBtn("reselect", "shot.reselect");
+reselectBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  selection = null;
+  selectedIndex = null;
+  setTool(null);
+  render();
+});
+toolbar.appendChild(reselectBtn);
 
 const cancelBtn = makeBtn("cancel", "shot.cancel");
 cancelBtn.addEventListener("click", (e) => {
@@ -1004,7 +1017,16 @@ function onMouseDown(e: MouseEvent) {
     return;
   }
 
-  // 4. 无工具 → 开始选区拖动
+  // 4. 无工具
+  //    微信式：已有选区时不再重新拉框（点工具栏工具也不会重置选区）。
+  //    想重新选 → 点工具栏「重新截图」按钮（清空 selection）或 Esc 退出。
+  if (selection) {
+    if (selectedIndex != null) {
+      selectedIndex = null;
+      render();
+    }
+    return;
+  }
   selectedIndex = null;
   dragMode = "select";
   dragStart = { ...p };

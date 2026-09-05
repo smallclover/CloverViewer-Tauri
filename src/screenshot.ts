@@ -106,7 +106,11 @@ const ICONS: Record<string, string> = {
   circle: '<ellipse cx="12" cy="12" rx="8.5" ry="7.5"/>',
   arrow: '<path d="M5 17 L19 5 M19 5 h-5 M19 5 v5"/>',
   pen: '<path d="M4 20 l5-1.5L20.5 7a2 2 0 0 0-2.8-2.8L6 15.5 4 20z"/>',
-  mosaic: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+  // 马赛克：4 格中左上/右下**实心**、右上/左下描边，对齐原版 egui 的
+  // paint_mosaic_icon（对角填充），否则 4 个描边框看起来跟别的图标没区别。
+  mosaic:
+    '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>' +
+    '<path d="M4 4h7v7H4zM13 13h7v7h-7z" fill="currentColor" stroke="none"/>',
   text: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
   cancel: '<path d="M6 6l12 12M18 6L6 18"/>',
   copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
@@ -532,10 +536,14 @@ function drawShape(c: CanvasRenderingContext2D, s: Shape) {
   }
 }
 
+// block 是**逻辑像素**的块边长（与原版 egui 的 mosaic_width 同义），
+// 内部转物理像素再切块：原版 block_size_phys = mosaic_width * ppp。
+// 之前直接拿 16 当物理像素用，150% DPI 下块只有原版 2/3 大（糊得不够）。
 function drawMosaic(c: CanvasRenderingContext2D, bb: Rect, block: number) {
   if (bb.w <= 0 || bb.h <= 0) return;
-  const bw = Math.max(1, Math.round(bb.w / block));
-  const bh = Math.max(1, Math.round(bb.h / block));
+  const bs = Math.max(1, Math.round(block * physScale()));
+  const bw = Math.max(1, Math.round(bb.w / bs));
+  const bh = Math.max(1, Math.round(bb.h / bs));
   const tmp = document.createElement("canvas");
   tmp.width = bw;
   tmp.height = bh;
@@ -547,7 +555,9 @@ function drawMosaic(c: CanvasRenderingContext2D, bb: Rect, block: number) {
   c.restore();
 }
 
-// 从多屏截图采样一块区域，绘制到目标矩形（用于马赛克与导出）
+// 从多屏截图采样一块区域，绘制到目标矩形（用于马赛克/放大镜/导出/OCR）。
+// 坐标系约定：src 侧（sx, sy）与 screens[] 一律是 **root-local 物理像素**；
+// dst 侧（dx, dy, dw, dh）是目标 canvas 的坐标。两侧各自独立，不混用。
 function blitRegion(
   dst: CanvasRenderingContext2D,
   sx: number, sy: number, sw: number, sh: number,
@@ -589,13 +599,14 @@ function render() {
   // 图形
   for (let i = 0; i < shapes.length; i++) {
     const s = shapes[i];
-    if (s.tool === "mosaic") drawMosaic(ctx, shapeBBox(s), mosaicWidth);
+    // 每个图形用自己的 strokeWidth（创建时快照），改工具栏粗细不影响已画的
+    if (s.tool === "mosaic") drawMosaic(ctx, shapeBBox(s), s.strokeWidth || mosaicWidth);
     else drawShape(ctx, s);
   }
 
   // 当前绘制中的图形
   if (curShape) {
-    if (curShape.tool === "mosaic") drawMosaic(ctx, shapeBBox(curShape), mosaicWidth);
+    if (curShape.tool === "mosaic") drawMosaic(ctx, shapeBBox(curShape), curShape.strokeWidth || mosaicWidth);
     else drawShape(ctx, curShape);
   }
 
@@ -1278,7 +1289,7 @@ async function exportImage(action: "save" | "clipboard") {
   oc.save();
   oc.translate(-sel.x, -sel.y);
   for (const s of shapes) {
-    if (s.tool === "mosaic") drawMosaic(oc, shapeBBox(s), mosaicWidth);
+    if (s.tool === "mosaic") drawMosaic(oc, shapeBBox(s), s.strokeWidth || mosaicWidth);
     else drawShape(oc, s);
   }
   oc.restore();
@@ -1402,17 +1413,24 @@ async function loadScreenshot() {
   canvas.width = totalW;
   canvas.height = totalH;
 
-  // 拼接多屏截图（定位到虚拟桌面逻辑坐标）
+  // 拼接多屏截图
+  // 注意：screens 一律存 **root-local 物理坐标**（= 后端 global - minX/minY），
+  // 与 physPos()/shape 坐标同一套系；blitRegion 内部比较时不再混用坐标系。
+  // 之前存的是后端 global，而传入 blitRegion 的 sx/sy 是 root-local（来自 physPos /
+  // shapeBBox），多屏（minX≠0）时比较结果完全错位 → 放大镜采样到别的屏、
+  // 马赛克糊的是错误区域。
   const pending: Promise<unknown>[] = [];
   for (const s of data.screens) {
     const img = document.createElement("img");
     img.src = s.data_url;
-    img.style.left = `${(s.x - minX) / physScale()}px`;
-    img.style.top = `${(s.y - minY) / physScale()}px`;
+    const rx = s.x - minX; // root-local 物理
+    const ry = s.y - minY;
+    img.style.left = `${rx / physScale()}px`;
+    img.style.top = `${ry / physScale()}px`;
     img.style.width = `${s.width / physScale()}px`;
     img.style.height = `${s.height / physScale()}px`;
     root.insertBefore(img, canvas);
-    screens.push({ img, x: s.x, y: s.y, w: s.width, h: s.height });
+    screens.push({ img, x: rx, y: ry, w: s.width, h: s.height });
     // 等解码完成再显示，避免逐张出现的闪烁（decode 失败时退化为 onload/onerror）
     pending.push(
       typeof img.decode === "function"

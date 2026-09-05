@@ -68,3 +68,10 @@ strip = true
 # 关闭增量编译换取稳定（本 crate 单次全量编译约 13s，可接受）
 [profile.dev]
 incremental = false
+
+# 只对自己的 crate 保留 opt-level=0（便于断点调试），依赖全部 O2。
+# 截屏（xcap）与 PNG 编码（image/png）都在依赖里，debug 下慢 5-10 倍，
+# 是 dev 模式 Alt+S 明显卡顿的主因；开 O2 后体感接近 release。
+# 代价：依赖首次编译变慢（一次性），且依赖内部无法单步。
+[profile.dev.package."*"]
+opt-level = 2

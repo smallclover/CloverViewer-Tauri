@@ -170,9 +170,9 @@ for (const { t, icon, title } of TOOLS) {
   });
   b.addEventListener("click", (e) => {
     e.stopPropagation();
-    // 再点同一工具保持选中（避免误以为「截图状态被重置」）。
-    // 想取消选区 → 用 cancel/OCR 旁边那个退出键，或按 Esc。
-    if (tool !== t) setTool(t);
+    // 点同一工具 → 取消（toggle off）；点别的工具 → 切换。
+    // toggle off 不会清除选区/已画图形，只是把光标交回选区模式。
+    setTool(tool === t ? null : t);
   });
   toolBtns.set(t, b);
   toolbar.appendChild(b);
@@ -1074,7 +1074,13 @@ function onMouseMove(e: MouseEvent) {
   const hit = hitTestShapes(p);
   if (hit !== hoverIndex) {
     hoverIndex = hit;
-    canvas.style.cursor = hit != null ? "move" : "crosshair";
+    // 命中图形 → move；有工具 → crosshair（画/拖）；
+    // 无工具但有选区 → default（不要误导成「重新拉框」）；
+    // 无工具且无选区 → crosshair（确实要选）。
+    canvas.style.cursor =
+      hit != null ? "move" :
+      tool ? "crosshair" :
+      selection ? "default" : "crosshair";
   }
 
   // 无拖拽/绘制分支命中时也要重绘：放大镜跟随鼠标 + overUI 切换都需要刷新。

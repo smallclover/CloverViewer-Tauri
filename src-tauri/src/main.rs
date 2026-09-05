@@ -1,7 +1,10 @@
-// MCP stdio 模式需要控制台子系统（stdin/stdout），故用 "console"；
-// GUI 模式下 release 构建手动隐藏控制台窗口（见 hide_console_window）。
-// 与 egui 原版 main.rs 的处理一致。
-#![cfg_attr(not(debug_assertions), windows_subsystem = "console")]
+// release 构建用 "windows" 子系统（无 console 窗口，避免启动时弹出黑窗）；
+// debug 构建保持 "console"（dev 日志输出需要看到）。
+//
+// MCP stdio 模式也走 "windows" 子系统是有意为之：MCP host 通过 pipe 启动本进程，
+// 不需要 console 分配，stdio handle 仍然可用。tracing 输出经 fmt 默认 write to
+// stderr（在 GUI subsystem 下会被忽略）——MCP 模式下日志不是关键信息，可接受丢失。
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
     tracing_subscriber::fmt()

@@ -374,7 +374,8 @@ function normRect(a: Pt, b: Pt): Rect {
 }
 
 function shapeBBox(s: Shape): Rect {
-  if (s.tool === "pen" && s.points && s.points.length) {
+  // pen / mosaic 都用 points 数组定位（mosaic 现在是笔刷式：每个 point 涂一个 bs×bs 的块）
+  if ((s.tool === "pen" || s.tool === "mosaic") && s.points && s.points.length) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of s.points) {
       x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
@@ -539,20 +540,42 @@ function drawShape(c: CanvasRenderingContext2D, s: Shape) {
 // block 是**逻辑像素**的块边长（与原版 egui 的 mosaic_width 同义），
 // 内部转物理像素再切块：原版 block_size_phys = mosaic_width * ppp。
 // 之前直接拿 16 当物理像素用，150% DPI 下块只有原版 2/3 大（糊得不够）。
-function drawMosaic(c: CanvasRenderingContext2D, bb: Rect, block: number) {
-  if (bb.w <= 0 || bb.h <= 0) return;
-  const bs = Math.max(1, Math.round(block * physScale()));
-  const bw = Math.max(1, Math.round(bb.w / bs));
-  const bh = Math.max(1, Math.round(bb.h / bs));
+// mosaic 现在是**笔刷式**：跟 pen 一样按 points 数组画笔触，
+// 每个 point 处涂一个 bs×bs 的方块，块的颜色取自源区域 down-sample 到 1×1 的代表色。
+// 相邻点 > bs 时插值填块，避免快速拖动时出现笔触裂缝。
+function drawMosaic(c: CanvasRenderingContext2D, s: Shape) {
+  const points = s.points;
+  if (!points || points.length === 0) return;
+  const block = s.strokeWidth || mosaicWidth;
+  const bs = Math.max(1, Math.round(block * physScale())); // 每块边长（物理像素）
   const tmp = document.createElement("canvas");
-  tmp.width = bw;
-  tmp.height = bh;
+  tmp.width = 1;
+  tmp.height = 1;
   const tc = tmp.getContext("2d")!;
-  blitRegion(tc, bb.x, bb.y, bb.w, bb.h, 0, 0, bw, bh);
-  c.save();
-  c.imageSmoothingEnabled = false;
-  c.drawImage(tmp, bb.x, bb.y, bb.w, bb.h);
-  c.restore();
+  const paintDot = (px: number, py: number) => {
+    const dx = px - bs / 2;
+    const dy = py - bs / 2;
+    blitRegion(tc, dx, dy, bs, bs, 0, 0, 1, 1);
+    const d = tc.getImageData(0, 0, 1, 1).data;
+    c.fillStyle = `rgba(${d[0]},${d[1]},${d[2]},${(d[3] / 255).toFixed(3)})`;
+    c.fillRect(dx, dy, bs, bs);
+  };
+  for (let i = 0; i < points.length; i++) {
+    const cur = points[i];
+    paintDot(cur.x, cur.y);
+    if (i > 0) {
+      const prev = points[i - 1];
+      const dist = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+      if (dist > bs) {
+        // 相邻两点之间补块（避免快速拖动时块间距过大产生的可见空隙）
+        const steps = Math.max(1, Math.ceil(dist / bs));
+        for (let j = 1; j < steps; j++) {
+          const t = j / steps;
+          paintDot(prev.x + (cur.x - prev.x) * t, prev.y + (cur.y - prev.y) * t);
+        }
+      }
+    }
+  }
 }
 
 // 从多屏截图采样一块区域，绘制到目标矩形（用于马赛克/放大镜/导出/OCR）。
@@ -600,13 +623,13 @@ function render() {
   for (let i = 0; i < shapes.length; i++) {
     const s = shapes[i];
     // 每个图形用自己的 strokeWidth（创建时快照），改工具栏粗细不影响已画的
-    if (s.tool === "mosaic") drawMosaic(ctx, shapeBBox(s), s.strokeWidth || mosaicWidth);
+    if (s.tool === "mosaic") drawMosaic(ctx, s);
     else drawShape(ctx, s);
   }
 
   // 当前绘制中的图形
   if (curShape) {
-    if (curShape.tool === "mosaic") drawMosaic(ctx, shapeBBox(curShape), curShape.strokeWidth || mosaicWidth);
+    if (curShape.tool === "mosaic") drawMosaic(ctx, curShape);
     else drawShape(ctx, curShape);
   }
 
@@ -956,7 +979,8 @@ function onMouseDown(e: MouseEvent) {
       end: { ...cp },
       color,
       strokeWidth: tool === "mosaic" ? mosaicWidth : strokeWidth,
-      points: tool === "pen" ? [{ ...cp }] : undefined,
+      // pen 和 mosaic 都是笔刷式：在 mousedown 时先入一个点，后续 mousemove 累加
+      points: tool === "pen" || tool === "mosaic" ? [{ ...cp }] : undefined,
     };
     render();
     return;
@@ -1017,7 +1041,7 @@ function onMouseMove(e: MouseEvent) {
   if (curShape) {
     const cp = clampToSelection(p);
     curShape.end = cp;
-    if (curShape.tool === "pen" && curShape.points) {
+    if ((curShape.tool === "pen" || curShape.tool === "mosaic") && curShape.points) {
       // 与原版一致：距上一点 > 2 物理像素才记录，避免密集采样
       const last = curShape.points[curShape.points.length - 1];
       if (!last || Math.hypot(cp.x - last.x, cp.y - last.y) > 2) {
@@ -1303,7 +1327,7 @@ async function exportImage(action: "save" | "clipboard") {
   oc.save();
   oc.translate(-sel.x, -sel.y);
   for (const s of shapes) {
-    if (s.tool === "mosaic") drawMosaic(oc, shapeBBox(s), s.strokeWidth || mosaicWidth);
+    if (s.tool === "mosaic") drawMosaic(oc, s);
     else drawShape(oc, s);
   }
   oc.restore();

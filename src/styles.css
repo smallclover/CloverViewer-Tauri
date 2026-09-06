@@ -36,22 +36,21 @@ html, body {
   font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 13px;
   color: var(--fg);
-  background: transparent; /* 透明窗口,圆角外露出桌面 */
+  background: var(--bg);
   user-select: none;
 }
-
-/* 主容器:圆角 + 背景(绿色氛围渐变,更有层次) */
-#app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  border-radius: 14px;
-  overflow: hidden;
+/* 背景做一丝绿色氛围渐变,更有层次(Mica 感) */
+body {
   background:
     radial-gradient(120vw 70vh at 15% -12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
     radial-gradient(100vw 60vh at 95% 110%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 55%),
     var(--bg);
-  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .hidden { display: none !important; }

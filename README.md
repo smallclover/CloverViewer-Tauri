@@ -2,6 +2,9 @@
   <img src="src-tauri/icons/128x128.png" width="120" alt="CloverViewer Logo">
   <h1>CloverViewer-Tauri 三叶草图片查看与截图工具</h1>
   <p>
+    <b>中文</b> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a>
+  </p>
+  <p>
     [CloverViewer](https://github.com/smallclover/CloverViewer)（Rust + egui）的 Tauri 2 重实现。<br>
     Rust 后端 + Web 前端（Vite + TypeScript），新增内置 MCP Server。
   </p>

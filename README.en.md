@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128.png" width="120" alt="CloverViewer — open-source Windows image viewer and screenshot tool">
+  <img src="assets/logo.png" width="120" alt="CloverViewer — open-source Windows image viewer and screenshot tool">
   <h1>CloverViewer-Tauri — Open-Source Windows Image Viewer &amp; Screenshot Tool (Tauri 2)</h1>
   <p>
     <a href="README.md">中文</a> · <b>English</b> · <a href="README.ja.md">日本語</a>

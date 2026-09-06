@@ -68,8 +68,16 @@ const ctxMenu = $("context-menu");
 
 // ---------- 工具 ----------
 let toastTimer: number | undefined;
-function toast(msg: string) {
-  toastEl.textContent = msg;
+function toast(msg: string, kind: "success" | "error" | "info" = "info") {
+  toastEl.textContent = "";
+  const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "";
+  if (icon) {
+    const ic = document.createElement("span");
+    ic.className = `toast-ic ${kind}`;
+    ic.textContent = icon;
+    toastEl.appendChild(ic);
+  }
+  toastEl.appendChild(document.createTextNode(msg));
   toastEl.classList.remove("hidden");
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
@@ -141,7 +149,7 @@ async function openDirectory(dir: string) {
     showGrid();
     refreshStatus();
   } catch (e) {
-    toast(t("toast.openFailed", { msg: String(e) }));
+    toast(t("toast.openFailed", { msg: String(e) }), "error");
   }
 }
 
@@ -692,18 +700,18 @@ async function copyImageBitmap(entry: ImageEntry) {
     );
     if (!blob) throw new Error("PNG encoding failed");
     await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-    toast(t("toast.copiedImage"));
+    toast(t("toast.copiedImage"), "success");
   } catch (e) {
-    toast(t("toast.copyFailed", { msg: String(e) }));
+    toast(t("toast.copyFailed", { msg: String(e) }), "error");
   }
 }
 
 async function copyImagePath(path: string) {
   try {
     await navigator.clipboard.writeText(path);
-    toast(t("toast.copiedPath"));
+    toast(t("toast.copiedPath"), "success");
   } catch (e) {
-    toast(t("toast.copyFailed", { msg: String(e) }));
+    toast(t("toast.copyFailed", { msg: String(e) }), "error");
   }
 }
 
@@ -769,10 +777,10 @@ function saveSettings(partial: Partial<AppConfig>, opts?: { silent?: boolean }) 
   config = { ...config, ...partial };
   void setConfig(config)
     .then(() => {
-      if (!opts?.silent) toast(t("toast.saved"));
+      if (!opts?.silent) toast(t("toast.saved"), "success");
     })
     .catch(() => {
-      if (!opts?.silent) toast(t("toast.saveFailed"));
+      if (!opts?.silent) toast(t("toast.saveFailed"), "error");
     });
 }
 
@@ -835,11 +843,11 @@ setAutostart.addEventListener("change", () => {
   saveSettings({ launch_on_startup: setAutostart.checked }, { silent: true });
   void setLaunchOnStartup(setAutostart.checked)
     .then(() =>
-      toast(setAutostart.checked ? t("toast.autostartOn") : t("toast.autostartOff")),
+      toast(setAutostart.checked ? t("toast.autostartOn") : t("toast.autostartOff"), "success"),
     )
     .catch((e) => {
       setAutostart.checked = !setAutostart.checked;
-      toast(t("toast.autostartFailed", { msg: String(e) }));
+      toast(t("toast.autostartFailed", { msg: String(e) }), "error");
     });
 });
 $("set-hotkey-apply").addEventListener("click", () => {
@@ -853,9 +861,9 @@ $("set-hotkey-apply").addEventListener("click", () => {
       if (config) {
         config = { ...config, hotkeys: { ...config.hotkeys, show_screenshot: value } };
       }
-      toast(t("toast.hotkeySet", { key: value }));
+      toast(t("toast.hotkeySet", { key: value }), "success");
     })
-    .catch((e) => toast(t("toast.hotkeyFailed", { msg: String(e) })));
+    .catch((e) => toast(t("toast.hotkeyFailed", { msg: String(e) }), "error"));
 });
 $("set-color-hotkey-apply").addEventListener("click", () => {
   const value = setColorHotkey.value.trim();
@@ -868,7 +876,7 @@ $("set-color-hotkey-apply").addEventListener("click", () => {
     return;
   }
   saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C" }), copy_color: value } }, { silent: true });
-  toast(t("toast.colorHotkeySet", { key: value }));
+  toast(t("toast.colorHotkeySet", { key: value }), "success");
 });
 
 // ---------- 启动 ----------

@@ -1480,6 +1480,10 @@ async function loadScreenshot() {
   dragMode = "none";
   curShape = null;
   selectedIndex = null;
+  // 重置工具选择：否则上次用过的画笔会跨会话保留，下次 Alt+S 进入直接是
+  // 画笔态（点哪画哪，无法拉选区）。每次新截图都从「无工具 / 选区模式」开始。
+  tool = null;
+  for (const b of toolBtns.values()) b.classList.toggle("active", false);
   hoverIndex = null;
   moveStart = null;
   moveOrigShape = null;

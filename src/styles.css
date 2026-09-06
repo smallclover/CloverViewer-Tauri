@@ -63,6 +63,7 @@ html, body {
   color: var(--fg);
   letter-spacing: 0.2px;
 }
+.titlebar-title img { width: 16px; height: 16px; border-radius: 4px; display: block; object-fit: cover; }
 .titlebar-spacer { flex: 1; height: 100%; }
 .titlebar-controls { display: flex; gap: 2px; }
 .titlebar-btn {
@@ -164,6 +165,7 @@ html, body {
   color: var(--fg-dim);
 }
 .empty-icon { font-size: 56px; }
+.empty-icon img { width: 72px; height: 72px; border-radius: 16px; display: block; }
 #empty-state .hint { font-size: 12px; opacity: 0.7; }
 
 /* ---------- 网格视图（窗口化虚拟滚动） ---------- */

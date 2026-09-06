@@ -1560,8 +1560,8 @@ async function loadScreenshot() {
   }
 }
 
-async function main() {
-  // 读配置（每次刷新都要重新读，比如用户切换了语言/取色热键）
+async function refreshConfig() {
+  // 读配置（每次复用/刷新都要重新读，这样「截图放大镜」等设置在下一次进入截图时立即生效）
   try {
     const cfg = await getConfig();
     magnifierActive = cfg.magnifier_enabled;
@@ -1571,10 +1571,16 @@ async function main() {
     // 读配置失败则保持默认
   }
   applyI18n(document);
+}
 
-  // 后端复用窗口时 main() 不会重跑，但会 emit screenshot-refresh 触发 loadScreenshot
-  await listen("screenshot-refresh", () => {
-    void loadScreenshot();
+async function main() {
+  await refreshConfig();
+
+  // 后端复用窗口时 main() 不会重跑，但会 emit screenshot-refresh 触发 loadScreenshot；
+  // 此处重读配置再重载，否则复用窗口下「截图放大镜」等设置不生效。
+  await listen("screenshot-refresh", async () => {
+    await refreshConfig();
+    await loadScreenshot();
   });
 
   // 后端隐藏窗口前 emit：清掉画面，避免下次 show 时闪旧截图

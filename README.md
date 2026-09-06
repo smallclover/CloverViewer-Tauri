@@ -20,7 +20,7 @@
 
 ## 📖 简介
 
-CloverViewer-Tauri 是一个免费开源的 Windows 轻量级工具，集图片浏览与屏幕截图于一体。本项目是原 [CloverViewer](https://github.com/smallclover/CloverViewer)（egui/eframe 版）的 Tauri 2 重实现，功能对齐之外新增了**内置 MCP Server**——可以让 Claude Desktop 等 AI 客户端直接调用截图能力。
+CloverViewer-Tauri 是一个免费开源的 Windows 轻量级工具，集图片浏览与屏幕截图于一体。本项目是原 [CloverViewer](https://github.com/smallclover/CloverViewer)（egui/eframe 版）的 Tauri 2 重实现，**界面全面更新换代**——从原版的 Rust 原生 egui UI，升级为基于 Web（Vite + TypeScript + Canvas）的现代化自定义无边框界面，观感与交互焕然一新。功能对齐之外新增了**内置 MCP Server**——可以让 Claude Desktop 等 AI 客户端直接调用截图能力。
 
 ## ✨ 功能特性
 
@@ -150,7 +150,8 @@ npm run tauri build
 ## 🔄 与原版的关系
 
 *   原 egui 版：[CloverViewer](https://github.com/smallclover/CloverViewer)（eframe + 全 Rust UI）
-*   本仓库：Tauri 2 重实现，配置文件互通，迁移路线与决策记录见 [ROADMAP.md](./ROADMAP.md)
+*   本仓库：Tauri 2 重实现；**界面全新换代**，改用 Web 技术栈（HTML/CSS/TS）做出自定义无边框窗口，而非原版的 egui 原生控件
+*   配置文件互通，迁移路线与决策记录见 [ROADMAP.md](./ROADMAP.md)
 *   迁移动机与取舍详见 ROADMAP「一、为什么迁移 / 什么时候不该迁移」
 
 ## 📄 开源协议

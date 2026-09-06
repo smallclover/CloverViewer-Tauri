@@ -603,6 +603,40 @@ btnFlipH.addEventListener("click", flipHorizontal);
 btnFlipV.addEventListener("click", flipVertical);
 updateViewSwitch(); // 初始状态：网格高亮；无图时禁用单图
 
+// ---------- 无边框窗口控制 ----------
+const win = getCurrentWindow();
+$("win-min").addEventListener("click", () => void win.minimize());
+// close() 会触发 CloseRequested：若开启“关闭最小化到托盘”则隐藏到托盘，
+// 否则真正退出——与原有行为一致。
+$("win-close").addEventListener("click", () => void win.close());
+// ---------- 无边框窗口：标题栏拖动 + 边缘缩放（原生） ----------
+// 使用 Tauri 原生 startDragging / startResizeDragging，由操作系统接管拖动/缩放
+// 循环。手写 setPosition + setSize 在每帧 mousemove 里挪动窗口时，WebView2 的
+// 合成器跟不上窗口位置，导致「拖动时闪动、重影」。原生拖拽让窗口与内容原子移动，
+// 不会出现该问题。
+const titlebar = $("titlebar");
+
+titlebar.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  if ((e.target as HTMLElement).closest(".titlebar-controls")) return;
+  void win.startDragging();
+});
+
+// 边缘缩放：原生 startResizeDragging 按方向交给系统处理
+const resizeHandles = document.querySelectorAll<HTMLElement>(".resize-handle");
+resizeHandles.forEach((h) => {
+  h.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const dir = h.dataset.dir;
+    if (
+      dir === "East" || dir === "West" || dir === "South" ||
+      dir === "SouthEast" || dir === "SouthWest"
+    ) {
+      void win.startResizeDragging(dir);
+    }
+  });
+});
+
 // ---------- 自定义右键菜单（接管 WebView 默认菜单） ----------
 type CtxItem = { label: string; action: () => void } | "sep";
 

@@ -7,6 +7,19 @@
   </head>
   <body>
     <div id="app">
+      <div id="titlebar">
+        <span class="titlebar-title">🍀 CloverViewer</span>
+        <div class="titlebar-spacer"></div>
+        <div class="titlebar-controls">
+          <button id="win-min" class="titlebar-btn" data-i18n-title="win.min" title="最小化">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+          </button>
+          <button id="win-close" class="titlebar-btn" data-i18n-title="win.close" title="关闭">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+      </div>
+
       <header id="toolbar">
         <button id="btn-open" class="tb-btn" data-i18n-title="toolbar.openTitle">
           <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
@@ -133,6 +146,13 @@
           </div>
         </div>
       </div>
+
+      <!-- 无边框窗口边缘缩放把手（frameless 下原生边框缩放失效，用 startResizeDragging 补回） -->
+      <div class="resize-handle rh-s" data-dir="South"></div>
+      <div class="resize-handle rh-e" data-dir="East"></div>
+      <div class="resize-handle rh-w" data-dir="West"></div>
+      <div class="resize-handle rh-se" data-dir="SouthEast"></div>
+      <div class="resize-handle rh-sw" data-dir="SouthWest"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

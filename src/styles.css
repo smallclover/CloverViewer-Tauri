@@ -43,6 +43,58 @@ html, body {
 .hidden { display: none !important; }
 .spacer { flex: 1; }
 
+/* ---------- 自定义标题栏（无边框窗口） ---------- */
+#titlebar {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 4px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.titlebar-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: 0.2px;
+}
+.titlebar-spacer { flex: 1; height: 100%; }
+.titlebar-controls { display: flex; gap: 2px; }
+.titlebar-btn {
+  width: 36px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+.titlebar-btn .ic { width: 15px; height: 15px; }
+.titlebar-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.titlebar-btn:active { transform: scale(0.92); }
+#win-close:hover { background: #e81123; color: #fff; }
+
+/* ---------- 无边框窗口缩放把手 ---------- */
+.resize-handle {
+  position: fixed;
+  z-index: 50;
+  background: transparent;
+}
+.rh-s { left: 0; right: 0; bottom: 0; height: 5px; cursor: ns-resize; }
+.rh-e { top: 0; bottom: 0; right: 0; width: 5px; cursor: ew-resize; }
+.rh-w { top: 0; bottom: 0; left: 0; width: 5px; cursor: ew-resize; }
+.rh-se { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.rh-sw { left: 0; bottom: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+
 /* ---------- 工具栏 ---------- */
 #toolbar {
   display: flex;
@@ -65,9 +117,10 @@ html, body {
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
 }
 .tb-btn:hover { background: var(--bg-hover); }
-.tb-btn:active { transform: translateY(1px); }
+.tb-btn:active { transform: scale(0.95); }
 
 .ic {
   width: 15px;
@@ -264,9 +317,11 @@ html, body {
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
 }
 .vs-btn + .vs-btn { border-left: 1px solid var(--border); }
 .vs-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.vs-btn:active { transform: scale(0.95); }
 .vs-btn.active {
   background: var(--accent);
   color: #fff;

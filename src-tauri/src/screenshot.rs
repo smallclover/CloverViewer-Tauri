@@ -162,8 +162,16 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
 pub fn start_screenshot(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
-        // 防并发：若上一次截屏尚未结束则丢弃本次
         let store = app.state::<ScreenshotStore>();
+
+        // 已在截图状态（截图窗口可见）时忽略再次触发，避免重新截屏/重开窗口导致闪屏。
+        if let Some(w) = app.get_webview_window("screenshot") {
+            if w.is_visible().unwrap_or(false) {
+                return;
+            }
+        }
+
+        // 防并发：若上一次截屏尚未结束则丢弃本次
         {
             let mut cap = store.capturing.lock().unwrap();
             if *cap {

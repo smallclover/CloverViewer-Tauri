@@ -70,9 +70,13 @@ const ctxMenu = $("context-menu");
 let toastTimer: number | undefined;
 function toast(msg: string) {
   toastEl.textContent = msg;
+  toastEl.classList.remove("hidden");
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2200);
+  toastTimer = window.setTimeout(() => {
+    toastEl.classList.remove("show");
+    toastEl.classList.add("hidden");
+  }, 2200);
 }
 
 async function srcFor(entry: ImageEntry): Promise<string> {

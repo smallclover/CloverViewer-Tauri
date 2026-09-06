@@ -1,21 +1,22 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128.png" width="120" alt="CloverViewer Logo">
-  <h1>CloverViewer-Tauri — Cloverleaf Image Viewer &amp; Screenshot Tool</h1>
+  <img src="src-tauri/icons/128x128.png" width="120" alt="CloverViewer — open-source Windows image viewer and screenshot tool">
+  <h1>CloverViewer-Tauri — Open-Source Windows Image Viewer &amp; Screenshot Tool (Tauri 2)</h1>
   <p>
-    <b>中文</b> · <a href="README.md">English</a> | <a href="README.ja.md">日本語</a>
+    <a href="README.md">中文</a> · <b>English</b> · <a href="README.ja.md">日本語</a>
   </p>
   <p>
-    A Tauri 2 reimplementation of [CloverViewer](https://github.com/smallclover/CloverViewer) (Rust + egui).<br>
-    Rust backend + Web frontend (Vite + TypeScript), with a built-in MCP Server.
+    A free, lightweight Windows app for browsing images and capturing/annotating screenshots — rebuilt with <a href="https://tauri.app">Tauri 2</a> from the original [CloverViewer](https://github.com/smallclover/CloverViewer) (Rust + egui).<br>
+    Rust backend + Web frontend (Vite + TypeScript), with a built-in <a href="https://modelcontextprotocol.io">MCP Server</a>.
   </p>
   <p>
     <img src="https://img.shields.io/badge/version-0.1.0-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
-    <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Tauri 2">
+    <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Built with Tauri 2">
+    <img src="https://img.shields.io/badge/MCP-Server-9C29AC" alt="MCP Server">
   </p>
   <p>
-    <a href="https://github.com/smallclover"><img src="https://img.shields.io/badge/Author-smallclover-green" alt="Author"></a>
+    <a href="https://github.com/smallclover"><img src="https://img.shields.io/badge/Author-smallclover-green" alt="Author: smallclover"></a>
   </p>
 </div>
 
@@ -23,13 +24,13 @@
 
 ## 📖 Introduction
 
-CloverViewer-Tauri is a free and open-source lightweight Windows tool that combines image browsing with screen capture. This project is a Tauri 2 reimplementation of the original [CloverViewer](https://github.com/smallclover/CloverViewer) (egui/eframe version), **with a complete UI overhaul** — upgrading from the original Rust-native egui interface to a modern, custom frameless interface built on the Web (Vite + TypeScript + Canvas). It looks and feels brand new. On top of feature parity, it adds a **built-in MCP Server**, letting AI clients such as Claude Desktop call the screenshot capability directly.
+CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot tool** built with **Tauri 2**. It is the next-generation reimplementation of the original [CloverViewer](https://github.com/smallclover/CloverViewer) (egui/eframe version) — **with a complete UI overhaul**: the Rust-native egui interface is replaced by a modern, custom, frameless interface built on the Web (Vite + TypeScript + Canvas). It looks and feels brand new. On top of feature parity, it adds a **built-in MCP Server**, letting AI clients such as Claude Desktop call the screenshot capability directly. Lightweight and fast, it packs image browsing, multi-monitor screenshot capture, annotation, and OCR into one portable Windows app.
 
 ## ✨ Features
 
 ### 🖼️ Image Viewer
 
-*   **Dual view modes**: switch between grid view (thumbnails) and single-image view (large image)
+*   **Dual view modes**: grid view (thumbnails) and single-image view (large image)
 *   **Folder browsing**: opening a folder loads all images automatically
 *   **Quick navigation**: ←/→ to switch, with preloading of adjacent images
 *   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity
@@ -88,7 +89,7 @@ PNG · JPEG · GIF · BMP · WebP · TIFF
 
 | Layer | Technology |
 |---|---|
-| Framework | Tauri 2 |
+| Framework | [Tauri 2](https://tauri.app) |
 | Frontend | Vite · TypeScript · Canvas |
 | Screenshot | xcap |
 | OCR | Windows.Media.Ocr (native UWP) |

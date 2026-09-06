@@ -1,21 +1,22 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128.png" width="120" alt="CloverViewer Logo">
-  <h1>CloverViewer-Tauri — クローバー画像ビューア &amp; スクリーンショットツール</h1>
+  <img src="src-tauri/icons/128x128.png" width="120" alt="CloverViewer — オープンソース Windows 画像ビューア & スクリーンショットツール">
+  <h1>CloverViewer-Tauri — オープンソース Windows 画像ビューア &amp; スクリーンショットツール（Tauri 2）</h1>
   <p>
     <a href="README.md">中文</a> · <a href="README.en.md">English</a> · <b>日本語</b>
   </p>
   <p>
-    [CloverViewer](https://github.com/smallclover/CloverViewer)（Rust + egui）の Tauri 2 再実装。<br>
-    Rust バックエンド + Web フロントエンド（Vite + TypeScript）、内蔵 MCP Server 付き。
+    画像閲覧とスクリーンショット注釈をひとつにまとめた、無料・軽量な Windows アプリ —— <a href="https://tauri.app">Tauri 2</a> で再実装した [CloverViewer](https://github.com/smallclover/CloverViewer)（Rust + egui）。<br>
+    Rust バックエンド + Web フロントエンド（Vite + TypeScript）、内蔵 <a href="https://modelcontextprotocol.io">MCP Server</a> 付き。
   </p>
   <p>
     <img src="https://img.shields.io/badge/version-0.1.0-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
-    <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Tauri 2">
+    <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Tauri 2 で構築">
+    <img src="https://img.shields.io/badge/MCP-Server-9C29AC" alt="MCP Server">
   </p>
   <p>
-    <a href="https://github.com/smallclover"><img src="https://img.shields.io/badge/Author-smallclover-green" alt="Author"></a>
+    <a href="https://github.com/smallclover"><img src="https://img.shields.io/badge/Author-smallclover-green" alt="作者: smallclover"></a>
   </p>
 </div>
 
@@ -23,7 +24,7 @@
 
 ## 📖 はじめに
 
-CloverViewer-Tauri は、画像閲覧とスクリーンショットをひとつにまとめた、無料・オープンソースの Windows 向け軽量ツールです。プロジェクトは本来の [CloverViewer](https://github.com/smallclover/CloverViewer)（egui/eframe 版）の Tauri 2 再実装で、**UI を全面的に刷新**しました——従来の Rust ネイティブ egui インターフェースから、Web（Vite + TypeScript + Canvas）ベースのモダンなカスタム・フレームレスインターフェースへと一新されています。見た目も操作感も新しくなりました。機能を揃えたうえで、**内蔵 MCP Server** を追加し、Claude Desktop などの AI クライアントがスクリーンショット機能を直接呼び出せるようにしています。
+CloverViewer-Tauri は、**Tauri 2** で構築された**無料・オープンソースの Windows 画像ビューア & スクリーンショットツール**です。本来の [CloverViewer](https://github.com/smallclover/CloverViewer)（egui/eframe 版）の**次世代の再実装**で、**UI を全面的に刷新**しました——従来の Rust ネイティブ egui インターフェースから、Web（Vite + TypeScript + Canvas）ベースのモダンなカスタム・フレームレスインターフェースへと一新されています。見た目も操作感も新しくなりました。機能を揃えたうえで、**内蔵 MCP Server** を追加し、Claude Desktop などの AI クライアントがスクリーンショット機能を直接呼び出せるようにしています。軽量で高速、画像閲覧・マルチモニターキャプチャ・注釈・OCR をひとつのポータブルな Windows アプリに収めています。
 
 ## ✨ 機能
 
@@ -88,7 +89,7 @@ PNG · JPEG · GIF · BMP · WebP · TIFF
 
 | レイヤー | 技術 |
 |---|---|
-| フレームワーク | Tauri 2 |
+| フレームワーク | [Tauri 2](https://tauri.app) |
 | フロントエンド | Vite · TypeScript · Canvas |
 | スクリーンショット | xcap |
 | OCR | Windows.Media.Ocr（ネイティブ UWP） |

@@ -66,6 +66,14 @@ pub fn run() {
             ocr::ocr_image,
         ])
         .setup(move |app| {
+            // 显式设置窗口/任务栏图标：Tauri 2 窗口默认不套用 default_window_icon，
+            // 否则窗口内部/任务栏图标是系统默认而非真实图标。
+            if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = win.set_icon(icon.clone());
+                }
+            }
+
             // 恢复上次窗口位置/尺寸
             if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
                 if let Some((x, y)) = startup_pos {

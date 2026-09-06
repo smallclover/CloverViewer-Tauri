@@ -760,10 +760,16 @@ const setMagnifier = $<HTMLInputElement>("set-magnifier");
 const setMinimize = $<HTMLInputElement>("set-minimize");
 const setAutostart = $<HTMLInputElement>("set-autostart");
 
-function saveSettings(partial: Partial<AppConfig>) {
+function saveSettings(partial: Partial<AppConfig>, opts?: { silent?: boolean }) {
   if (!config) return;
   config = { ...config, ...partial };
-  void setConfig(config);
+  void setConfig(config)
+    .then(() => {
+      if (!opts?.silent) toast(t("toast.saved"));
+    })
+    .catch(() => {
+      if (!opts?.silent) toast(t("toast.saveFailed"));
+    });
 }
 
 function openSettings() {
@@ -822,7 +828,7 @@ setMinimize.addEventListener("change", () => {
   saveSettings({ minimize_on_close: setMinimize.checked });
 });
 setAutostart.addEventListener("change", () => {
-  saveSettings({ launch_on_startup: setAutostart.checked });
+  saveSettings({ launch_on_startup: setAutostart.checked }, { silent: true });
   void setLaunchOnStartup(setAutostart.checked)
     .then(() =>
       toast(setAutostart.checked ? t("toast.autostartOn") : t("toast.autostartOff")),
@@ -857,7 +863,7 @@ $("set-color-hotkey-apply").addEventListener("click", () => {
     toast(t("toast.hotkeyEmpty"));
     return;
   }
-  saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C" }), copy_color: value } });
+  saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C" }), copy_color: value } }, { silent: true });
   toast(t("toast.colorHotkeySet", { key: value }));
 });
 

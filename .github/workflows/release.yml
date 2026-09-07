@@ -1,0 +1,44 @@
+name: release
+
+# 手动或推送 v* 标签时触发：构建 Windows NSIS 安装包并创建 GitHub Release。
+# 本地无需任何 GitHub Token —— 发布使用 Actions 自带的 GITHUB_TOKEN。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build & publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # __VERSION__ 会被替换为触发本次构建的标签版本（如 v0.1.0 -> 0.1.0）
+          tagName: v__VERSION__
+          releaseName: 'CloverViewer v__VERSION__'
+          releaseBody: |
+            CloverViewer 更新。
+
+            从下方 Assets 下载 `*-setup.exe` 安装即可：
+            - 安装包（NSIS）: `CloverViewer_` + version + `_x64-setup.exe`
+          releaseDraft: false
+          prerelease: false

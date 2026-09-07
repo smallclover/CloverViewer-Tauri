@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloverViewer UI 现代化 · 方向草图</title>
+  <style>
+    :root { --bg:#0f1115; --card:#171a20; --line:#262a33; --txt:#eceef2; --sub:#9aa0ac; --acc:#4ea85c; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--txt); font-family:"Segoe UI",system-ui,sans-serif; padding:32px 26px 60px; }
+    h1 { font-size:22px; font-weight:700; }
+    .lede { color:var(--sub); font-size:14px; max-width:900px; line-height:1.6; margin:8px 0 26px; }
+    .lede b { color:var(--acc); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:22px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+    .card h3 { font-size:16px; margin-bottom:2px; }
+    .card .desc { color:var(--sub); font-size:12.5px; line-height:1.5; min-height:40px; margin-bottom:12px; }
+    .card .refs { font-size:12px; color:var(--sub); margin-top:12px; border-top:1px solid var(--line); padding-top:10px; line-height:1.7; }
+    .card .refs a { color:#7ec88a; text-decoration:none; }
+    .card .refs a:hover { text-decoration:underline; }
+
+    /* ---------- 迷你窗口 ---------- */
+    .win { height:230px; border-radius:10px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.45); border:1px solid var(--line); position:relative; background:#1c1f26; }
+    .win.light { background:#f3f4f6; border-color:#e2e3e7; }
+    .tb { height:24px; display:flex; align-items:center; gap:6px; padding:0 8px; font-size:11px; color:var(--sub);
+          background:rgba(255,255,255,.05); border-bottom:1px solid var(--line); }
+    .win.light .tb { color:#5b6067; background:rgba(255,255,255,.6); border-color:#e2e3e7; }
+    .tb .dot { width:9px; height:9px; border-radius:50%; }
+    .tb .dot.r{background:#e5614b}.tb .dot.y{background:#e6a23c}.tb .dot.g{background:#5ec269}
+    .tb .t { flex:1; text-align:center; }
+    .toolbar { height:34px; display:flex; align-items:center; gap:6px; padding:0 8px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.03); }
+    .win.light .toolbar { background:#fff; border-color:#e2e3e7; }
+    .btn { height:20px; border-radius:5px; font-size:10px; display:inline-flex; align-items:center; gap:4px; padding:0 8px; }
+    .btn.primary { background:var(--acc); color:#fff; }
+    .btn.ghost { background:transparent; color:var(--sub); border:1px solid var(--line); }
+    .btn.ic { width:22px; justify-content:center; border:1px solid var(--line); color:var(--sub); }
+    .spacer { flex:1; }
+    .crumb { font-size:10px; color:var(--sub); }
+
+    .content { position:absolute; top:58px; left:0; right:0; bottom:26px; padding:10px; overflow:hidden; }
+    .status { height:26px; position:absolute; left:0; right:0; bottom:0; display:flex; align-items:center; gap:6px;
+              padding:0 10px; font-size:10px; color:var(--sub); border-top:1px solid var(--line); }
+
+    /* 网格缩略图 */
+    .thumbs { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; height:100%; }
+    .th { border-radius:6px; background:#2a2e36; position:relative; overflow:hidden; }
+    .th::after{content:""; position:absolute; inset:38% 30%; border-radius:4px; background:linear-gradient(135deg,#3a3f49,#454b57); }
+    .win.light .th{background:#e4e6ea}.win.light .th::after{background:linear-gradient(135deg,#cdd2d9,#b9c0c9)}
+    .th.hover{outline:2px solid var(--acc)}
+    .sidebar { position:absolute; top:58px; left:0; bottom:26px; width:92px; padding:10px 6px; border-right:1px solid var(--line); background:rgba(255,255,255,.02); }
+    .sitem { height:22px; border-radius:5px; font-size:10px; color:var(--sub); padding:0 6px; margin-bottom:3px; display:flex; align-items:center; }
+    .sitem.on { background:rgba(78,168,92,.16); color:#d7f0dc; }
+
+    /* C 极简 */
+    .float-toolbar { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:4; display:flex; gap:4px;
+                     background:rgba(20,22,28,.7); backdrop-filter:blur(6px); border:1px solid var(--line); padding:5px; border-radius:9px; }
+    .win.light .float-toolbar{background:rgba(255,255,255,.75)}
+    .ft-btn{width:24px;height:24px;border-radius:5px;background:transparent;color:var(--sub);display:flex;align-items:center;justify-content:center;}
+
+    /* D 截图浮层 */
+    .overlay { position:relative; height:230px; border-radius:10px; overflow:hidden; background:#0b0c0f; border:1px solid var(--line); }
+    .screen { position:absolute; inset:0; background:
+      radial-gradient(circle at 30% 30%, #2c313a 0, transparent 40%),
+      radial-gradient(circle at 72% 62%, #23272f 0, transparent 45%),
+      #16181d; }
+    .sel { position:absolute; left:18%; top:20%; width:60%; height:52%; border:2px solid var(--acc); background:rgba(78,168,92,.12); }
+    .sel::after{content:""; position:absolute; right:-3px; bottom:-3px; width:7px;height:7px;border-radius:2px;background:var(--acc)}
+    .dim { position:absolute; inset:0; background:rgba(0,0,0,.35); }
+    .annot-bar { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:4px;
+                 background:rgba(20,22,28,.78); backdrop-filter:blur(6px); border:1px solid var(--line); padding:6px; border-radius:10px; }
+    .abtn{width:26px;height:26px;border-radius:6px;color:#c9ced6;display:flex;align-items:center;justify-content:center;background:transparent;}
+    .abtn.on{background:var(--acc);color:#fff}
+  </style>
+</head>
+<body>
+  <h1>CloverViewer UI 现代化 · 方向草图</h1>
+  <p class="lede">
+    每个卡片是一扇<b>迷你窗口</b>,模拟 CloverViewer 按该方向改造后的样子。下面是<b>真实参考链接</b>,点开能看真实现代应用。确定方向后我出高保真实现。
+  </p>
+
+  <div class="grid">
+
+    <!-- A -->
+    <div class="card">
+      <h3>A · Windows 11 Fluent / Mica(毛玻璃)</h3>
+      <div class="desc">标题栏+工具栏用半透明毛玻璃,圆角、微软 accent,原生 Windows 11 质感。</div>
+      <div class="win">
+        <div class="tb"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">CloverViewer</span></div>
+        <div class="toolbar">
+          <span class="btn primary">↗ 打开文件夹</span>
+          <span class="crumb">主页 &gt; 图片 &gt; 2026</span>
+          <span class="spacer"></span>
+          <span class="btn ic">⋯</span>
+          <span class="btn ic">⚙</span>
+        </div>
+        <div class="content"><div class="thumbs"><div class="th hover"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div></div></div>
+        <div class="status">就绪 · 12 张 · 2560×1440</div>
+      </div>
+      <div class="refs">
+        <b>真实参考</b> · <a href="https://files.community/" target="_blank">Files(资源管理器)</a> ·
+        <a href="https://learn.microsoft.com/windows/apps/design/style/mica" target="_blank">Mica 设计文档</a> ·
+        <a href="https://developer.microsoft.com/fluentui/" target="_blank">Fluent UI</a> ·
+        <a href="https://github.com/microsoft/PowerToys" target="_blank">PowerToys</a>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="card">
+      <h3>B · Eagle 式工作台(侧边栏)</h3>
+      <div class="desc">左侧导航(最近/收藏/文件夹/标签) + 右侧网格,图片资产管理更顺手。</div>
+      <div class="win">
+        <div class="tb"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">CloverViewer — 收藏</span></div>
+        <div class="sidebar">
+          <div class="sitem on">● 最近的</div>
+          <div class="sitem">★ 收藏</div>
+          <div class="sitem">▓ 文件夹</div>
+          <div class="sitem"># 标签</div>
+          <div class="sitem">◆ 截图</div>
+        </div>
+        <div class="content" style="left:92px"><div class="thumbs"><div class="th"></div><div class="th hover"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div></div></div>
+        <div class="status">收藏 24 项</div>
+      </div>
+      <div class="refs">
+        <b>真实参考</b> · <a href="https://eagle.cool/" target="_blank">Eagle(资产库)</a> ·
+        <a href="https://www.figma.com/" target="_blank">Figma</a> ·
+        <a href="https://www.figma.com/community" target="_blank">Figma Community</a>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="card">
+      <h3>C · Photos 极简 · 内容优先</h3>
+      <div class="desc">去掉常驻工具栏,内容最大化;需要时悬浮毛玻璃工具条。</div>
+      <div class="win light">
+        <div class="tb"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">CloverViewer</span></div>
+        <div class="float-toolbar">
+          <span class="ft-btn">🔍</span><span class="ft-btn">⇄</span><span class="ft-btn">−</span><span class="ft-btn">＋</span><span class="ft-btn">⚙</span>
+        </div>
+        <div class="content"><div class="thumbs"><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div><div class="th"></div></div></div>
+      </div>
+      <div class="refs">
+        <b>真实参考</b> · Windows 照片(macOS 照片 / Google 照片同思路) ·
+        <a href="https://www.windows.com/" target="_blank">Windows 11 照片应用</a>
+      </div>
+    </div>
+
+    <!-- D -->
+    <div class="card">
+      <h3>D · 截图浮层(Snipaste 式浮动工具条)</h3>
+      <div class="desc">截图标注时,底部悬浮工具条,图标化工具 + 半透明玻璃底。</div>
+      <div class="overlay">
+        <div class="screen"></div>
+        <div class="dim"></div>
+        <div class="sel"></div>
+        <div class="annot-bar">
+          <span class="abtn on">▣</span><span class="abtn">◯</span><span class="abtn">↗</span><span class="abtn">✎</span><span class="abtn">⬛</span><span class="abtn">T</span><span class="abtn">⌫</span><span class="abtn">✓</span><span class="abtn">✕</span>
+        </div>
+      </div>
+      <div class="refs">
+        <b>真实参考</b> · <a href="https://www.snipaste.com/" target="_blank">Snipaste</a> ·
+        <a href="https://getsharex.com/" target="_blank">ShareX</a> ·
+        Windows 截图工具(Snipping Tool)
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

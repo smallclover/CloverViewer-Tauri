@@ -1,6 +1,6 @@
 name: release
 
-# 手动或推送 v* 标签时触发：构建 Windows NSIS 安装包并创建 GitHub Release。
+# 推送 v* 标签时触发：构建 Windows NSIS 安装包并创建 GitHub Release。
 # 本地无需任何 GitHub Token —— 发布使用 Actions 自带的 GITHUB_TOKEN。
 on:
   push:
@@ -22,6 +22,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Install frontend dependencies
+        run: npm ci
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

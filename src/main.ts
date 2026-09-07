@@ -62,6 +62,8 @@ const btnFlipH = $("btn-flip-h");
 const btnFlipV = $("btn-flip-v");
 const btnGrid = $<HTMLButtonElement>("btn-grid");
 const btnSingle = $<HTMLButtonElement>("btn-single");
+const navPrev = $<HTMLButtonElement>("nav-prev");
+const navNext = $<HTMLButtonElement>("nav-next");
 const dropOverlay = $("drop-overlay");
 const toastEl = $("toast");
 const ctxMenu = $("context-menu");
@@ -221,6 +223,7 @@ function showGrid() {
   setImageToolsVisible(false);
   updateViewSwitch();
   renderGrid();
+  updateNavButtons();
 }
 
 function renderGrid() {
@@ -335,6 +338,7 @@ function showSingle(index: number) {
   updateViewSwitch();
   updateCellActive();
   applyPropsState();
+  updateNavButtons();
 
   const entry = images[index];
   fitMode = true;
@@ -535,8 +539,21 @@ function flipVertical() {
 // ---------- 导航 ----------
 function navigate(delta: number) {
   if (images.length === 0) return;
-  const next = (activeIndex + delta + images.length) % images.length;
+  const next = activeIndex + delta;
+  // 不循环：到首/尾就不再切换（首尾按钮置灰）
+  if (next < 0 || next > images.length - 1) return;
   showSingle(next);
+}
+
+// 更新单图左右切图按钮的置灰状态（首张禁用上一张，末张禁用下一张）
+function updateNavButtons() {
+  if (viewMode !== "single") {
+    navPrev.disabled = true;
+    navNext.disabled = true;
+    return;
+  }
+  navPrev.disabled = activeIndex <= 0;
+  navNext.disabled = activeIndex >= images.length - 1;
 }
 
 // ---------- 键盘 ----------
@@ -613,6 +630,11 @@ btnProps.addEventListener("click", toggleProps);
 btnRotate.addEventListener("click", rotateImage);
 btnFlipH.addEventListener("click", flipHorizontal);
 btnFlipV.addEventListener("click", flipVertical);
+// 单图切图按钮：点击切换 + 阻止 mousedown 冒泡，避免误触发拖拽平移
+navPrev.addEventListener("mousedown", (e) => e.stopPropagation());
+navNext.addEventListener("mousedown", (e) => e.stopPropagation());
+navPrev.addEventListener("click", () => navigate(-1));
+navNext.addEventListener("click", () => navigate(1));
 updateViewSwitch(); // 初始状态：网格高亮；无图时禁用单图
 
 // ---------- 无边框窗口控制 ----------

@@ -129,10 +129,11 @@ const ICONS: Record<string, string> = {
     '<rect x="8" y="8" width="11" height="11" rx="1.5" fill="none"/>' +
     '<rect x="5" y="5" width="11" height="11" rx="1.5" fill="#ffffff" stroke="none"/>' +
     '<rect x="5" y="5" width="11" height="11" rx="1.5"/>',
-  // 下载箭头（贴齐 egui `paint_save_icon`：中线 + 末端 V 头 + 顶横）
+  // 保存：向下箭落入开口托盘（lucide download 风格），一眼即“保存/落盘”
   save:
-    '<path d="M12 4 V15 M9 12 L12 15 L15 12"/>' +
-    '<path d="M5 6 H19"/>',
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
+    '<path d="M7 10l5 5 5-5"/>' +
+    '<path d="M12 15V3"/>',
   ocr: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M7 9 H17 M7 13 H14 M7 17 H17"/>',
   // 重新截图：刷新环箭头（lucide rotate-cw 风格），点它清空选区回到拉框
   reselect: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',

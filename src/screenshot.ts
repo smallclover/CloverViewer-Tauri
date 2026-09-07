@@ -75,12 +75,14 @@ let curShape: Shape | null = null; // 正在绘制
 let selectedIndex: number | null = null;
 let hoverIndex: number | null = null;
 
-type DragMode = "none" | "select" | "move" | "resize";
+type DragMode = "none" | "select" | "move" | "resize" | "move-selection";
 let dragMode: DragMode = "none";
 let resizeHandle = -1;
 let moveStart: Pt | null = null;
 let moveOrigShape: Shape | null = null;
 let resizeOrig: { start: Pt; end: Pt; strokeWidth: number } | null = null;
+let moveSelectionStart: Pt | null = null;
+let moveSelectionOrig: Rect | null = null;
 
 // ---------- 放大镜 ----------
 const MAG_GRID = 15; // 15×15 像素
@@ -664,9 +666,10 @@ function render() {
     else drawShape(ctx, curShape);
   }
 
-  // 选区边框（绿色 + 8 锚点）
-  if (selection && selection.w > 0 && selection.h > 0) {
-    drawStyleBox(ctx, selection);
+  // 选区边框（绿色 + 8 锚点）：用 selRect（= 拖拽中的动态选区 或 已定选区），
+  // 与微信截图一致 —— 拉框过程中绿色框实时跟随，选区完成/移动/缩放时也显示。
+  if (selRect && selRect.w > 0 && selRect.h > 0) {
+    drawStyleBox(ctx, selRect);
   }
 
   // 选中图形的控制点 + 蓝色边框
@@ -937,6 +940,26 @@ function clampToSelection(p: Pt): Pt {
   };
 }
 
+/// p 是否落在当前选区内（用于「选区外禁止光标 / 选区内拖拽移动选区」）
+function pointInSelection(p: Pt): boolean {
+  return (
+    !!selection &&
+    p.x >= selection.x && p.x <= selection.x + selection.w &&
+    p.y >= selection.y && p.y <= selection.y + selection.h
+  );
+}
+
+/// 把所有图形整体平移 (dx, dy)（移动选区时，标注内容跟随选区一起走，保持相对位置）
+function translateShapes(dx: number, dy: number) {
+  for (const s of shapes) {
+    s.start.x += dx; s.start.y += dy;
+    s.end.x += dx; s.end.y += dy;
+    if (s.points) {
+      for (const q of s.points) { q.x += dx; q.y += dy; }
+    }
+  }
+}
+
 // ============================================================
 // 历史
 // ============================================================
@@ -1019,12 +1042,19 @@ function onMouseDown(e: MouseEvent) {
 
   // 4. 无工具
   //    微信式：已有选区时不再重新拉框（点工具栏工具也不会重置选区）。
+  //    点在选区内 → 整体移动选区（拖动选区）；点在选区外 → 仅取消图形选中。
   //    想重新选 → 点工具栏「重新截图」按钮（清空 selection）或 Esc 退出。
   if (selection) {
-    if (selectedIndex != null) {
+    if (pointInSelection(p)) {
+      // 先取消图形选中，避免「移选区」和「移图形」混淆
       selectedIndex = null;
-      render();
+      dragMode = "move-selection";
+      moveSelectionStart = { ...p };
+      moveSelectionOrig = { ...selection };
+    } else if (selectedIndex != null) {
+      selectedIndex = null;
     }
+    render();
     return;
   }
   selectedIndex = null;
@@ -1077,6 +1107,19 @@ function onMouseMove(e: MouseEvent) {
     return;
   }
 
+  if (dragMode === "move-selection" && moveSelectionStart && moveSelectionOrig) {
+    // 拖动整体移动选区：选区四角限制在屏幕内，标注内容跟随选区平移（保持相对位置）
+    const w = moveSelectionOrig.w, h = moveSelectionOrig.h;
+    const nx = Math.min(Math.max(moveSelectionOrig.x + (p.x - moveSelectionStart.x), 0), Math.max(0, totalW - w));
+    const ny = Math.min(Math.max(moveSelectionOrig.y + (p.y - moveSelectionStart.y), 0), Math.max(0, totalH - h));
+    const appDx = nx - moveSelectionOrig.x;
+    const appDy = ny - moveSelectionOrig.y;
+    selection = { x: nx, y: ny, w, h };
+    translateShapes(appDx, appDy);
+    render();
+    return;
+  }
+
   // 绘制中（终点/笔迹点 clamp 到选区 —— 原版 drag.rs 行为）
   if (curShape) {
     const cp = clampToSelection(p);
@@ -1094,15 +1137,17 @@ function onMouseMove(e: MouseEvent) {
 
   // 悬停
   const hit = hitTestShapes(p);
+  // 命中图形 → move；有工具 → crosshair（画/拖）；
+  // 无工具且有选区 → 选区外 not-allowed（禁止符号），选区内 move（可拖动选区）；
+  // 无工具且无选区 → crosshair（确实要选）。
+  const cursor =
+    hit != null ? "move" :
+    tool ? "crosshair" :
+    !selection ? "crosshair" :
+    pointInSelection(p) ? "move" : "not-allowed";
+  if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
   if (hit !== hoverIndex) {
     hoverIndex = hit;
-    // 命中图形 → move；有工具 → crosshair（画/拖）；
-    // 无工具但有选区 → default（不要误导成「重新拉框」）；
-    // 无工具且无选区 → crosshair（确实要选）。
-    canvas.style.cursor =
-      hit != null ? "move" :
-      tool ? "crosshair" :
-      selection ? "default" : "crosshair";
   }
 
   // 无拖拽/绘制分支命中时也要重绘：放大镜跟随鼠标 + overUI 切换都需要刷新。
@@ -1146,6 +1191,14 @@ function onMouseUp(e: MouseEvent) {
     dragMode = "none";
     resizeHandle = -1;
     resizeOrig = null;
+    render();
+    return;
+  }
+
+  if (dragMode === "move-selection") {
+    dragMode = "none";
+    moveSelectionStart = null;
+    moveSelectionOrig = null;
     render();
     return;
   }
@@ -1489,6 +1542,8 @@ async function loadScreenshot() {
   moveOrigShape = null;
   resizeOrig = null;
   resizeHandle = -1;
+  moveSelectionStart = null;
+  moveSelectionOrig = null;
   textInput.classList.remove("editing");
   ocrPanel.style.display = "none";
   screens = [];
@@ -1567,10 +1622,21 @@ async function refreshConfig() {
     magnifierActive = cfg.magnifier_enabled;
     setLang(cfg.language);
     if (cfg.hotkeys?.copy_color) copyColorHotkey = cfg.hotkeys.copy_color;
+    applyTheme(cfg.theme);
   } catch {
     // 读配置失败则保持默认
   }
   applyI18n(document);
+}
+
+// 截图窗口 UI 主题：与主窗口一致，跟随 config.theme（dark / light / system），
+// 由 screenshot.html 里 :root[data-theme] 变量驱动工具栏/弹窗/帮助框/OCR 面板配色。
+function applyTheme(theme: "dark" | "light" | "system") {
+  const dark =
+    theme === "dark" ||
+    (theme === "system" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
 async function main() {
@@ -1595,6 +1661,8 @@ async function main() {
     selectedIndex = null;
     ocrPanel.style.display = "none";
     textInput.classList.remove("editing");
+    moveSelectionStart = null;
+    moveSelectionOrig = null;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     document.body.classList.remove("ready");
   });

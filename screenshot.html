@@ -5,6 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Screenshot</title>
     <style>
+      /* 截图窗口 UI 主题变量 —— 跟随应用设置里的主题（config.theme），
+         由 screenshot.ts 读到后写入 <html data-theme> 切换。默认暗色。 */
+      :root {
+        --s-toolbar-bg: rgba(28, 30, 36, 0.72);
+        --s-toolbar-border: rgba(255, 255, 255, 0.12);
+        --s-fg: #e6e6ea;
+        --s-fg-dim: #9a9ca6;
+        --s-btn-hover-bg: rgba(255, 255, 255, 0.12);
+        --s-btn-hover-fg: #ffffff;
+        --s-accent: #4ea85c;
+        --s-accent-shadow: rgba(78, 168, 92, 0.5);
+        --s-popup-bg: rgba(28, 30, 36, 0.92);
+        --s-popup-border: rgba(255, 255, 255, 0.12);
+        --s-row-hover-bg: rgba(255, 255, 255, 0.1);
+        --s-divider: rgba(255, 255, 255, 0.14);
+        --s-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        --s-border-soft: rgba(255, 255, 255, 0.35);
+        --s-help-bg: rgba(0, 0, 0, 0.55);
+        --s-panel-bg: rgba(28, 30, 36, 0.94);
+        --s-panel-header-bg: rgba(255, 255, 255, 0.05);
+        --s-panel-title: #cfd1d8;
+        --s-error: #ff8a8a;
+      }
+      :root[data-theme="light"] {
+        --s-toolbar-bg: rgba(255, 255, 255, 0.82);
+        --s-toolbar-border: rgba(0, 0, 0, 0.14);
+        --s-fg: #26272d;
+        --s-fg-dim: #6e707a;
+        --s-btn-hover-bg: rgba(0, 0, 0, 0.08);
+        --s-btn-hover-fg: #111111;
+        --s-accent: #3d8a49;
+        --s-accent-shadow: rgba(61, 138, 73, 0.4);
+        --s-popup-bg: rgba(255, 255, 255, 0.96);
+        --s-popup-border: rgba(0, 0, 0, 0.14);
+        --s-row-hover-bg: rgba(0, 0, 0, 0.07);
+        --s-divider: rgba(0, 0, 0, 0.15);
+        --s-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        --s-border-soft: rgba(0, 0, 0, 0.3);
+        --s-help-bg: rgba(255, 255, 255, 0.82);
+        --s-panel-bg: rgba(255, 255, 255, 0.97);
+        --s-panel-header-bg: rgba(0, 0, 0, 0.04);
+        --s-panel-title: #6e707a;
+        --s-error: #d64545;
+      }
+
       /* 初始化前隐藏：避免 CSS/JS 未就绪时 HTML 骨架裸渲染（元素挤在左上角）。
          loadScreenshot() 完成后由 JS 加 .ready 显示。 */
       body {
@@ -65,12 +110,12 @@
         align-items: center;
         gap: 4px;
         padding: 6px;
-        background: rgba(28, 30, 36, 0.72);
+        background: var(--s-toolbar-bg);
         backdrop-filter: blur(16px) saturate(160%);
         -webkit-backdrop-filter: blur(16px) saturate(160%);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid var(--s-toolbar-border);
         border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        box-shadow: var(--s-shadow);
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
       }
       .toolbar button {
@@ -84,20 +129,20 @@
         border-radius: 8px;
         background: transparent;
         cursor: pointer;
-        color: #e6e6ea;
+        color: var(--s-fg);
         transition: background 0.14s ease, color 0.14s ease, transform 0.08s ease, box-shadow 0.14s ease;
       }
       .toolbar button:hover {
-        background: rgba(255, 255, 255, 0.12);
-        color: #fff;
+        background: var(--s-btn-hover-bg);
+        color: var(--s-btn-hover-fg);
       }
       .toolbar button:active {
         transform: scale(0.9);
       }
       .toolbar button.active {
-        background: #4ea85c;
+        background: var(--s-accent);
         color: #fff;
-        box-shadow: 0 2px 8px rgba(78, 168, 92, 0.5);
+        box-shadow: 0 2px 8px var(--s-accent-shadow);
       }
       .toolbar button svg {
         width: 20px;
@@ -107,32 +152,32 @@
         width: 1px;
         height: 20px;
         margin: 0 4px;
-        background: rgba(255, 255, 255, 0.14);
+        background: var(--s-divider);
       }
       .toolbar .swatch {
         width: 20px;
         height: 20px;
         border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        border: 1px solid var(--s-border-soft);
         box-sizing: border-box;
       }
       .toolbar .width-dot {
         border-radius: 50%;
-        background: #e6e6ea;
+        background: var(--s-fg);
       }
 
       /* ============ 弹出面板（玻璃拟态 · 暗色） ============ */
       .popup {
         position: absolute;
-        background: rgba(28, 30, 36, 0.92);
+        background: var(--s-popup-bg);
         backdrop-filter: blur(16px) saturate(160%);
         -webkit-backdrop-filter: blur(16px) saturate(160%);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid var(--s-popup-border);
         border-radius: 10px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        box-shadow: var(--s-shadow);
         padding: 8px;
         display: none;
-        color: #e6e6ea;
+        color: var(--s-fg);
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
       }
       .popup.open {
@@ -147,7 +192,7 @@
         width: 22px;
         height: 22px;
         border-radius: 4px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        border: 1px solid var(--s-border-soft);
         cursor: pointer;
         box-sizing: border-box;
         transition: transform 0.1s ease;
@@ -166,7 +211,7 @@
         border: none;
         padding: 0;
         background: none;
-        color: #cfd1d8;
+        color: var(--s-panel-title);
         cursor: pointer;
       }
       .width-list {
@@ -184,12 +229,12 @@
         transition: background 0.12s ease;
       }
       .width-list .row:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--s-row-hover-bg);
       }
       .width-list .row .bar {
         height: 4px;
         border-radius: 2px;
-        background: #e6e6ea;
+        background: var(--s-fg);
       }
 
       /* ============ 文本输入 ============ */
@@ -202,7 +247,7 @@
         outline: none;
         resize: none;
         overflow: hidden;
-        color: #fff;
+        color: var(--s-fg);
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
         line-height: 1.2;
         padding: 0;
@@ -219,8 +264,8 @@
         position: absolute;
         left: 12px;
         bottom: 12px;
-        background: rgba(0, 0, 0, 0.55);
-        color: #fff;
+        background: var(--s-help-bg);
+        color: var(--s-fg);
         font-size: 12px;
         line-height: 1.7;
         padding: 8px 12px;
@@ -234,15 +279,15 @@
         position: absolute;
         display: flex;
         flex-direction: column;
-        background: rgba(28, 30, 36, 0.94);
+        background: var(--s-panel-bg);
         backdrop-filter: blur(16px) saturate(160%);
         -webkit-backdrop-filter: blur(16px) saturate(160%);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid var(--s-popup-border);
         border-radius: 10px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        box-shadow: var(--s-shadow);
         font-family: "Segoe UI", system-ui, sans-serif;
         overflow: hidden;
-        color: #e6e6ea;
+        color: var(--s-fg);
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
       }
       #ocr-panel .ocr-header {
@@ -250,14 +295,14 @@
         align-items: center;
         gap: 2px;
         padding: 6px 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid var(--s-toolbar-border);
+        background: var(--s-panel-header-bg);
       }
       #ocr-panel .ocr-title {
         flex: 1;
         font-size: 12px;
         font-weight: 600;
-        color: #cfd1d8;
+        color: var(--s-panel-title);
         padding-left: 2px;
       }
       #ocr-panel .ocr-header button {
@@ -271,11 +316,11 @@
         border-radius: 5px;
         background: transparent;
         cursor: pointer;
-        color: #e6e6ea;
+        color: var(--s-fg);
         transition: background 0.12s ease;
       }
       #ocr-panel .ocr-header button:hover {
-        background: rgba(255, 255, 255, 0.12);
+        background: var(--s-btn-hover-bg);
       }
       #ocr-panel .ocr-header button svg {
         width: 17px;
@@ -287,7 +332,7 @@
         padding: 10px 12px;
         font-size: 13px;
         line-height: 1.6;
-        color: #e6e6ea;
+        color: var(--s-fg);
         white-space: pre-wrap;
         word-break: break-all;
         user-select: text;
@@ -295,7 +340,7 @@
         cursor: text;
       }
       #ocr-panel .ocr-body.error {
-        color: #ff8a8a;
+        color: var(--s-error);
       }
     </style>
   </head>

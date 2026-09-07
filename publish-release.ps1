@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 一键发布 CloverViewer：把 v0.1.0 标签挪到当前 HEAD，推送 main 和标签，
 剩下的（构建 NSIS 安装包 + 创建 GitHub Release）由 .github/workflows/release.yml 自动完成。

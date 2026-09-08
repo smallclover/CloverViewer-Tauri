@@ -101,6 +101,139 @@ pub fn copy_text(text: String) -> Result<(), String> {
     cb.set_text(text).map_err(|e| e.to_string())
 }
 
+/// 物理坐标 (x, y) 处的顶层窗口矩形（物理像素）。
+/// 用于"绿框跟随鼠标自动框选窗口"：按 Z 序枚举顶层可见窗口，跳过本应用自己的
+/// 窗口（截图/主窗口），命中第一个包含该点且最上层的窗口。坐标与 xcap 同一物理像素系。
+#[derive(Debug, Clone, Serialize)]
+pub struct WindowRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[tauri::command]
+pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::{HWND, LPARAM, RECT};
+        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetClassNameW, GetWindowRect, IsIconic, IsWindowVisible,
+        };
+
+        // 桌面 / 任务栏这类"背景窗口"，光标落到它们上面时不应框选（否则绿框会框到整块屏幕）
+        const BG_CLASSES: &[&str] = &[
+            "Progman", "WorkerW", "SHELLDLL_DefView", "Shell_TrayWnd",
+            "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow",
+        ];
+
+        unsafe fn window_class(hwnd: HWND) -> String {
+            let mut buf = [0u16; 256];
+            let n = GetClassNameW(hwnd, &mut buf);
+            if n == 0 {
+                String::new()
+            } else {
+                String::from_utf16_lossy(&buf[..n as usize])
+            }
+        }
+
+        // 取窗口真实可见边界：优先 DWM 扩展帧边界（去掉不可见 resize 边框），失败回退 GetWindowRect
+        unsafe fn window_bounds(hwnd: HWND) -> Option<RECT> {
+            let mut r = RECT::default();
+            let ok = DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                &mut r as *mut RECT as *mut core::ffi::c_void,
+                std::mem::size_of::<RECT>() as u32,
+            )
+            .is_ok();
+            if ok {
+                return Some(r);
+            }
+            GetWindowRect(hwnd, &mut r).ok()?;
+            Some(r)
+        }
+
+        unsafe fn is_cloaked(hwnd: HWND) -> bool {
+            let mut v: u32 = 0;
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED,
+                &mut v as *mut u32 as *mut core::ffi::c_void,
+                std::mem::size_of::<u32>() as u32,
+            )
+            .is_ok()
+                && v != 0
+        }
+
+        // 本应用自己的顶层窗口，枚举时跳过
+        let own: Vec<HWND> = {
+            let mut v = Vec::new();
+            for label in ["screenshot", "main"] {
+                if let Some(w) = app.get_webview_window(label) {
+                    if let Ok(hwnd) = w.hwnd() {
+                        // Tauri 的 hwnd() 来自 windows 0.61.3，而本函数 use 的是 0.62.2，
+                        // 两个 HWND 均为 #[repr(transparent)] 包装 *mut c_void，用裸指针桥接。
+                        v.push(HWND(hwnd.0));
+                    }
+                }
+            }
+            v
+        };
+
+        struct Ctx {
+            x: i32,
+            y: i32,
+            own: Vec<HWND>,
+            found: Option<RECT>,
+        }
+
+        unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
+            let ctx = unsafe { &mut *(lparam.0 as *mut Ctx) };
+            unsafe {
+                if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
+                    return true.into();
+                }
+                if is_cloaked(hwnd) {
+                    return true.into();
+                }
+                if ctx.own.contains(&hwnd) {
+                    return true.into();
+                }
+                let class = window_class(hwnd);
+                if BG_CLASSES.contains(&class.as_str()) {
+                    return true.into();
+                }
+                if let Some(r) = window_bounds(hwnd) {
+                    if ctx.x >= r.left && ctx.x < r.right && ctx.y >= r.top && ctx.y < r.bottom {
+                        // EnumWindows 按 Z 序顶到底枚举，第一个命中即最上层窗口
+                        ctx.found = Some(r);
+                        return false.into();
+                    }
+                }
+            }
+            true.into()
+        }
+
+        let mut ctx = Ctx { x, y, own, found: None };
+        unsafe {
+            let _ = EnumWindows(Some(enum_proc), LPARAM(&mut ctx as *mut Ctx as isize));
+        }
+        ctx.found.map(|r| WindowRect {
+            x: r.left,
+            y: r.top,
+            width: (r.right - r.left).max(1) as u32,
+            height: (r.bottom - r.top).max(1) as u32,
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, x, y);
+        None
+    }
+}
+
 /// 前端导出完成后的收尾请求：PNG 已由前端 Canvas 合成（裁剪 + 标注），
 /// Rust 侧只负责「落盘」或「写剪贴板」，然后隐藏截图窗口。
 #[derive(Debug, Deserialize)]
@@ -241,6 +374,44 @@ pub fn start_screenshot(app: &AppHandle) {
                 }
             }
         };
+
+        // Windows 无边框窗口自带不可见 DWM resize border：set_position 设的是【外框】，
+        // 内容(webview/content)会相对外框内缩若干像素（本例左 9px/上 5px），导致内容
+        // 盖不到屏幕最左/最上（透过透明窗看到活桌面）。补偿：读「内框-外框」的真实偏移，
+        // 把外框往左/上再挪这么多，让内容正好落在虚拟桌面 (min_x, min_y)。
+        // 注意：set_size 设的是【内容】尺寸（6400x2160），位置才是问题，只补偿位置即可。
+        let border = match (win.outer_position(), win.inner_position()) {
+            (Ok(op), Ok(ip)) => (ip.x - op.x, ip.y - op.y),
+            _ => (0, 0),
+        };
+        if border != (0, 0) {
+            let _ = win.set_position(PhysicalPosition::new(
+                data.min_x - border.0,
+                data.min_y - border.1,
+            ));
+        }
+
+        // 诊断：确认内容实际落点是否等于期望的虚拟桌面包围盒（用于排查跨屏/边缘偏移）
+        eprintln!(
+            "[screenshot] border offset (inner-outer): ({},{})",
+            border.0, border.1
+        );
+        eprintln!(
+            "[screenshot] window expected content: pos=({},{}) size={}x{}",
+            data.min_x, data.min_y, data.total_width, data.total_height
+        );
+        match win.outer_position() {
+            Ok(p) => eprintln!("[screenshot] window actual outer pos: ({},{})", p.x, p.y),
+            Err(e) => eprintln!("[screenshot] window outer pos read failed: {e}"),
+        }
+        match win.inner_position() {
+            Ok(p) => eprintln!("[screenshot] window actual inner pos: ({},{})", p.x, p.y),
+            Err(e) => eprintln!("[screenshot] window inner pos read failed: {e}"),
+        }
+        match win.inner_size() {
+            Ok(s) => eprintln!("[screenshot] window actual inner size: {}x{}", s.width, s.height),
+            Err(e) => eprintln!("[screenshot] window inner size read failed: {e}"),
+        }
 
         let _ = win.show();
         let _ = win.set_focus();

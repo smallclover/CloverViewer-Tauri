@@ -54,6 +54,7 @@ windows = { version = "0.62", features = [
     "Storage_Streams",
     "Win32_System_Console",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Dwm",
 ] }
 # 开机自启：写 HKCU\...\Run 注册表
 winreg = "0.56"

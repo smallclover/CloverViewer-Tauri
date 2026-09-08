@@ -76,6 +76,10 @@
         position: fixed;
         inset: 0;
         overflow: hidden;
+        /* 不透明深色铺底：多屏高度不同时，较矮屏那一列下方是"无屏幕"空白，
+           若保持透明会透出活桌面，看起来像没截到。铺一层深色后，空白/边缘
+           细缝都统一显示为深色，不再露馅。 */
+        background: #14161c;
       }
       #screenshot-root img {
         position: absolute;

@@ -103,6 +103,17 @@ export const copyText = (text: string) => invoke<void>("copy_text", { text });
 
 export const ocrImage = (png: string) => invoke<string>("ocr_image", { png });
 
+/** 物理坐标 (x, y) 处的顶层窗口矩形（用于绿框跟随鼠标自动框选窗口） */
+export interface WindowRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export const pickWindowAt = (x: number, y: number) =>
+  invoke<WindowRect | null>("pick_window_at", { x, y });
+
 /** 本地文件 → asset protocol URL */
 export const fileSrc = convertFileSrc;
 

@@ -1,4 +1,4 @@
-import { closeScreenshot, copyText, finishScreenshot, getConfig, getScreenshotData, ocrImage } from "./api";
+import { closeScreenshot, copyText, finishScreenshot, getConfig, getScreenshotData, ocrImage, pickWindowAt } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
 import { listen } from "@tauri-apps/api/event";
 
@@ -61,6 +61,12 @@ let screens: { img: HTMLImageElement; x: number; y: number; w: number; h: number
 let selection: Rect | null = null;
 let dragStart: Pt | null = null;
 let dragCur: Pt | null = null;
+
+// 窗口吸附：悬停时绿框自动框住光标下方的窗口（root-local 物理坐标）
+let hoverWin: Rect | null = null;
+let lastWinQuery = 0;
+let winQuerySeq = 0;
+let lastQueryPos: Pt | null = null;
 
 let tool: Tool | null = null;
 let color = DEFAULT_COLOR;
@@ -639,18 +645,37 @@ function blitRegion(
   dst.restore();
 }
 
+/// 把多屏截图合成到整张画布上：先用不透明深色铺满（填补 2K 下方那截"无屏幕"的空白，
+/// 也避免透明缝隙透出活桌面），再按**精确整数物理坐标**绘制各屏，杜绝亚像素拼接细缝。
+function drawBase(c: CanvasRenderingContext2D) {
+  c.fillStyle = "#14161c";
+  c.fillRect(0, 0, c.canvas.width, c.canvas.height);
+  for (const s of screens) {
+    c.drawImage(s.img, s.x, s.y, s.w, s.h);
+  }
+}
+
 function render() {
   const r = root.getBoundingClientRect();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 遮罩：有选区/拖动时，选区外变暗
+  // 拼接底图
+  drawBase(ctx);
+
+  // 遮罩：有选区/拖动时，选区外变暗（选区用底图重新覆盖，而不是 clearRect 挖洞——
+  // 挖洞会清掉画布底图、透出活桌面，跨屏时恰恰在交界处露馅）
   const selRect = dragMode === "select" && dragStart && dragCur
     ? normRect(dragStart, dragCur)
     : selection;
   if (selRect && selRect.w > 0 && selRect.h > 0) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.clearRect(selRect.x, selRect.y, selRect.w, selRect.h);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(selRect.x, selRect.y, selRect.w, selRect.h);
+    ctx.clip();
+    drawBase(ctx);
+    ctx.restore();
   }
 
   // 图形
@@ -732,6 +757,40 @@ function render() {
   if (magnifierActive && lastMousePos && !overUI) {
     drawMagnifier(ctx, lastMousePos.x, lastMousePos.y);
   }
+
+  // 窗口吸附：绿框自动框住光标下方窗口；空白处则框住光标所在的那块显示器
+  if (hoverWin && !selection && !tool && dragMode === "none") {
+    drawWindowBox(ctx, hoverWin);
+  }
+}
+
+/// 窗口吸附悬停框：绿色细框 + 8 手柄，套住光标下方窗口（或整块显示器）。
+/// 左上角显示框的尺寸（宽×高）。无填充、边框/手柄都向内缩，确保不向相邻屏凸出。
+function drawWindowBox(c: CanvasRenderingContext2D, r: Rect) {
+  const asz = 8 * physScale();
+  const lw = 3 * physScale();
+  c.strokeStyle = "#00ff00";
+  c.lineWidth = lw;
+  c.strokeRect(r.x + lw / 2, r.y + lw / 2, r.w - lw, r.h - lw);
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  c.fillStyle = "#00ff00";
+  for (const [px, py] of [
+    [r.x + asz / 2, r.y + asz / 2], [r.x + r.w - asz / 2, r.y + asz / 2],
+    [r.x + r.w - asz / 2, r.y + r.h - asz / 2], [r.x + asz / 2, r.y + r.h - asz / 2],
+    [cx, r.y + asz / 2], [cx, r.y + r.h - asz / 2], [r.x + asz / 2, cy], [r.x + r.w - asz / 2, cy],
+  ]) {
+    c.fillRect(px - asz / 2, py - asz / 2, asz, asz);
+  }
+  // 左上角显示尺寸（宽×高），带深色底衬保证可读
+  const label = `${Math.round(r.w)}x${Math.round(r.h)}`;
+  const fs = 13 * physScale();
+  c.font = `600 ${fs}px monospace`;
+  c.textBaseline = "top";
+  const tw = c.measureText(label).width;
+  c.fillStyle = "rgba(0,0,0,0.55)";
+  c.fillRect(r.x + 4, r.y + 4, tw + 8 * physScale(), fs + 6 * physScale());
+  c.fillStyle = "#00ff00";
+  c.fillText(label, r.x + 8, r.y + 7);
 }
 
 function drawStyleBox(c: CanvasRenderingContext2D, r: Rect) {
@@ -1058,6 +1117,15 @@ function onMouseDown(e: MouseEvent) {
     render();
     return;
   }
+  // 微信式：绿框已自动套住光标下方窗口时，单击一下即选中整个窗口区域
+  if (hoverWin) {
+    selection = { ...hoverWin };
+    hoverWin = null;
+    dragMode = "none";
+    dragStart = dragCur = null;
+    render();
+    return;
+  }
   selectedIndex = null;
   dragMode = "select";
   dragStart = { ...p };
@@ -1072,6 +1140,35 @@ function onMouseMove(e: MouseEvent) {
   lastMousePos = p;
   const el = document.elementFromPoint(e.clientX, e.clientY);
   overUI = !!el && !!(el as HTMLElement).closest?.(".toolbar, .popup, #text-input, #ocr-panel");
+
+  // 窗口吸附：仅在"未拉框/未选/未用工具"时，查光标下方窗口，让绿框自动框住它。
+  // 节流 ~40ms + 仅在光标移动超过 2px 时查，避免高频 IPC；用序号保证只采纳最新结果。
+  if (!overUI && dragMode === "none" && !selection && !tool) {
+    const now = performance.now();
+    const moved =
+      !lastQueryPos || Math.hypot(p.x - lastQueryPos.x, p.y - lastQueryPos.y) > 2;
+    if (now - lastWinQuery > 40 && moved) {
+      lastWinQuery = now;
+      lastQueryPos = { ...p };
+      const seq = ++winQuerySeq;
+      const gx = Math.round(p.x + minX), gy = Math.round(p.y + minY);
+      void pickWindowAt(gx, gy).then((r) => {
+        if (seq !== winQuerySeq) return; // 过期结果，丢弃
+        if (!r) {
+          // 光标不在任何窗口上（显示器空白处）→ 圈住光标所在的那块显示器（整个屏幕一圈）
+          const mon = screens.find(
+            (s) => p.x >= s.x && p.x < s.x + s.w && p.y >= s.y && p.y < s.y + s.h,
+          );
+          hoverWin = mon ? { x: mon.x, y: mon.y, w: mon.w, h: mon.h } : null;
+        } else {
+          hoverWin = { x: r.x - minX, y: r.y - minY, w: r.width, h: r.height };
+        }
+        render();
+      });
+    }
+  } else if (hoverWin) {
+    hoverWin = null;
+  }
 
   if (dragMode === "select") {
     dragCur = p;
@@ -1534,6 +1631,7 @@ async function loadScreenshot() {
   dragMode = "none";
   curShape = null;
   selectedIndex = null;
+  hoverWin = null;
   // 重置工具选择：否则上次用过的画笔会跨会话保留，下次 Alt+S 进入直接是
   // 画笔态（点哪画哪，无法拉选区）。每次新截图都从「无工具 / 选区模式」开始。
   tool = null;
@@ -1569,11 +1667,9 @@ async function loadScreenshot() {
     img.src = s.data_url;
     const rx = s.x - minX; // root-local 物理
     const ry = s.y - minY;
-    img.style.left = `${rx / physScale()}px`;
-    img.style.top = `${ry / physScale()}px`;
-    img.style.width = `${s.width / physScale()}px`;
-    img.style.height = `${s.height / physScale()}px`;
-    root.insertBefore(img, canvas);
+    // 不再把 <img> 插入 DOM 拼接（那是亚像素细缝与跨屏空白露馅的根源），改由
+    // render() 的 drawBase() 把各屏按精确整数物理坐标合成到画布上。img 仅作为
+    // blitRegion/放大镜/马赛克/导出 的像素源保留在 screens[] 里（解码后常驻内存）。
     screens.push({ img, x: rx, y: ry, w: s.width, h: s.height });
     // 等解码完成再显示，避免逐张出现的闪烁（decode 失败时退化为 onload/onerror）
     pending.push(
@@ -1660,6 +1756,7 @@ async function main() {
     dragStart = dragCur = null;
     dragMode = "none";
     selectedIndex = null;
+    hoverWin = null;
     ocrPanel.style.display = "none";
     textInput.classList.remove("editing");
     moveSelectionStart = null;

@@ -67,6 +67,9 @@ let hoverWin: Rect | null = null;
 let lastWinQuery = 0;
 let winQuerySeq = 0;
 let lastQueryPos: Pt | null = null;
+// 区分「单击选中绿框的窗口/显示器」 vs 「按住拖拽画自定义选区」：
+// mousedown 先进入 pending-win 挂起；拖动>阈值转自定义选区，松手没动则选中该窗口/显示器。
+let pendingWinSelect: Rect | null = null;
 
 let tool: Tool | null = null;
 let color = DEFAULT_COLOR;
@@ -81,7 +84,7 @@ let curShape: Shape | null = null; // 正在绘制
 let selectedIndex: number | null = null;
 let hoverIndex: number | null = null;
 
-type DragMode = "none" | "select" | "move" | "resize" | "move-selection";
+type DragMode = "none" | "select" | "move" | "resize" | "move-selection" | "pending-win";
 let dragMode: DragMode = "none";
 let resizeHandle = -1;
 let moveStart: Pt | null = null;
@@ -714,22 +717,6 @@ function render() {
     }
   }
 
-  // 尺寸标签
-  if (selRect && selRect.w > 0) {
-    const label = `${Math.round(selRect.w)} × ${Math.round(selRect.h)}`;
-    const fs = 12 * physScale();
-    ctx.font = `${fs}px "Segoe UI", sans-serif`;
-    const tw = ctx.measureText(label).width;
-    let lx = selRect.x;
-    let ly = selRect.y - fs - 12 * physScale();
-    if (ly < 4 * physScale()) ly = selRect.y + 8 * physScale();
-    ctx.fillStyle = "rgba(0,0,0,0.65)";
-    ctx.fillRect(lx, ly, tw + 12 * physScale(), fs + 8 * physScale());
-    ctx.fillStyle = "#fff";
-    ctx.textBaseline = "top";
-    ctx.fillText(label, lx + 6 * physScale(), ly + 4 * physScale());
-  }
-
   // 工具栏定位
   if (selection) {
     toolbar.style.display = "flex";
@@ -759,29 +746,32 @@ function render() {
   }
 
   // 窗口吸附：绿框自动框住光标下方窗口；空白处则框住光标所在的那块显示器
-  if (hoverWin && !selection && !tool && dragMode === "none") {
+  // （pending-win 时也保持显示，直到开始拖动或单击选中）
+  if (hoverWin && !selection && !tool && (dragMode === "none" || dragMode === "pending-win")) {
     drawWindowBox(ctx, hoverWin);
   }
 }
 
-/// 窗口吸附悬停框：绿色细框 + 8 手柄，套住光标下方窗口（或整块显示器）。
-/// 左上角显示框的尺寸（宽×高）。无填充、边框/手柄都向内缩，确保不向相邻屏凸出。
-function drawWindowBox(c: CanvasRenderingContext2D, r: Rect) {
+/// 统一的绿色框样式：粗边向内缩（不向相邻屏凸出）+ 8 个内缩手柄 + 左上角 `WxH` 尺寸标注。
+/// 跟随鼠标的吸附框和点击/拖拽选中的选区框都用它，保证视觉一致。
+function drawGreenBox(c: CanvasRenderingContext2D, r: Rect) {
   const asz = 8 * physScale();
   const lw = 3 * physScale();
   c.strokeStyle = "#00ff00";
   c.lineWidth = lw;
   c.strokeRect(r.x + lw / 2, r.y + lw / 2, r.w - lw, r.h - lw);
-  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-  c.fillStyle = "#00ff00";
-  for (const [px, py] of [
-    [r.x + asz / 2, r.y + asz / 2], [r.x + r.w - asz / 2, r.y + asz / 2],
-    [r.x + r.w - asz / 2, r.y + r.h - asz / 2], [r.x + asz / 2, r.y + r.h - asz / 2],
-    [cx, r.y + asz / 2], [cx, r.y + r.h - asz / 2], [r.x + asz / 2, cy], [r.x + r.w - asz / 2, cy],
-  ]) {
-    c.fillRect(px - asz / 2, py - asz / 2, asz, asz);
+  if (r.w > asz * 3 && r.h > asz * 3) {
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    c.fillStyle = "#00ff00";
+    for (const [px, py] of [
+      [r.x + asz / 2, r.y + asz / 2], [r.x + r.w - asz / 2, r.y + asz / 2],
+      [r.x + r.w - asz / 2, r.y + r.h - asz / 2], [r.x + asz / 2, r.y + r.h - asz / 2],
+      [cx, r.y + asz / 2], [cx, r.y + r.h - asz / 2], [r.x + asz / 2, cy], [r.x + r.w - asz / 2, cy],
+    ]) {
+      c.fillRect(px - asz / 2, py - asz / 2, asz, asz);
+    }
   }
-  // 左上角显示尺寸（宽×高），带深色底衬保证可读
+  // 左上角尺寸标注（宽×高），带深色底衬保证可读
   const label = `${Math.round(r.w)}x${Math.round(r.h)}`;
   const fs = 13 * physScale();
   c.font = `600 ${fs}px monospace`;
@@ -793,20 +783,13 @@ function drawWindowBox(c: CanvasRenderingContext2D, r: Rect) {
   c.fillText(label, r.x + 8, r.y + 7);
 }
 
+/// 窗口吸附悬停框：套住光标下方窗口（或整块显示器）
+function drawWindowBox(c: CanvasRenderingContext2D, r: Rect) {
+  drawGreenBox(c, r);
+}
+
 function drawStyleBox(c: CanvasRenderingContext2D, r: Rect) {
-  c.strokeStyle = "#00ff00";
-  c.lineWidth = 1;
-  c.strokeRect(r.x, r.y, r.w, r.h);
-  const asz = 6 * physScale();
-  if (r.w > asz * 3 && r.h > asz * 3) {
-    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-    const pts = [
-      [r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h],
-      [cx, r.y], [cx, r.y + r.h], [r.x, cy], [r.x + r.w, cy],
-    ];
-    c.fillStyle = "#00ff00";
-    for (const [px, py] of pts) c.fillRect(px - asz / 2, py - asz / 2, asz, asz);
-  }
+  drawGreenBox(c, r);
 }
 
 // ============================================================
@@ -1117,12 +1100,13 @@ function onMouseDown(e: MouseEvent) {
     render();
     return;
   }
-  // 微信式：绿框已自动套住光标下方窗口时，单击一下即选中整个窗口区域
+  // 微信式：绿框已套住光标下方窗口/显示器——先挂起，区分「单击选中」vs「按住拖拽自定义选区」。
+  // 若随后拖动（onMouseMove 超过阈值）→ 转自定义选区；若松手没动（onMouseUp）→ 选中该窗口/显示器。
   if (hoverWin) {
-    selection = { ...hoverWin };
-    hoverWin = null;
-    dragMode = "none";
-    dragStart = dragCur = null;
+    pendingWinSelect = { ...hoverWin };
+    dragMode = "pending-win";
+    dragStart = { ...p };
+    dragCur = { ...p };
     render();
     return;
   }
@@ -1166,8 +1150,20 @@ function onMouseMove(e: MouseEvent) {
         render();
       });
     }
-  } else if (hoverWin) {
+  } else if (hoverWin && dragMode !== "pending-win") {
     hoverWin = null;
+  }
+
+  // pending-win：按下后若拖动超过阈值，说明想画自定义选区 → 转成 select 拖拽
+  if (dragMode === "pending-win") {
+    dragCur = p;
+    if (dragStart && Math.hypot(p.x - dragStart.x, p.y - dragStart.y) > 3) {
+      pendingWinSelect = null;
+      hoverWin = null;
+      dragMode = "select";
+    }
+    render();
+    return;
   }
 
   if (dragMode === "select") {
@@ -1255,6 +1251,19 @@ function onMouseMove(e: MouseEvent) {
 
 function onMouseUp(e: MouseEvent) {
   if (e.button !== 0) return;
+
+  // pending-win：松手时若没拖动（是单击）→ 选中绿框预览的窗口/显示器
+  if (dragMode === "pending-win") {
+    if (pendingWinSelect) {
+      selection = { ...pendingWinSelect };
+    }
+    pendingWinSelect = null;
+    hoverWin = null;
+    dragMode = "none";
+    dragStart = dragCur = null;
+    render();
+    return;
+  }
 
   if (dragMode === "select") {
     const r = dragStart && dragCur ? normRect(dragStart, dragCur) : null;
@@ -1632,6 +1641,7 @@ async function loadScreenshot() {
   curShape = null;
   selectedIndex = null;
   hoverWin = null;
+  pendingWinSelect = null;
   // 重置工具选择：否则上次用过的画笔会跨会话保留，下次 Alt+S 进入直接是
   // 画笔态（点哪画哪，无法拉选区）。每次新截图都从「无工具 / 选区模式」开始。
   tool = null;
@@ -1757,6 +1767,7 @@ async function main() {
     dragMode = "none";
     selectedIndex = null;
     hoverWin = null;
+    pendingWinSelect = null;
     ocrPanel.style.display = "none";
     textInput.classList.remove("editing");
     moveSelectionStart = null;

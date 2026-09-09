@@ -1,6 +1,6 @@
 [package]
 name = "cloverviewer-tauri"
-version = "0.1.0"
+version = "0.1.1"
 description = "CloverViewer 的 Tauri 2 重实现（Rust 后端 + Web 前端）"
 edition = "2021"
 

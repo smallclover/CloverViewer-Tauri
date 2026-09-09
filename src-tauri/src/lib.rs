@@ -64,6 +64,7 @@ pub fn run() {
             screenshot::finish_screenshot,
             screenshot::copy_text,
             screenshot::pick_window_at,
+            screenshot::screenshot_ui_ready,
             ocr::ocr_image,
         ])
         .setup(move |app| {

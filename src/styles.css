@@ -562,7 +562,15 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .setting-row:last-child { border-bottom: none; }
-.setting-row > label,
+.setting-row > label {
+  font-size: 13px;
+  color: var(--fg);
+  /* 允许长文案换行（日语热键标签较长），避免把右侧按钮挤得变形/换行 */
+  white-space: normal;
+  line-height: 1.4;
+  min-width: 0;
+  flex: 1 1 auto;
+}
 .setting-row > span {
   font-size: 13px;
   color: var(--fg);
@@ -610,6 +618,8 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* 不参与收缩：输入框+按钮始终保持固定大小/位置，三种语言布局一致 */
+  flex-shrink: 0;
 }
 .hotkey-row input {
   width: 110px;

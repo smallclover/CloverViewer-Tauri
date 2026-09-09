@@ -1,4 +1,4 @@
-import { closeScreenshot, copyText, finishScreenshot, getConfig, getScreenshotData, ocrImage, pickWindowAt } from "./api";
+import { closeScreenshot, copyText, finishScreenshot, getConfig, getScreenshotData, ocrImage, pickWindowAt, screenshotUiReady } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
 import { listen } from "@tauri-apps/api/event";
 
@@ -262,21 +262,11 @@ uiLayer.appendChild(toolbar);
 // ---------- 颜色面板 ----------
 const colorPopup = document.createElement("div");
 colorPopup.className = "popup ui-interactive";
+// 原生取色条（<input type="color">）：选调色板之外的任意颜色用。模块级引用以便同步它的显示值。
+let nativeColorInput: HTMLInputElement | null = null;
 {
   const pal = document.createElement("div");
   pal.className = "palette";
-  for (const c of PALETTE) {
-    const cell = document.createElement("div");
-    cell.className = "cell" + (c === color ? " sel" : "");
-    cell.style.background = c;
-    cell.addEventListener("click", () => {
-      color = c;
-      colorSwatch.style.background = c;
-      syncColorPopup();
-      closePopups();
-    });
-    pal.appendChild(cell);
-  }
   const native = document.createElement("input");
   native.type = "color";
   native.className = "native";
@@ -285,6 +275,21 @@ colorPopup.className = "popup ui-interactive";
     color = native.value;
     colorSwatch.style.background = color;
   });
+  nativeColorInput = native;
+  for (const c of PALETTE) {
+    const cell = document.createElement("div");
+    cell.className = "cell" + (c === color ? " sel" : "");
+    cell.style.background = c;
+    cell.addEventListener("click", () => {
+      color = c;
+      // 同步原生取色条的显示值，避免它停在旧颜色上"不变"
+      if (nativeColorInput) nativeColorInput.value = c;
+      colorSwatch.style.background = c;
+      syncColorPopup();
+      closePopups();
+    });
+    pal.appendChild(cell);
+  }
   pal.appendChild(native);
   colorPopup.appendChild(pal);
 }
@@ -1381,7 +1386,10 @@ function showTextInput(p: Pt) {
   textInput.style.color = color;
   textInput.style.fontSize = `${fs}px`;
   textInput.classList.add("editing");
-  textInput.focus();
+  render();
+  // 关键：在 mousedown 里立即 focus 会被鼠标交互抢占，导致随后的 blur 把输入框关掉
+  // （表现为"点了没反应/输入框一闪而过"）。等事件循环结束再聚焦，确保文本框真正获得焦点。
+  setTimeout(() => textInput.focus(), 0);
 }
 
 function commitText() {
@@ -1422,6 +1430,7 @@ textInput.addEventListener("keydown", (e) => {
     textInput.classList.remove("editing");
   }
 });
+// blur 提交：点击别处时，有内容则提交、无内容则取消（隐藏）
 textInput.addEventListener("blur", commitText);
 
 // ============================================================
@@ -1592,6 +1601,8 @@ colorBtn.addEventListener("click", (e) => {
   closePopups();
   if (!open) {
     syncColorPopup();
+    // 打开时把原生取色条同步成当前颜色
+    if (nativeColorInput) nativeColorInput.value = color;
     const r = colorBtn.getBoundingClientRect();
     const rr = root.getBoundingClientRect();
     colorPopup.style.left = `${r.left - rr.left - 80}px`;
@@ -1754,6 +1765,8 @@ async function main() {
   await listen("screenshot-refresh", async () => {
     await refreshConfig();
     await loadScreenshot();
+    // 渲染完成 → 通知后端显示窗口（避免冷启动白屏/始终置顶锁屏）
+    await screenshotUiReady();
   });
 
   // 后端隐藏窗口前 emit：清掉画面，避免下次 show 时闪旧截图
@@ -1777,6 +1790,8 @@ async function main() {
   });
 
   await loadScreenshot();
+  // 渲染完成 → 通知后端显示窗口（避免冷启动白屏/始终置顶锁屏）
+  await screenshotUiReady();
 }
 
 void main();

@@ -362,7 +362,9 @@ pub fn start_screenshot(app: &AppHandle) {
             .resizable(false)
             .position(data.min_x as f64 / s, data.min_y as f64 / s)
             .inner_size(data.total_width as f64 / s, data.total_height as f64 / s)
-            .visible(true)
+            // 先隐藏创建，等前端把截图渲染好、回传 screenshot_ui_ready 再 show。
+            // 避免 WebView2 冷启动偶发白屏/卡死在始终置顶窗口上把用户锁住。
+            .visible(false)
             .build()
             {
                 Ok(w) => w,
@@ -413,8 +415,8 @@ pub fn start_screenshot(app: &AppHandle) {
             Err(e) => eprintln!("[screenshot] window inner size read failed: {e}"),
         }
 
-        let _ = win.show();
-        let _ = win.set_focus();
+        // 注意：这里不再 show()。窗口先隐藏，前端渲染完截图后回传 screenshot_ui_ready 再显示，
+        // 以规避 WebView2 冷启动白屏/卡死导致的"始终置顶锁屏"。
 
         // 通知前端刷新：复用窗口下 main() 不会重跑，由事件触发 loadScreenshot。
         if let Err(e) = win.emit("screenshot-refresh", ()) {
@@ -424,6 +426,16 @@ pub fn start_screenshot(app: &AppHandle) {
         let store = app.state::<ScreenshotStore>();
         *store.capturing.lock().unwrap() = false;
     });
+}
+
+/// 前端把截图渲染完成后的"就绪"回调：此时才真正显示并聚焦截图窗口。
+/// 这样能避免 WebView2 冷启动的白色闪屏/卡死窗口被置顶挡住整个屏幕。
+#[tauri::command]
+pub fn screenshot_ui_ready(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("screenshot") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
 }
 
 fn capture_all() -> Result<ScreenshotData, String> {

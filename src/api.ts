@@ -94,6 +94,9 @@ export interface MonitorInfo {
 export const getScreenshotData = () =>
   invoke<ScreenshotData | null>("get_screenshot_data");
 
+/** 前端把截图渲染完成后通知后端：此时才显示截图窗口（避免冷启动白屏/锁屏） */
+export const screenshotUiReady = () => invoke<void>("screenshot_ui_ready");
+
 export const closeScreenshot = () => invoke<void>("close_screenshot");
 
 export const finishScreenshot = (action: "save" | "clipboard", png: string) =>

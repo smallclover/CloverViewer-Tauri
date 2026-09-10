@@ -21,11 +21,38 @@ use config::ConfigStore;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, RunEvent,
+    AppHandle, Manager, RunEvent,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const MAIN_WINDOW: &str = "main";
+
+/// 主窗口最小逻辑尺寸，与 tauri.conf.json 的 minWidth/minHeight 一致。
+/// 用于过滤启动阶段上报的瞬时小尺寸：Windows 上 WebView 初始化偶尔会把窗口
+/// 临时缩到一个远低于正常值的小尺寸，若被 `Resized` 处理器原样落盘，下次启动
+/// 就会把主窗口恢复得很小。低于该下限（换算成当前缩放的物理像素）的一律忽略。
+const MIN_WINDOW_LOGICAL_W: f32 = 640.0;
+const MIN_WINDOW_LOGICAL_H: f32 = 480.0;
+
+/// 把主窗口带到前台并聚焦。
+///
+/// 三个触发点共用（单实例二次启动 / 托盘菜单「显示」 / 托盘左键点击）：
+/// - show + unminimize：同时覆盖「隐藏到托盘」与「最小化到任务栏」两种状态，
+///   否则仅 show 不会把最小化窗口还原（Windows 上表现为点托盘没反应）。
+/// - Windows 上本进程不是前台进程、后台调用 SetForegroundWindow 会被系统拒绝，
+///   窗口可能只恢复但被其它窗口盖住；用开关 always_on_top 强制抬到最前再还原层级。
+fn show_main_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = w.show();
+        let _ = w.unminimize();
+        #[cfg(target_os = "windows")]
+        {
+            let _ = w.set_always_on_top(true);
+            let _ = w.set_always_on_top(false);
+        }
+        let _ = w.set_focus();
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -39,11 +66,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
-                let _ = win.show();
-                let _ = win.unminimize();
-                let _ = win.set_focus();
-            }
+            show_main_window(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -87,7 +110,20 @@ pub fn run() {
                 }
                 if let Some((w, h)) = startup_size {
                     if w > 0.0 && h > 0.0 {
-                        let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
+                        // 过滤过小的持久化尺寸：启动阶段 WebView 有时会上报一次瞬时
+                        // 小尺寸，若被记进 config.json，下次打开主窗口就会变得很小。
+                        // 以窗口最小逻辑尺寸（640x480）× 当前缩放作为下限，低于则忽略，
+                        // 保留 tauri.conf.json 里的默认 1024x768。
+                        let scale = win
+                            .scale_factor()
+                            .map(|s| s as f32)
+                            .unwrap_or(1.0)
+                            .max(0.5);
+                        if w >= MIN_WINDOW_LOGICAL_W * scale && h >= MIN_WINDOW_LOGICAL_H * scale {
+                            let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
+                        } else {
+                            tracing::warn!("忽略过小的持久化窗口尺寸 {w}x{h}");
+                        }
                     }
                 }
             }
@@ -114,10 +150,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
-                        if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                        show_main_window(app);
                     }
                     "quit" => {
                         app.exit(0);
@@ -132,10 +165,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                        show_main_window(&app);
                     }
                 })
                 .build(app)?;
@@ -188,6 +218,14 @@ pub fn run() {
                 }
                 tauri::WindowEvent::Resized(size) => {
                     if size.width == 0 || size.height == 0 {
+                        return;
+                    }
+                    // 过滤启动阶段的瞬时小尺寸（低于窗口最小逻辑尺寸的一律不落盘），
+                    // 避免污染 config.json，导致下次打开主窗口变小。
+                    let scale = window.scale_factor().unwrap_or(1.0) as f32;
+                    if (size.width as f32) < MIN_WINDOW_LOGICAL_W * scale
+                        || (size.height as f32) < MIN_WINDOW_LOGICAL_H * scale
+                    {
                         return;
                     }
                     let mut cfg = (*store.snapshot()).clone();

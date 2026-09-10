@@ -143,7 +143,16 @@ const ICONS: Record<string, string> = {
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
     '<path d="M7 10l5 5 5-5"/>' +
     '<path d="M12 15V3"/>',
-  ocr: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M7 9 H17 M7 13 H14 M7 17 H17"/>',
+  // OCR / 文字识别：扫描框（四角）+ 三行文字（lucide scan-text 风格），
+  // 一眼即“扫描识别文字”，比原先的“方块+几条线”更贴切。
+  ocr:
+    '<path d="M3 7V5a2 2 0 0 1 2-2h2"/>' +
+    '<path d="M17 3h2a2 2 0 0 1 2 2v2"/>' +
+    '<path d="M21 17v2a2 2 0 0 1-2 2h-2"/>' +
+    '<path d="M7 21H5a2 2 0 0 1-2-2v-2"/>' +
+    '<path d="M7 8h8"/>' +
+    '<path d="M7 12h10"/>' +
+    '<path d="M7 16h6"/>',
   // 重新截图：刷新环箭头（lucide rotate-cw 风格），点它清空选区回到拉框
   reselect: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
 };
@@ -191,6 +200,15 @@ for (const { t, icon, title } of TOOLS) {
   toolBtns.set(t, b);
   toolbar.appendChild(b);
 }
+
+// OCR：文字识别。非绘制工具——点击即识别，不进入工具选中态；放在「文本(T)」工具后面，
+// 与文字相关。不参与 toolBtns 选中高亮。
+const ocrBtn = makeBtn("ocr", "shot.ocr");
+ocrBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  void runOcr();
+});
+toolbar.appendChild(ocrBtn);
 
 // 分隔线
 const divider = document.createElement("div");
@@ -247,15 +265,9 @@ saveBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   void exportImage("save");
 });
-const ocrBtn = makeBtn("ocr", "shot.ocr");
-ocrBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  void runOcr();
-});
 toolbar.appendChild(cancelBtn);
 toolbar.appendChild(copyBtn);
 toolbar.appendChild(saveBtn);
-toolbar.appendChild(ocrBtn);
 
 uiLayer.appendChild(toolbar);
 

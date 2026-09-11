@@ -23,6 +23,8 @@
         --s-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
         --s-border-soft: rgba(255, 255, 255, 0.35);
         --s-help-bg: rgba(0, 0, 0, 0.55);
+        --s-kbd-bg: rgba(255, 255, 255, 0.14);
+        --s-kbd-border: rgba(255, 255, 255, 0.2);
         --s-panel-bg: rgba(28, 30, 36, 0.94);
         --s-panel-header-bg: rgba(255, 255, 255, 0.05);
         --s-panel-title: #cfd1d8;
@@ -43,7 +45,9 @@
         --s-divider: rgba(0, 0, 0, 0.15);
         --s-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         --s-border-soft: rgba(0, 0, 0, 0.3);
-        --s-help-bg: rgba(255, 255, 255, 0.82);
+        --s-help-bg: rgba(255, 255, 255, 0.86);
+        --s-kbd-bg: rgba(0, 0, 0, 0.07);
+        --s-kbd-border: rgba(0, 0, 0, 0.18);
         --s-panel-bg: rgba(255, 255, 255, 0.97);
         --s-panel-header-bg: rgba(0, 0, 0, 0.04);
         --s-panel-title: #6e707a;
@@ -263,19 +267,51 @@
         display: block;
       }
 
-      /* ============ 帮助框 ============ */
+      /* ============ 帮助框（快捷键提示） ============
+         每项一行「键帽 + 说明」，用两列网格排布（列优先，先填满 4 行再换列），
+         键帽等宽、说明左对齐 —— 比原先的三行「·」串排整齐、也便于按行扫读。
+         由 screenshot.ts 的 HELP_ITEMS 生成 DOM，文案走 i18n。 */
       #help-box {
         position: absolute;
         left: 12px;
         bottom: 12px;
+        display: grid;
+        grid-auto-flow: column;
+        grid-template-rows: repeat(4, auto);
+        gap: 2px 16px;
+        padding: 7px 11px;
         background: var(--s-help-bg);
-        color: var(--s-fg);
+        backdrop-filter: blur(10px) saturate(150%);
+        -webkit-backdrop-filter: blur(10px) saturate(150%);
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 8px;
+        color: var(--s-fg-dim);
         font-size: 12px;
-        line-height: 1.7;
-        padding: 8px 12px;
-        border-radius: 6px;
+        line-height: 1.35;
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-        white-space: pre;
+        white-space: nowrap;
+        /* 工具栏落到左下角时由 render() 抬高避让，用 transform 不触发重排 */
+        transition: transform 0.12s ease;
+      }
+      #help-box .hint {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #help-box kbd {
+        flex: none;
+        box-sizing: border-box;
+        min-width: 46px;
+        padding: 1px 6px;
+        border: 1px solid var(--s-kbd-border);
+        border-radius: 4px;
+        background: var(--s-kbd-bg);
+        color: var(--s-fg);
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.5;
+        text-align: center;
       }
 
       /* ============ OCR 结果面板 ============ */

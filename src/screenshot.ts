@@ -360,12 +360,76 @@ const textInput = document.createElement("textarea");
 textInput.id = "text-input";
 uiLayer.appendChild(textInput);
 
-// ---------- 帮助框 ----------
+// ---------- 帮助框（快捷键提示） ----------
+// 逐项渲染成「键帽 + 说明」，而不是一整段多行文本：键帽等宽、说明左对齐，
+// 换语言时长文案不会把整行挤歪。每一项都必须与下面 keydown 里真实生效的
+// 交互一一对应（改快捷键时同步改这张表，别让提示和实际脱节）。
 const helpBox = document.createElement("div");
 helpBox.id = "help-box";
-helpBox.dataset.i18n = "shot.help";
-helpBox.textContent = t("shot.help");
+
+const HELP_ITEMS: { kbdI18n?: string; kbd?: string; labelI18n: string }[] = [
+  // 鼠标：与 onMouseDown / onMouseMove 的窗口吸附一致
+  { kbdI18n: "shot.hint.dragKey", labelI18n: "shot.hint.drag" },
+  { kbdI18n: "shot.hint.clickKey", labelI18n: "shot.hint.click" },
+  // 键盘：与 window keydown 一致
+  { kbd: "Enter", labelI18n: "shot.hint.enter" },
+  { kbd: "Esc", labelI18n: "shot.hint.esc" },
+  { kbd: "Delete", labelI18n: "shot.hint.delete" },
+  { kbd: "Ctrl+Z", labelI18n: "shot.hint.undo" },
+  { kbd: "Ctrl+Y", labelI18n: "shot.hint.redo" },
+];
+
+function makeHintRow(kbdText: string, labelI18n: string, kbdI18n?: string): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "hint";
+  const kbd = document.createElement("kbd");
+  if (kbdI18n) kbd.dataset.i18n = kbdI18n;
+  kbd.textContent = kbdI18n ? t(kbdI18n) : kbdText;
+  const label = document.createElement("span");
+  label.dataset.i18n = labelI18n;
+  label.textContent = t(labelI18n);
+  row.append(kbd, label);
+  return row;
+}
+
+for (const it of HELP_ITEMS) {
+  helpBox.appendChild(makeHintRow(it.kbd ?? "", it.labelI18n, it.kbdI18n));
+}
+// 取色热键可由用户在设置里改（config.hotkeys.copy_color）→ 键帽文案取实际配置值，
+// 放大镜关掉时该键无效，整行隐藏（避免提示一个按了没反应的键）。
+const helpColorRow = makeHintRow("Alt+C", "shot.hint.copyColor");
+const helpColorKbd = helpColorRow.querySelector("kbd") as HTMLElement;
+helpBox.appendChild(helpColorRow);
 uiLayer.appendChild(helpBox);
+
+function updateHelpBox() {
+  helpColorKbd.textContent = copyColorHotkey;
+  helpColorRow.style.display = magnifierActive ? "" : "none";
+}
+
+// 与 screenshot.html 里 #help-box 的 left/bottom 保持一致
+const HELP_MARGIN = 12;
+
+/// 工具栏被挤到左下角时会压住提示框 → 检测相交后把提示框整体抬到工具栏上方。
+/// 用 transform 平移（不触发重排），无冲突时还原。
+function positionHelpBox() {
+  if (toolbar.style.display === "none") {
+    helpBox.style.transform = "";
+    return;
+  }
+  const viewH = root.getBoundingClientRect().height;
+  const hbW = helpBox.offsetWidth;
+  const hbH = helpBox.offsetHeight;
+  if (!hbW || !hbH) return;
+  const left = HELP_MARGIN;
+  const bottom = viewH - HELP_MARGIN;
+  const tb = toolbar.getBoundingClientRect();
+  const hit =
+    tb.left < left + hbW && tb.right > left && tb.top < bottom && tb.bottom > bottom - hbH;
+  helpBox.style.transform = hit
+    ? `translateY(-${Math.ceil(bottom - tb.top + 8)}px)`
+    : "";
+}
 
 // ---------- OCR 结果面板 ----------
 const ocrPanel = document.createElement("div");
@@ -751,6 +815,9 @@ function render() {
   } else {
     toolbar.style.display = "none";
   }
+
+  // 提示框避让：工具栏落到左下角时把它抬到工具栏上方，别互相压住
+  positionHelpBox();
 
   // OCR 面板跟随选区 —— 选区移动/重选时同步刷新位置（之前只 showOcrPanel 调一次）。
   if (selection && ocrPanel.style.display !== "none") {
@@ -1757,6 +1824,8 @@ async function refreshConfig() {
     // 读配置失败则保持默认
   }
   applyI18n(document);
+  // 提示框里「取色热键」要显示配置里的实际键值，放大镜关闭时整行隐藏
+  updateHelpBox();
 }
 
 // 截图窗口 UI 主题：与主窗口一致，跟随 config.theme（dark / light / system），

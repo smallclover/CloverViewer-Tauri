@@ -635,3 +635,217 @@ body {
   white-space: nowrap;
 }
 .mini-btn:hover { background: var(--border); }
+
+/* ---------- 关于页（全屏整页，不是弹窗） ---------- */
+/* top 让出标题栏高度：无边框窗口靠标题栏拖动，若被关于页盖住就没法移动窗口了。
+   底部状态栏被盖住无所谓（那里没有窗口控件）。 */
+#about-overlay {
+  position: fixed;
+  inset: 38px 0 0 0;
+  z-index: 310; /* 高于设置面板(300)，低于 toast(1000)，出错提示仍能盖在上面 */
+  background:
+    radial-gradient(80vw 55vh at 12% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+    radial-gradient(70vw 50vh at 96% 108%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 58%),
+    var(--bg);
+}
+
+#about-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.about-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+.about-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.about-wrap {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.85fr) 1.15fr;
+  gap: 34px;
+  width: 100%;
+  height: 100%;
+  padding: 42px 44px;
+  overflow: hidden;
+  animation: aboutIn 0.16s ease-out both;
+}
+@keyframes aboutIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 左栏：品牌区 */
+.about-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.about-logo {
+  width: 92px;
+  height: 92px;
+  border-radius: 22px;
+  box-shadow: 0 18px 44px var(--shadow);
+}
+.about-name {
+  margin-top: 18px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.about-ver {
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.about-tagline {
+  margin-top: 14px;
+  max-width: 330px;
+  color: var(--fg-dim);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.about-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 20px;
+}
+.about-links a {
+  color: var(--accent);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+.about-links a:hover { text-decoration: underline; }
+
+/* 右栏：版本信息 / 许可证 / 致谢（内容可能超出一屏，故自身可滚动） */
+.about-right {
+  min-width: 0;
+  overflow: hidden auto;
+  padding-right: 6px;
+}
+.about-right h3 {
+  margin: 22px 0 10px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.about-right h3:first-child { margin-top: 0; }
+
+.about-kv {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 7px 14px;
+  font-size: 12.5px;
+}
+.about-kv dt { color: var(--fg-dim); }
+.about-kv dd {
+  min-width: 0;
+  color: var(--fg);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.about-lic {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.about-lic details { border-bottom: 1px solid var(--border); }
+.about-lic details:last-child { border-bottom: none; }
+.about-lic summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+}
+.about-lic summary::-webkit-details-marker { display: none; }
+.about-lic summary:hover { background: var(--bg-hover); }
+.about-lic summary b { font-weight: 600; }
+.about-lic summary span {
+  flex: none;
+  color: var(--fg-dim);
+  font-size: 11.5px;
+}
+.about-lic p {
+  padding: 0 12px 11px;
+  color: var(--fg-dim);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+/* 致谢：保持原版 about.rs 的斜体 + weak 语义 */
+.about-thanks {
+  padding: 11px 14px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-style: italic;
+  opacity: 0.82;
+}
+.about-th {
+  font-size: 12.5px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+.about-tm {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.about-copyright {
+  margin-top: 18px;
+  color: var(--fg-dim);
+  font-size: 11.5px;
+  opacity: 0.8;
+}
+
+/* 窄窗口（主窗口最小宽度 640px）退化为单列，避免两栏被挤扁 */
+@media (max-width: 780px) {
+  .about-wrap {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 30px 26px;
+    overflow-y: auto;
+  }
+  .about-left { justify-content: flex-start; }
+  .about-logo { width: 64px; height: 64px; border-radius: 16px; }
+  .about-name { font-size: 25px; margin-top: 12px; }
+  .about-right { overflow: visible; padding-right: 0; }
+}
+
+/* 尊重系统的「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .about-wrap { animation: none; }
+}

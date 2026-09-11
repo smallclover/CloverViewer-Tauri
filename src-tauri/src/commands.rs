@@ -68,6 +68,82 @@ pub fn set_show_screenshot_hotkey(
     Ok(())
 }
 
+/// 关于页展示的应用信息。
+///
+/// 全部取自运行时的真实值：版本与标识来自 tauri.conf.json（`package_info` /
+/// `config`），Tauri 版本来自编译期常量，平台来自 `std::env::consts`。
+/// 不在前端硬编码，避免 tauri.conf.json 改了而关于页还显示旧值。
+#[derive(serde::Serialize)]
+pub struct AppInfo {
+    pub version: String,
+    pub identifier: String,
+    pub tauri: String,
+    pub os: String,
+    pub arch: String,
+}
+
+#[tauri::command]
+pub fn get_app_info(app: tauri::AppHandle) -> AppInfo {
+    AppInfo {
+        version: app.package_info().version.to_string(),
+        identifier: app.config().identifier.clone(),
+        tauri: tauri::VERSION.to_string(),
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+    }
+}
+
+/// 用系统默认浏览器打开链接（关于页的仓库 / Releases / 原版仓库 / 许可证）。
+///
+/// 用 ShellExecuteW 而不是 tauri-plugin-opener：只需要这一个 API，
+/// 走已在依赖里的 windows crate 即可，不必新增 crate、npm 包与 capability 授权。
+///
+/// 只放行 `https://`：这个 url 会被交给系统 shell 处理，若允许 file:// 或任意
+/// 自定义协议，就等于给前端开了一个「启动任意程序」的入口。
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") {
+        return Err(format!("只允许打开 https 链接: {url}"));
+    }
+
+    #[cfg(windows)]
+    {
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        // ShellExecuteW 要的是以 NUL 结尾的 UTF-16，Vec 需活到调用结束
+        let wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+        let op: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+
+        // SAFETY: 两个 PCWSTR 都指向上面已初始化的、以 NUL 结尾的缓冲区，
+        // 且在本次调用期间保持存活；hwnd 传 null 表示不依附父窗口。
+        let hinstance = unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(op.as_ptr()),
+                PCWSTR(wide.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+
+        // ShellExecuteW 用返回值 <= 32 表示失败（它不设置 last error）
+        let code = hinstance.0 as isize;
+        if code <= 32 {
+            return Err(format!("打开浏览器失败（ShellExecuteW 返回 {code}）"));
+        }
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err("当前平台未实现".into())
+    }
+}
+
 /// 扫描目录下所有受支持的图片（不递归）
 #[tauri::command]
 pub fn list_images(dir: String) -> Result<Vec<ImageEntry>, String> {

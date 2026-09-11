@@ -80,6 +80,8 @@ pub fn run() {
             commands::set_show_screenshot_hotkey,
             commands::list_images,
             commands::read_image_data,
+            commands::get_app_info,
+            commands::open_url,
             thumbnails::get_thumbnail,
             image_info::get_image_info,
             screenshot::get_screenshot_data,

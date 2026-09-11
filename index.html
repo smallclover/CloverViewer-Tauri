@@ -40,6 +40,9 @@
           <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
           <span data-i18n="toolbar.props">属性</span>
         </button>
+        <button id="btn-about" class="tb-btn" data-i18n-title="toolbar.about">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+        </button>
         <button id="btn-settings" class="tb-btn" data-i18n-title="toolbar.settings">
           <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -149,6 +152,75 @@
               <span data-i18n="settings.autostart">开机自启</span>
               <input id="set-autostart" type="checkbox" />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 关于页：全屏整页（非弹窗）。top 让出 38px 标题栏高度，
+           使无边框窗口在关于页打开时仍可拖动/最小化/关闭。 -->
+      <div id="about-overlay" class="hidden">
+        <div id="about-panel" role="dialog" aria-modal="true">
+          <button id="about-close" class="about-close" data-i18n-title="settings.close">✕</button>
+          <div class="about-wrap">
+            <aside class="about-left">
+              <img class="about-logo" src="/logo.png" alt="CloverViewer" />
+              <h1 class="about-name">CloverViewer</h1>
+              <div class="about-ver" id="about-version">v0.1.0</div>
+              <p class="about-tagline" data-i18n="about.tagline">基于 Tauri 2 的图片查看器和截图工具</p>
+              <nav class="about-links">
+                <a id="about-link-repo" href="https://github.com/smallclover/CloverViewer-Tauri" data-i18n="about.repo">GitHub 源码地址</a>
+                <a id="about-link-releases" href="https://github.com/smallclover/CloverViewer-Tauri/releases" data-i18n="about.releases">Releases 下载</a>
+                <a id="about-link-original" href="https://github.com/smallclover/CloverViewer" data-i18n="about.original">原版 CloverViewer（egui 版）</a>
+                <a id="about-link-license" href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE">MIT License</a>
+              </nav>
+            </aside>
+
+            <section class="about-right">
+              <h3 data-i18n="about.verInfo">版本信息</h3>
+              <dl class="about-kv">
+                <dt data-i18n="about.kVersion">版本</dt>
+                <dd id="info-version">0.1.0</dd>
+                <dt data-i18n="about.kId">标识</dt>
+                <dd id="info-identifier">com.smallclover.cloverviewer.tauri</dd>
+                <dt data-i18n="about.kUi">界面</dt>
+                <dd id="info-ui">Tauri 2</dd>
+                <dt data-i18n="about.kBackend">后端</dt>
+                <dd>Rust · xcap · image · rmcp</dd>
+                <dt data-i18n="about.kRt">运行环境</dt>
+                <dd id="info-runtime">Windows · x64</dd>
+              </dl>
+
+              <h3 data-i18n="about.licenses">开源许可证</h3>
+              <div class="about-lic">
+                <details open>
+                  <summary><b>CloverViewer-Tauri</b><span>MIT</span></summary>
+                  <p data-i18n="about.lic.self">本软件以 MIT 协议开源，与原版 CloverViewer（egui 版）同源。</p>
+                </details>
+                <details>
+                  <summary><b>Tauri 2 · wry · tao</b><span>Apache-2.0 / MIT</span></summary>
+                  <p data-i18n="about.lic.framework">桌面框架：原生窗口、WebView 与前后端 IPC。</p>
+                </details>
+                <details>
+                  <summary><b>xcap · image · imageproc · kamadak-exif</b><span>Apache-2.0 / MIT / BSD-2-Clause</span></summary>
+                  <p data-i18n="about.lic.image">屏幕采集、图像编解码与 EXIF 解析。</p>
+                </details>
+                <details>
+                  <summary><b>rmcp · axum · tokio</b><span>Apache-2.0 / MIT</span></summary>
+                  <p data-i18n="about.lic.mcp">内置 MCP Server（stdio 与 streamable HTTP 两种传输）。</p>
+                </details>
+                <details>
+                  <summary><b>arboard · winreg · single-instance · tracing</b><span>MIT / Apache-2.0</span></summary>
+                  <p data-i18n="about.lic.system">剪贴板、注册表、单实例与日志。</p>
+                </details>
+              </div>
+
+              <h3 data-i18n="about.credits">致谢</h3>
+              <blockquote class="about-thanks">
+                <p class="about-th" data-i18n="about.th">献给我的妻子</p>
+                <p class="about-tm" data-i18n="about.tm">谢谢她不嫌弃我把无数个周末都花在对着电脑屏幕发呆上</p>
+              </blockquote>
+              <p class="about-copyright">Copyright © 2026 CloverViewer Developers · MIT License</p>
+            </section>
           </div>
         </div>
       </div>

@@ -104,6 +104,20 @@ export const finishScreenshot = (action: "save" | "clipboard", png: string) =>
 
 export const copyText = (text: string) => invoke<void>("copy_text", { text });
 
+/** 关于页展示的应用信息（版本/标识/Tauri 版本/平台，均取自运行时真实值） */
+export interface AppInfo {
+  version: string;
+  identifier: string;
+  tauri: string;
+  os: string;
+  arch: string;
+}
+
+export const getAppInfo = () => invoke<AppInfo>("get_app_info");
+
+/** 用系统默认浏览器打开 https 链接（后端限制只放行 https://） */
+export const openUrl = (url: string) => invoke<void>("open_url", { url });
+
 export const ocrImage = (png: string) => invoke<string>("ocr_image", { png });
 
 /** 物理坐标 (x, y) 处的顶层窗口矩形（用于绿框跟随鼠标自动框选窗口） */

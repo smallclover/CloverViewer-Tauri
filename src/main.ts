@@ -8,10 +8,12 @@ import {
   fileSrc,
   formatDimensions,
   formatSize,
+  getAppInfo,
   getConfig,
   getImageInfo,
   getThumbnail,
   listImages,
+  openUrl,
   readImageData,
   setConfig,
   setLaunchOnStartup,
@@ -558,6 +560,10 @@ function updateNavButtons() {
 
 // ---------- 键盘 ----------
 window.addEventListener("keydown", (e) => {
+  // 关于页 / 设置面板打开时屏蔽查看器快捷键：它们盖住了画面，
+  // 否则按 R 会转动背后的图、Ctrl+O 会弹出文件夹对话框。
+  if (!aboutOverlay.classList.contains("hidden")) return;
+  if (!settingsOverlay.classList.contains("hidden")) return;
   if (e.ctrlKey && e.key.toLowerCase() === "o") {
     e.preventDefault();
     void pickFolder();
@@ -830,9 +836,13 @@ settingsOverlay.addEventListener("mousedown", (e) => {
   if (e.target === settingsOverlay) closeSettings();
 });
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !settingsOverlay.classList.contains("hidden")) {
-    closeSettings();
+  if (e.key !== "Escape") return;
+  // 关于页在最上层，优先关闭；两个都关着时 Esc 交给查看器（退出单图视图）
+  if (!aboutOverlay.classList.contains("hidden")) {
+    closeAbout();
+    return;
   }
+  if (!settingsOverlay.classList.contains("hidden")) closeSettings();
 });
 
 setLanguage.addEventListener("change", () => {
@@ -900,6 +910,73 @@ $("set-color-hotkey-apply").addEventListener("click", () => {
   saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C" }), copy_color: value } }, { silent: true });
   toast(t("toast.colorHotkeySet", { key: value }), "success");
 });
+
+// ---------- 关于页 ----------
+const aboutOverlay = $("about-overlay");
+const aboutVersion = $("about-version");
+const infoVersion = $("info-version");
+const infoIdentifier = $("info-identifier");
+const infoUi = $("info-ui");
+const infoRuntime = $("info-runtime");
+
+/** 关于页里的外部链接：仓库 / Releases / 原版 CloverViewer / 许可证 */
+const ABOUT_LINKS: Array<[string, string]> = [
+  ["about-link-repo", "https://github.com/smallclover/CloverViewer-Tauri"],
+  ["about-link-releases", "https://github.com/smallclover/CloverViewer-Tauri/releases"],
+  ["about-link-original", "https://github.com/smallclover/CloverViewer"],
+  ["about-link-license", "https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE"],
+];
+
+let aboutInfoLoaded = false;
+
+/**
+ * 填充版本信息。HTML 里已写好与 tauri.conf.json 一致的静态兜底值，
+ * 这里只是用运行时真实值覆盖，取不到也不会留空。
+ */
+async function fillAboutInfo() {
+  try {
+    const info = await getAppInfo();
+    aboutVersion.textContent = `v${info.version}`;
+    infoVersion.textContent = info.version;
+    infoIdentifier.textContent = info.identifier;
+
+    // 渲染引擎版本：WebView2 的 UA 里带 Edg/<版本>
+    const parts = [`Tauri ${info.tauri}`];
+    const edg = /Edg\/(\d+)/.exec(navigator.userAgent);
+    if (edg) parts.push(`WebView2 ${edg[1]}`);
+    infoUi.textContent = parts.join(" · ");
+
+    const os = info.os === "windows" ? "Windows" : info.os;
+    const arch = info.arch === "x86_64" ? "x64" : info.arch;
+    infoRuntime.textContent = `${os} · ${arch}`;
+  } catch {
+    // 后端不可用时保留 HTML 里的静态值
+  }
+}
+
+function openAbout() {
+  aboutOverlay.classList.remove("hidden");
+  if (!aboutInfoLoaded) {
+    aboutInfoLoaded = true;
+    void fillAboutInfo();
+  }
+}
+
+function closeAbout() {
+  aboutOverlay.classList.add("hidden");
+}
+
+$("btn-about").addEventListener("click", openAbout);
+$("about-close").addEventListener("click", closeAbout);
+
+// 链接交给系统默认浏览器打开（后端只放行 https://）。
+// href 仍保留真实地址，便于中键新开、右键复制链接。
+for (const [id, url] of ABOUT_LINKS) {
+  $(id).addEventListener("click", (e) => {
+    e.preventDefault();
+    void openUrl(url).catch((err) => toast(String(err), "error"));
+  });
+}
 
 // ---------- 启动 ----------
 (async () => {

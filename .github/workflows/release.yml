@@ -33,9 +33,17 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # 从 CHANGELOG.md 抽当前标签对应的版本段落（到下一个 `## ` 标题为止）。
-      # 版本号取自标签名（v0.1.2 -> 0.1.2）。抽不到就回退成一句提示，不让发布失败。
+      # 从 CHANGELOG.md 抽当前标签对应的版本段落（到下一个 `## ` 标题为止），
+      # 并以多行 heredoc 形式交给后面的 tauri-action 当作 Release 正文。
+      #
+      # ⚠ 这里刻意**不用** `Out-File -Encoding utf8NoBOM`：GitHub 的 Windows runner
+      # 上 `shell: pwsh` 默认仍是 **Windows PowerShell 5.1**（不存在 utf8NoBOM 这个
+      # 取值，会直接报 ValidateSet 错），而 `-Encoding utf8` 又会写出 BOM，把
+      # `$GITHUB_OUTPUT` 的第一行键名污染成 `\ufeffbody`。所以统一走 .NET 显式编码。
+      #
+      # 抽不到版本段落不报错，回退成一句提示，避免因为文档没跟上而卡住发布。
       - name: Extract release notes
+        id: notes_body
         shell: pwsh
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
@@ -55,22 +63,10 @@ jobs:
             $notes = ($lines[$start..($end - 1)] -join "`n").Trim()
             Write-Host "已抽取 CHANGELOG.md 中 v$version 的正文（$($end - $start) 行）。"
           }
-          # 用「文件 → 单行环境变量」传递，避免多行值 + BOM 把 $GITHUB_ENV 解析搞坏
-          $path = Join-Path $env:RUNNER_TEMP 'release_notes.md'
-          [System.IO.File]::WriteAllText($path, $notes, [System.Text.UTF8Encoding]::new($false))
-          "RELEASE_NOTES_PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-
-      # GitHub Actions 的 step output 只认单行；这里用 heredoc 语法把多行正文
-      # 原样交给下一步（delta 行数在输出里显示为 0，属正常现象）。
-      - name: Expose release notes
-        id: notes_body
-        shell: pwsh
-        run: |
-          $body = Get-Content -Raw -Encoding UTF8 $env:RELEASE_NOTES_PATH
           $delim = "RELEASE_NOTES_EOF"
-          "body<<$delim" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
-          $body | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
-          $delim | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          $block = "body<<$delim`r`n$notes`r`n$delim`r`n"
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT, $block, [System.Text.UTF8Encoding]::new($false))
 
       - name: Build & publish release
         uses: tauri-apps/tauri-action@v0

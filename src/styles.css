@@ -126,16 +126,6 @@ body {
   background: var(--glass);
   border-right: 1px solid var(--border);
 }
-.rail-brand {
-  width: 32px;
-  height: 32px;
-  margin-bottom: 8px;
-  padding: 3px;
-  border-radius: 9px;
-  background: var(--accent-soft);
-}
-.rail-brand img { width: 100%; height: 100%; border-radius: 6px; display: block; }
-
 .tb-btn {
   display: inline-flex;
   align-items: center;
@@ -169,7 +159,6 @@ body {
 }
 #toolbar .tb-btn span { display: none; }
 #toolbar .tb-btn.primary { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
-#toolbar #btn-grid.active { background: transparent; border-color: transparent; color: var(--fg); }
 #toolbar #btn-settings { position: absolute; bottom: 51px; }
 #toolbar #btn-about { position: absolute; bottom: 9px; }
 /* 图片动作不属于应用导航轨：仅在单图模式时作为画布底部浮动胶囊出现。 */
@@ -458,31 +447,6 @@ body {
   gap: 8px;
 }
 
-/* 视图切换不再占用状态栏：宫格入口收回左侧导航轨。 */
-#view-switch {
-  position: fixed;
-  z-index: 45;
-  top: 93px;
-  left: 10px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-#view-switch .vs-btn {
-  display: none;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  justify-content: center;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--fg-dim);
-}
-#view-switch #btn-grid { display: inline-flex; }
-#view-switch #btn-grid.active { background: var(--accent-soft); color: var(--accent); }
-#view-switch .vs-btn span { display: none; }
-
 /* 设置与工作区采用同一套整页两栏，不再弹出居中的旧对话框。 */
 #settings-overlay {
   inset: 38px 0 0 56px;
@@ -530,39 +494,6 @@ body {
 .settings-header { justify-content: flex-start; gap: 12px; }
 .settings-close { width: auto; height: auto; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); font-size: 12px; }
 .settings-close:hover { background: var(--accent-soft); color: var(--accent); }
-
-/* 右下角视图切换（网格/单图 两键并存，当前模式高亮）—— 胶囊分段控件 */
-#view-switch {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: color-mix(in srgb, var(--bg-hover) 60%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-.vs-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 14px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--fg-dim);
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
-}
-.vs-btn:hover { background: var(--bg-hover); color: var(--fg); }
-.vs-btn:active { transform: scale(0.95); }
-.vs-btn.active {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 40%, transparent);
-}
-.vs-btn:disabled { opacity: 0.45; cursor: default; }
-.vs-btn:disabled:hover { background: transparent; color: var(--fg-dim); }
 
 /* ---------- 拖放遮罩 / Toast ---------- */
 #drop-overlay {
@@ -1008,33 +939,6 @@ body {
 }
 #content { padding-top: 34px; }
 #empty-state { min-height: 100%; }
-
-/* 后声明以覆盖旧版底部“网格/单图”分段控件。 */
-#view-switch {
-  position: fixed;
-  z-index: 45;
-  top: 93px;
-  left: 10px;
-  display: block;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-#view-switch .vs-btn { display: none; }
-#view-switch #btn-grid {
-  display: inline-flex;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--fg-dim);
-}
-#view-switch #btn-grid.active { background: var(--accent-soft); color: var(--accent); }
-#view-switch .vs-btn span { display: none; }
 
 /* 尊重系统的「减少动态效果」设置 */
 @media (prefers-reduced-motion: reduce) {

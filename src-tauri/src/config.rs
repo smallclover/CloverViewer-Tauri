@@ -58,6 +58,17 @@ pub struct HotkeysConfig {
     pub show_screenshot: String,
     #[serde(alias = "copy_screenshot")]
     pub copy_color: String,
+    /// 滚动截图（长截图）的独立热键：按下直接进入滚动截图待框选态。
+    ///
+    /// 与 ShareX 的做法一致（它给 "Start/Stop scrolling capture" 单独留了热键）：
+    /// 「我已经知道我要长截图」时，不必先 Alt+S 再切模式。旧配置里没有这个字段，
+    /// 用 `#[serde(default)]` 兜底，保证 config.json 向后兼容。
+    #[serde(default = "default_scroll_hotkey")]
+    pub scroll_capture: String,
+}
+
+fn default_scroll_hotkey() -> String {
+    "Alt+Shift+S".to_string()
 }
 
 impl Default for HotkeysConfig {
@@ -65,6 +76,7 @@ impl Default for HotkeysConfig {
         Self {
             show_screenshot: "Alt+S".to_string(),
             copy_color: "Alt+C".to_string(),
+            scroll_capture: default_scroll_hotkey(),
         }
     }
 }

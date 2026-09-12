@@ -67,6 +67,9 @@ pub struct ScreenshotData {
 pub struct ScreenshotStore {
     data: Mutex<Option<ScreenshotData>>,
     capturing: Mutex<bool>,
+    /// 本次进入覆盖窗时的启动模式：true = 直接进「滚动截图待框选」态。
+    /// 独立热键（Alt+Shift+S）置位，前端 loadScreenshot 时取走并清掉。
+    scroll_start: Mutex<Option<(bool, std::time::Instant)>>,
 }
 
 impl ScreenshotStore {
@@ -74,7 +77,49 @@ impl ScreenshotStore {
         Self {
             data: Mutex::new(None),
             capturing: Mutex::new(false),
+            scroll_start: Mutex::new(None),
         }
+    }
+
+    /// 前端取走并清除「是否以滚动截图模式启动」
+    pub fn take_scroll_start(&self) -> bool {
+        let mut g = self.scroll_start.lock().unwrap();
+        let v = g.map(|(v, _)| v).unwrap_or(false);
+        *g = None;
+        v
+    }
+
+    /// 记录启动模式。
+    ///
+    /// 「先写先赢」（窗口 500ms 内）：Alt+Shift+S 与 Alt+S 都可能在同一瞬间触发同一个入口，
+    /// 若普通截图那次后到，就会把「滚动截图」意图覆盖掉 —— 现象是按下 Alt+Shift+S 却进了
+    /// 普通截图（用户实测报回）。真正的「过一会儿再按 Alt+S」不受影响（超过窗口就正常覆盖）。
+    fn set_scroll_start(&self, on: bool) {
+        const GUARD: std::time::Duration = std::time::Duration::from_millis(500);
+        let mut g = self.scroll_start.lock().unwrap();
+        match *g {
+            Some((true, t)) if !on && t.elapsed() < GUARD => {
+                tracing::info!("启动模式: 保留滚动截图意图（忽略同一瞬间的普通截图触发）");
+            }
+            _ => *g = Some((on, std::time::Instant::now())),
+        }
+    }
+
+    /// 占用「正在截图」互斥。滚动截图会话与 Alt+S 共用这一把锁，
+    /// 避免一次长截图中途被另一次截图打断（返回 false = 已有截图在进行中）。
+    pub fn try_begin_capture(&self) -> bool {
+        let mut g = self.capturing.lock().unwrap();
+        if *g {
+            false
+        } else {
+            *g = true;
+            true
+        }
+    }
+
+    /// 释放「正在截图」互斥
+    pub fn end_capture(&self) {
+        *self.capturing.lock().unwrap() = false;
     }
 }
 
@@ -82,6 +127,12 @@ impl ScreenshotStore {
 #[tauri::command]
 pub fn get_screenshot_data(store: State<'_, ScreenshotStore>) -> Option<ScreenshotData> {
     store.data.lock().unwrap().clone()
+}
+
+/// 前端进入截图窗时询问「这次是不是以滚动截图模式启动」，取走即清（一次性）。
+#[tauri::command]
+pub fn take_scroll_start_mode(store: State<'_, ScreenshotStore>) -> bool {
+    store.take_scroll_start()
 }
 
 /// 关闭截图窗口（前端 Esc 时调用）—— 仅隐藏窗口（不销毁），保留供下次复用。
@@ -293,9 +344,24 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
 
 /// 进入截图模式：截屏 + 复用/创建截图窗口（由全局热键触发）
 pub fn start_screenshot(app: &AppHandle) {
+    start_screenshot_mode(app, false);
+}
+
+/// 进入滚动截图模式：与普通截图共用覆盖窗与截屏流程，只是进入后直接处于
+/// 「滚动截图待框选」态（由 Alt+Shift+S 这类专属热键触发）。
+pub fn start_scroll_screenshot(app: &AppHandle) {
+    start_screenshot_mode(app, true);
+}
+
+fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
     let app = app.clone();
     std::thread::spawn(move || {
         let store = app.state::<ScreenshotStore>();
+        store.set_scroll_start(scroll);
+        tracing::info!(
+            "覆盖窗启动: 模式={}",
+            if scroll { "滚动截图" } else { "普通截图" }
+        );
 
         // 已在截图状态（截图窗口可见）时忽略再次触发，避免重新截屏/重开窗口导致闪屏。
         if let Some(w) = app.get_webview_window("screenshot") {

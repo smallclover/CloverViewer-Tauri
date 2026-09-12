@@ -1,5 +1,6 @@
 import "./styles.css";
 import { applyI18n, setLang, t, type Lang } from "./i18n";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -18,6 +19,8 @@ import {
   setConfig,
   setLaunchOnStartup,
   setShowScreenshotHotkey,
+  setScrollCaptureHotkey,
+  takeStartupNotices,
 } from "./api";
 
 // ---------- 状态 ----------
@@ -796,6 +799,7 @@ const setZoom = $<HTMLInputElement>("set-zoom");
 const setZoomVal = $("set-zoom-val");
 const setHotkey = $<HTMLInputElement>("set-hotkey");
 const setColorHotkey = $<HTMLInputElement>("set-color-hotkey");
+const setScrollHotkey = $<HTMLInputElement>("set-scroll-hotkey");
 const setMagnifier = $<HTMLInputElement>("set-magnifier");
 const setMinimize = $<HTMLInputElement>("set-minimize");
 const setAutostart = $<HTMLInputElement>("set-autostart");
@@ -820,6 +824,8 @@ function openSettings() {
   setZoomVal.textContent = `${config.zoom_sensitivity.toFixed(1)}×`;
   setHotkey.value = config.hotkeys.show_screenshot;
   setColorHotkey.value = config.hotkeys.copy_color;
+  // 旧配置文件里没有这个字段（serde default 只在后端生效），前端兜一个默认值
+  setScrollHotkey.value = config.hotkeys.scroll_capture || "Alt+Shift+S";
   setMagnifier.checked = config.magnifier_enabled;
   setMinimize.checked = config.minimize_on_close;
   setAutostart.checked = config.launch_on_startup;
@@ -907,8 +913,24 @@ $("set-color-hotkey-apply").addEventListener("click", () => {
     toast(t("toast.hotkeyEmpty"));
     return;
   }
-  saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C" }), copy_color: value } }, { silent: true });
+  saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C", scroll_capture: "Alt+Shift+S" }), copy_color: value } }, { silent: true });
   toast(t("toast.colorHotkeySet", { key: value }), "success");
+});
+// 滚动截图专属热键：与截图热键同样需要真正重注册（不能只写配置）
+$("set-scroll-hotkey-apply").addEventListener("click", () => {
+  const value = setScrollHotkey.value.trim();
+  if (!value || !value.includes("+")) {
+    toast(t("toast.hotkeyEmpty"));
+    return;
+  }
+  void setScrollCaptureHotkey(value)
+    .then(() => {
+      if (config) {
+        config = { ...config, hotkeys: { ...config.hotkeys, scroll_capture: value } };
+      }
+      toast(t("toast.hotkeySet", { key: value }), "success");
+    })
+    .catch((e) => toast(t("toast.hotkeyFailed", { msg: String(e) }), "error"));
 });
 
 // ---------- 关于页 ----------
@@ -978,6 +1000,40 @@ for (const [id, url] of ABOUT_LINKS) {
   });
 }
 
+// ---------- 滚动截图：后端把长图落盘后通知主窗口打开 ----------
+async function initScrollCaptureBridge() {
+  // 「在查看器中打开」：后端已保存临时 PNG 并把主窗口显示出来，这里负责载入这张图
+  await listen<{ path: string }>("open-image", async (e) => {
+    const path = e.payload?.path;
+    if (!path) return;
+    try {
+      await openFileOrFolder(path);
+      toast(t("toast.opened"), "success");
+    } catch (err) {
+      toast(String(err), "error");
+    }
+  });
+}
+
+// ---------- 启动阶段提示（热键冲突等） ----------
+async function showStartupNotices() {
+  try {
+    const notices = await takeStartupNotices();
+    for (const n of notices) {
+      if (n.kind === "hotkey_fallback") {
+        toast(
+          t("notice.hotkeyFallback", { wanted: n.wanted ?? "", used: n.used ?? "" }),
+          "info",
+        );
+      } else if (n.kind === "hotkey_conflict") {
+        toast(t("notice.hotkeyConflict", { wanted: n.wanted ?? "" }), "error");
+      }
+    }
+  } catch {
+    // 取不到就算了，不影响主流程
+  }
+}
+
 // ---------- 启动 ----------
 (async () => {
   try {
@@ -990,5 +1046,7 @@ for (const [id, url] of ABOUT_LINKS) {
   }
   applyI18n(document);
   refreshStatus();
+  void initScrollCaptureBridge();
+  void showStartupNotices();
   // 记住上次的语言仅作展示；无目录状态由用户操作进入
 })();

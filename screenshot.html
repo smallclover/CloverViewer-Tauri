@@ -85,7 +85,10 @@
            细缝都统一显示为深色，不再露馅。 */
         background: #14161c;
       }
-      #screenshot-root img {
+      /* 只作用于**直接子** img（标注图层用到的位图）。子选择器是必须的：
+         滚动截图的结果缩略预览是 #scroll-hud 里的 <img>，若这里写成后代选择器，
+         ID 选择器的权重会压过 `.sh-preview`，把预览变成 absolute 而与按钮叠在一起。 */
+      #screenshot-root > img {
         position: absolute;
         pointer-events: none;
         -webkit-user-drag: none;
@@ -381,6 +384,243 @@
       }
       #ocr-panel .ocr-body.error {
         color: var(--s-error);
+      }
+      /* ============ 滚动截图：开始面板 / 进度与结果 HUD ============
+         两者都定位在**选区之外**：捕获期间选区内的画布必须保持全透明
+         （透出真实窗口，屏幕像素捕获才不会把 UI 画进长图里）。 */
+      #scroll-panel,
+      #scroll-hud {
+        position: absolute;
+        display: none;
+        flex-direction: column;
+        gap: 7px;
+        box-sizing: border-box;
+        width: min(320px, calc(100vw - 20px));
+        padding: 11px 12px;
+        background: var(--s-panel-bg);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        border: 1px solid var(--s-popup-border);
+        border-radius: 10px;
+        box-shadow: var(--s-shadow);
+        color: var(--s-fg);
+        font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      #scroll-hud {
+        width: min(280px, calc(100vw - 20px));
+      }
+      #scroll-panel.open,
+      #scroll-hud.open {
+        display: flex;
+      }
+      /* 后端采帧的瞬间：HUD 压在捕获区上时必须让开（否则可能被截进长图），
+         抓完立刻恢复 —— 每帧只隐藏 ~120ms。 */
+      #scroll-hud.hud-hidden {
+        visibility: hidden;
+      }
+      .sh-title {
+        font-weight: 600;
+        color: var(--s-panel-title);
+        font-size: 13px;
+        line-height: 1.25;
+      }
+      .sh-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .sh-badge {
+        flex: 0 0 auto;
+        padding: 2px 6px;
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 999px;
+        color: var(--s-fg-dim);
+        font-size: 10px;
+        line-height: 1.35;
+        white-space: nowrap;
+      }
+      .sh-badge.ok { color: var(--s-accent); }
+      .sh-badge.warn { color: #d8a13a; }
+      .sh-badge.recording { color: #e46467; }
+      .sh-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .sh-metric {
+        min-width: 0;
+        padding: 6px 7px;
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 7px;
+        background: color-mix(in srgb, var(--s-panel-bg) 84%, #000 16%);
+      }
+      .sh-metric-label {
+        overflow: hidden;
+        color: var(--s-fg-dim);
+        font-size: 10px;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sh-metric-value {
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--s-panel-title);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sh-status {
+        color: var(--s-fg-dim);
+      }
+      .sh-detail {
+        display: none;
+        color: var(--s-fg-dim);
+        font-size: 11px;
+        line-height: 1.42;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      .sh-detail.on { display: -webkit-box; }
+      .sh-detail.warn { color: #d8a13a; }
+      .sh-status.warn {
+        color: #d8a13a;
+      }
+      .sh-status.err {
+        color: var(--s-error);
+      }
+      /* SendInput 注入期间覆盖窗整体放行鼠标（滚轮要落到底下的目标窗口），
+         此时 HUD 上的按钮点不到 —— 必须显式禁用命中测试，否则用户点「停止」
+         只会把点击穿透给目标应用，看起来像按钮坏了（唯一出口是 Esc）。 */
+      #scroll-hud.clickthrough {
+        pointer-events: none;
+      }
+      .sh-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .sh-actions.result { padding-top: 2px; }
+      .sh-actions.result .sh-btn.primary { order: -1; }
+      .sh-actions-footer {
+        display: none;
+        justify-content: space-between;
+        width: 100%;
+        padding-top: 3px;
+        border-top: 1px solid var(--s-toolbar-border);
+      }
+      .sh-actions-footer.result { display: flex; }
+      .sh-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--s-fg);
+        font-family: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.12s ease;
+      }
+      .sh-btn:hover:not(:disabled) {
+        background: var(--s-btn-hover-bg);
+      }
+      .sh-btn.primary {
+        background: var(--s-accent);
+        border-color: transparent;
+        color: #fff;
+      }
+      .sh-btn.quiet {
+        padding-inline: 2px;
+        border-color: transparent;
+        color: var(--s-fg-dim);
+      }
+      .sh-btn.quiet:hover:not(:disabled) {
+        background: transparent;
+        color: var(--s-fg);
+      }
+      .sh-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .sh-preview {
+        display: none;
+        width: 120px;
+        max-height: 220px;
+        object-fit: contain;
+        align-self: flex-start;
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 4px;
+        background: #000;
+        image-rendering: auto;
+      }
+      .sh-preview.on {
+        display: block;
+      }
+      /* 开始面板里的「从页面顶部开始」勾选项 */
+      /* REC 手感：捕获中标题前一个呼吸红点，扫一眼就知道「正在录」 */
+      .sh-rec {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 6px;
+        border-radius: 50%;
+        background: #ff4d4f;
+        box-shadow: 0 0 6px rgba(255, 77, 79, 0.9);
+        animation: sh-rec-pulse 1.1s ease-in-out infinite;
+        vertical-align: middle;
+      }
+      @keyframes sh-rec-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.35; transform: scale(0.82); }
+      }
+      .sh-check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--s-fg-dim);
+        cursor: pointer;
+        user-select: none;
+      }
+      .sh-esc-stop {
+        display: none;
+        color: var(--s-fg-dim);
+        font-size: 11px;
+      }
+      .sh-esc-stop.on { display: block; }
+      /* 覆盖窗里的一次性提示（成功 / 失败）。截图窗没有主窗口那套 toast，
+         而结果态的失败原因必须有地方显示 —— 否则「保存失败」是一次无声的点击。 */
+      #scroll-notice {
+        position: absolute;
+        display: none;
+        max-width: min(420px, calc(100vw - 32px));
+        padding: 9px 12px;
+        border: 1px solid var(--s-popup-border);
+        border-radius: 8px;
+        background: var(--s-panel-bg);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        box-shadow: var(--s-shadow);
+        color: var(--s-fg);
+        font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+        font-size: 12px;
+        line-height: 1.45;
+        word-break: break-all;
+      }
+      #scroll-notice.on { display: block; }
+      #scroll-notice.err { color: var(--s-error); border-color: var(--s-error); }
+      .sh-check input {
+        margin: 0;
+        cursor: pointer;
       }
     </style>
   </head>

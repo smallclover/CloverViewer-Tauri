@@ -68,6 +68,40 @@ pub fn set_show_screenshot_hotkey(
     Ok(())
 }
 
+/// 重注册滚动截图专属热键（注销旧键 → 注册新键 → 持久化）
+#[tauri::command]
+pub fn set_scroll_capture_hotkey(
+    app: tauri::AppHandle,
+    store: State<'_, ConfigStore>,
+    hotkey: String,
+) -> Result<(), String> {
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+
+    Shortcut::from_str(&hotkey).map_err(|e| format!("无效的热键格式: {e}"))?;
+
+    let gs = app.global_shortcut();
+    let old = store.snapshot().hotkeys.scroll_capture.clone();
+    if old == hotkey {
+        return Ok(());
+    }
+    if let Err(e) = gs.unregister(old.as_str()) {
+        tracing::warn!("注销旧滚动截图热键 {old} 失败: {e}");
+    }
+    gs.on_shortcut(hotkey.as_str(), |app, _sc, event| {
+        if event.state() == ShortcutState::Pressed {
+            crate::screenshot::start_scroll_screenshot(app);
+        }
+    })
+    .map_err(|e| format!("注册热键失败: {e}"))?;
+
+    let mut cfg = (*store.snapshot()).clone();
+    cfg.hotkeys.scroll_capture = hotkey;
+    store.replace(cfg.clone());
+    crate::config::save_config(&cfg);
+    Ok(())
+}
+
 /// 关于页展示的应用信息。
 ///
 /// 全部取自运行时的真实值：版本与标识来自 tauri.conf.json（`package_info` /

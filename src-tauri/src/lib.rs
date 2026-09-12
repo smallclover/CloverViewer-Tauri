@@ -14,6 +14,10 @@ mod image_scan;
 pub mod mcp;
 mod ocr;
 mod screenshot;
+/// 滚动截图（长截图）核心。
+/// `pub` 是为了让开发用探针 `src-tauri/examples/scroll_probe.rs` 复用同一套实现
+/// （兼容性探测 + 完整会话 CLI + 标尺校验，见 SCROLL_CAPTURE_PLAN.md 附录 A）。
+pub mod scroll_capture;
 mod startup;
 mod thumbnails;
 
@@ -26,6 +30,38 @@ use tauri::{
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const MAIN_WINDOW: &str = "main";
+
+/// 启动阶段要告诉用户的提示（目前只有热键冲突）。
+///
+/// 为什么不直接在 setup 里 emit：那时前端刚开始加载、还没挂上监听，事件会丢。
+/// 改成「存起来 + 前端启动后主动取」，就没有竞态。
+#[derive(Default)]
+pub struct StartupNotices(std::sync::Mutex<Vec<StartupNotice>>);
+
+#[derive(Clone, serde::Serialize)]
+pub struct StartupNotice {
+    /// "hotkey_fallback" = 想要的组合被占用、已临时改用别的；"hotkey_conflict" = 完全没注册上
+    pub kind: String,
+    pub wanted: Option<String>,
+    pub used: Option<String>,
+}
+
+impl StartupNotices {
+    fn push(&self, n: StartupNotice) {
+        if let Ok(mut g) = self.0.lock() {
+            g.push(n);
+        }
+    }
+}
+
+#[tauri::command]
+fn take_startup_notices(state: tauri::State<'_, StartupNotices>) -> Vec<StartupNotice> {
+    state
+        .0
+        .lock()
+        .map(|mut g| std::mem::take(&mut *g))
+        .unwrap_or_default()
+}
 
 /// 主窗口最小逻辑尺寸，与 tauri.conf.json 的 minWidth/minHeight 一致。
 /// 用于过滤启动阶段上报的瞬时小尺寸：Windows 上 WebView 初始化偶尔会把窗口
@@ -58,6 +94,7 @@ fn show_main_window(app: &AppHandle) {
 pub fn run() {
     let config = config::load_config();
     let hotkey_show_screenshot = config.hotkeys.show_screenshot.clone();
+    let hotkey_scroll_capture = config.hotkeys.scroll_capture.clone();
     let startup_pos = config.window_pos;
     let startup_size = config.window_size;
     let launch_on_startup = config.launch_on_startup;
@@ -73,11 +110,14 @@ pub fn run() {
         .manage(ConfigStore::new(config))
         .manage(thumbnails::ThumbnailStore::new(512))
         .manage(screenshot::ScreenshotStore::new())
+        .manage(scroll_capture::ScrollCaptureSession::new())
+        .manage(StartupNotices::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
             commands::set_launch_on_startup,
             commands::set_show_screenshot_hotkey,
+            commands::set_scroll_capture_hotkey,
             commands::list_images,
             commands::read_image_data,
             commands::get_app_info,
@@ -85,12 +125,22 @@ pub fn run() {
             thumbnails::get_thumbnail,
             image_info::get_image_info,
             screenshot::get_screenshot_data,
+            screenshot::take_scroll_start_mode,
             screenshot::close_screenshot,
             screenshot::finish_screenshot,
             screenshot::copy_text,
             screenshot::pick_window_at,
             screenshot::screenshot_ui_ready,
             ocr::ocr_image,
+            scroll_capture::start_scroll_capture,
+            scroll_capture::stop_scroll_capture,
+            scroll_capture::scroll_capture_progress,
+            scroll_capture::set_scroll_hud_safe,
+            scroll_capture::finish_scroll_capture,
+            scroll_capture::discard_scroll_capture,
+            scroll_capture::has_scroll_capture_result,
+            scroll_capture::scroll_capture_running,
+            take_startup_notices,
         ])
         .setup(move |app| {
             // 显式设置窗口/任务栏图标：Tauri 2 窗口默认不套用 default_window_icon，
@@ -132,12 +182,69 @@ pub fn run() {
 
             // 注册全局截图热键（直接进入截图模式）
             let gs = app.global_shortcut();
-            if let Err(e) = gs.on_shortcut(hotkey_show_screenshot.as_str(), |app, _sc, event| {
+            let hk_log = hotkey_show_screenshot.clone();
+            if let Err(e) = gs.on_shortcut(hotkey_show_screenshot.as_str(), move |app, _sc, event| {
                 if event.state() == ShortcutState::Pressed {
+                    tracing::info!("热键触发: 截图 {hk_log}");
                     screenshot::start_screenshot(app);
                 }
             }) {
                 tracing::warn!("热键 {hotkey_show_screenshot} 注册失败: {e}");
+            }
+
+            // 注册滚动截图专属热键（按下直接进「滚动截图待框选」态，省掉 Alt+S → S 两步）。
+            //
+            // 热键冲突在这类机器上是**常态**（微信/QQ/输入法/别的截图工具都在抢全局热键）：
+            // 被占用时按候选列表自动降级，并把「想用的 / 实际生效的」一并告诉前端去提示用户
+            // （PixPin 也是启动时提示冲突的做法）。注册不上也不影响其它入口（工具栏图标 / S 键）。
+            if hotkey_scroll_capture == hotkey_show_screenshot {
+                app.state::<StartupNotices>().push(StartupNotice {
+                    kind: "hotkey_conflict".into(),
+                    wanted: Some(hotkey_scroll_capture.clone()),
+                    used: None,
+                });
+                tracing::warn!("滚动截图热键与截图热键相同（{hotkey_scroll_capture}），跳过注册");
+            } else {
+                let mut candidates = vec![hotkey_scroll_capture.clone()];
+                for c in ["Alt+Shift+A", "Ctrl+Alt+S", "Ctrl+Shift+A", "Alt+Shift+Z"] {
+                    if !candidates.iter().any(|x| x == c) {
+                        candidates.push(c.to_string());
+                    }
+                }
+                let mut bound: Option<String> = None;
+                for (idx, cand) in candidates.iter().enumerate() {
+                    let cand_log = cand.clone();
+                    let r = gs.on_shortcut(cand.as_str(), move |app, _sc, event| {
+                        if event.state() == ShortcutState::Pressed {
+                            tracing::info!("热键触发: 滚动截图 {cand_log}");
+                            screenshot::start_scroll_screenshot(app);
+                        }
+                    });
+                    match r {
+                        Ok(_) => {
+                            if idx > 0 {
+                                app.state::<StartupNotices>().push(StartupNotice {
+                                    kind: "hotkey_fallback".into(),
+                                    wanted: Some(hotkey_scroll_capture.clone()),
+                                    used: Some(cand.clone()),
+                                });
+                                tracing::warn!(
+                                    "滚动截图热键 {hotkey_scroll_capture} 被占用，临时改用 {cand}"
+                                );
+                            }
+                            bound = Some(cand.clone());
+                            break;
+                        }
+                        Err(e) => tracing::warn!("滚动截图热键 {cand} 注册失败: {e}"),
+                    }
+                }
+                if bound.is_none() {
+                    app.state::<StartupNotices>().push(StartupNotice {
+                        kind: "hotkey_conflict".into(),
+                        wanted: Some(hotkey_scroll_capture.clone()),
+                        used: None,
+                    });
+                }
             }
 
             // 托盘

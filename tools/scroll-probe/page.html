@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>cloverprobe-scroll-test</title>
+    <style>
+      /* 滚动截图 P0 验证页 —— 见 SCROLL_CAPTURE_PLAN.md 第 10.3 节。
+         特点（刻意覆盖拼接算法的各种坑，且**完全静态、无动画**，保证可复现）：
+         - 每屏内容唯一（色相 + 文字 + 条纹频率都随 section 变化）→ 重叠匹配有足够纹理
+         - 顶部 sticky 导航（吸顶，高度 48px）
+         - 底部 fixed 工具条（吸底，高度 56px）→ 验证「吸底栏只应出现一次」
+         - 右侧浏览器滚动条 → 验证「选区含滚动条」的影响
+         查询参数：
+           ?plain=1  去掉吸顶/吸底（最简场景）
+           ?anim=1   加一个动图块（验证动态内容导致的匹配失败路径）
+           ?height=N 覆盖总高度（默认 7200） */      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #fafafa;
+        color: #1a1a1a;
+        padding-bottom: 56px;
+      }
+      header#nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 16px;
+        background: #16324f;
+        color: #fff;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      header#nav .dot { width: 12px; height: 12px; border-radius: 50%; background: #4ea85c; }
+      footer#bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+        background: #8a2b2b;
+        color: #fff;
+        z-index: 10;
+      }
+      section.blk {
+        position: relative;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+      }
+      /* 可解码的「灰阶标尺」：把 section 序号编码成灰度，用来**程序化校验**拼接结果
+         （有没有重复段/漏段/错序）。探针 --verify-ruler 会按 x=44 取灰度、
+         x=36 必须接近纯黑来判定「这是一行标尺」，再把灰度反解成序号。
+         灰度 = 8% + index*4%（下划线宽度固定 8px，两侧留黑边便于定位）。 */
+      .ruler {
+        position: absolute;
+        left: 32px;
+        top: 0;
+        bottom: 0;
+        width: 28px;
+        z-index: 2;
+        background: linear-gradient(
+          to right,
+          #000 0 8px,
+          var(--ruler) 8px 16px,
+          #000 16px 28px
+        );
+      }
+      section.blk h2,
+      section.blk p,
+      section.blk .stripes {
+        margin-left: 0;
+      }
+      /* 只有打开标尺（?ruler=1）时才给正文让出左边那一条的宽度 */
+      body.ruler-on section.blk h2,
+      body.ruler-on section.blk p,
+      body.ruler-on section.blk .stripes {
+        margin-left: 56px;
+      }
+      section.blk h2 {
+        margin: 0 0 8px;
+        font-size: 17px;
+      }
+      section.blk p {
+        margin: 0 0 6px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      /* 每块一条独一无二的条纹（频率随 section 变化）→ 纵向纹理，利于位移估计 */
+      .stripes {
+        height: 34px;
+        margin-top: 8px;
+        background-repeat: repeat-x;
+        background-size: 100% 100%;
+      }
+      .tiny {
+        font-size: 10px;
+        color: #666;
+        font-family: Consolas, monospace;
+        word-break: break-all;
+      }
+      #anim-box {
+        width: 180px;
+        height: 90px;
+        display: none;
+      }
+      #anim-box.on { display: block; }
+    </style>
+  </head>
+  <body>
+    <header id="nav">
+      <span class="dot"></span>
+      <span>cloverprobe-scroll-test</span>
+      <span id="nav-info" style="margin-left: auto; font-weight: 400; font-size: 12px"></span>
+    </header>
+
+    <div id="content"></div>
+
+    <footer id="bar">
+      <strong>fixed footer</strong>
+      <span>这一条应该只在长图最底部出现一次</span>
+      <span id="bar-info" style="margin-left: auto; font-size: 12px">static diagnostic footer</span>
+    </footer>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const plain = params.get("plain") === "1";
+      const anim = params.get("anim") === "1";
+      // 灰阶标尺默认**关**：它是给 `scroll_probe --verify-ruler` 做程序化校验用的
+      // （每段把序号编码成灰度，用来判断拼接有没有重复段/漏段/错序）。
+      // 平时测试不需要它，开着只会在长图里多出一条黑带，容易让人以为是 bug。
+      const ruler = params.get("ruler") === "1";
+      if (ruler) document.body.classList.add("ruler-on");
+      const total = parseInt(params.get("height") || "7200", 10);
+      const count = Math.ceil(total / 120);
+
+      if (plain) {
+        document.getElementById("nav").style.position = "static";
+        document.getElementById("bar").style.display = "none";
+      }
+
+      const content = document.getElementById("content");
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < count; i++) {
+        const hue = (i * 37) % 360;
+        const sec = document.createElement("section");
+        sec.className = "blk";
+        // 标尺灰度：灰阶字节 = 26 + 3*index（i 最大 60 → 26..206，既不像黑边也不越界，
+        // 步长 3 在 8bit 下足够区分；探针按同一公式反解序号）。默认关闭，见上面的 `ruler`。
+        const rulerGray = 26 + i * 3;
+        const rulerDiv = ruler
+          ? `<div class="ruler" style="--ruler: rgb(${rulerGray} ${rulerGray} ${rulerGray})"></div>`
+          : "";
+        sec.innerHTML = `
+          ${rulerDiv}
+          <h2>Section ${i + 1} / ${count} · 滚动截图验证块</h2>
+          <p>唯一标识 SEC-${String(i).padStart(4, "0")}：每块的颜色与条纹频率都不同，
+             用来验证重叠匹配能否唯一定位位移。汉字与 Latin mixed 1234567890。</p>
+          <p class="tiny">${"abcXYZ0123".repeat(6)}</p>
+          <div class="stripes" style="
+            background-image: repeating-linear-gradient(90deg,
+              hsl(${hue} 70% 45%) 0px, hsl(${hue} 70% 45%) ${2 + (i % 9)}px,
+              hsl(${(hue + 40) % 360} 80% 75%) ${2 + (i % 9)}px, hsl(${(hue + 40) % 360} 80% 75%) ${4 + (i % 9) * 2}px);
+          "></div>`;
+        frag.appendChild(sec);
+      }
+      content.appendChild(frag);
+
+      if (anim) {
+        const box = document.createElement("canvas");
+        box.id = "anim-box";
+        box.className = "on";
+        box.width = 180;
+        box.height = 90;
+        document.getElementById("content").prepend(box);
+        const ctx = box.getContext("2d");
+        let t = 0;
+        (function tick() {
+          t += 4;
+          ctx.fillStyle = "#111";
+          ctx.fillRect(0, 0, 180, 90);
+          ctx.fillStyle = `hsl(${t % 360} 90% 60%)`;
+          ctx.fillRect((t % 150), 30, 30, 30);
+          requestAnimationFrame(tick);
+        })();
+      }
+
+      document.getElementById("nav-info").textContent =
+        `height=${document.body.scrollHeight}px viewport=${innerHeight}px dpr=${devicePixelRatio} plain=${plain} anim=${anim}`;
+    </script>
+  </body>
+</html>

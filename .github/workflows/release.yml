@@ -2,6 +2,10 @@ name: release
 
 # 推送 v* 标签时触发：构建 Windows NSIS 安装包并创建 GitHub Release。
 # 本地无需任何 GitHub Token —— 发布使用 Actions 自带的 GITHUB_TOKEN。
+#
+# Release 正文来源：仓库根目录的 CHANGELOG.md 里对应版本的段落（由下面的
+# 「Extract release notes」步骤抽取）。所以**发布前必须先把 CHANGELOG.md 的
+# 版本段落写好并提交**，否则会回退成一句兜底说明。
 on:
   push:
     tags:
@@ -29,18 +33,53 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # 从 CHANGELOG.md 抽当前标签对应的版本段落（到下一个 `## ` 标题为止）。
+      # 版本号取自标签名（v0.1.2 -> 0.1.2）。抽不到就回退成一句提示，不让发布失败。
+      - name: Extract release notes
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $lines = Get-Content -Encoding UTF8 CHANGELOG.md
+          $start = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^##\s+v$([regex]::Escape($version))(\s|$)") { $start = $i; break }
+          }
+          if ($start -lt 0) {
+            Write-Host "CHANGELOG.md 里没有 v$version 的段落，使用兜底正文。"
+            $notes = "CloverViewer v$version 更新。请从下方 Assets 下载 ``*-setup.exe`` 安装。"
+          } else {
+            $end = $lines.Count
+            for ($j = $start + 1; $j -lt $lines.Count; $j++) {
+              if ($lines[$j] -match '^##\s') { $end = $j; break }
+            }
+            $notes = ($lines[$start..($end - 1)] -join "`n").Trim()
+            Write-Host "已抽取 CHANGELOG.md 中 v$version 的正文（$($end - $start) 行）。"
+          }
+          # 用「文件 → 单行环境变量」传递，避免多行值 + BOM 把 $GITHUB_ENV 解析搞坏
+          $path = Join-Path $env:RUNNER_TEMP 'release_notes.md'
+          [System.IO.File]::WriteAllText($path, $notes, [System.Text.UTF8Encoding]::new($false))
+          "RELEASE_NOTES_PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      # GitHub Actions 的 step output 只认单行；这里用 heredoc 语法把多行正文
+      # 原样交给下一步（delta 行数在输出里显示为 0，属正常现象）。
+      - name: Expose release notes
+        id: notes_body
+        shell: pwsh
+        run: |
+          $body = Get-Content -Raw -Encoding UTF8 $env:RELEASE_NOTES_PATH
+          $delim = "RELEASE_NOTES_EOF"
+          "body<<$delim" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          $body | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+          $delim | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+
       - name: Build & publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # __VERSION__ 会被替换为触发本次构建的标签版本（如 v0.1.0 -> 0.1.0）
+          # __VERSION__ 会被替换为触发本次构建的标签版本（如 v0.1.2 -> 0.1.2）
           tagName: v__VERSION__
           releaseName: 'CloverViewer v__VERSION__'
-          releaseBody: |
-            CloverViewer 更新。
-
-            从下方 Assets 下载 `*-setup.exe` 安装即可：
-            - 安装包（NSIS）: `CloverViewer_` + version + `_x64-setup.exe`
+          releaseBody: ${{ steps.notes_body.outputs.body }}
           releaseDraft: false
           prerelease: false

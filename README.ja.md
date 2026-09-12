@@ -9,7 +9,7 @@
     Rust バックエンド + Web フロントエンド（Vite + TypeScript）、内蔵 <a href="https://modelcontextprotocol.io">MCP Server</a> 付き。
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.0-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.2-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Tauri 2 で構築">
@@ -42,6 +42,7 @@ CloverViewer-Tauri は、**Tauri 2** で構築された**無料・オープン�
 ### 📸 スクリーンショットと注釈
 
 *   **マルチモニター対応**: 複数画面を跨いで仮想デスクトップ全体を連結キャプチャ
+*   **スクロール撮影（長い画像）**: スクロールできる範囲を選ぶと自動でスクロールし、フレームを重なり画素で連結。対象アプリが受け付けるスクロール方式（ホイールメッセージ / 疑似ホイール / PageDown / スクロールバー）を自動判定し、固定ヘッダー・固定フッター・固定サイドバーを避けて結合します。結果はコピー / デスクトップ保存 / ビューアで開くが可能
 *   **注釈ツール**: 矩形、楕円、矢印、ペン、モザイク、テキスト
 *   **色と線幅**: ツールアイコンを長押しでカラーパレットを開く
 *   **拡大鏡カラーピッカー**: 座標とピクセル色をリアルタイム表示、**Alt+C**（カスタマイズ可）で色をコピー
@@ -145,7 +146,9 @@ npm run tauri build
 | ショートカット | 機能 |
 |--------|------|
 | **Alt+S**（カスタマイズ可） | グローバルでスクリーンショット起動 |
-| Esc | スクリーンショットをキャンセル |
+| **Alt+Shift+S**（カスタマイズ可） | スクロール撮影へ直行：範囲を選ぶと自動で開始（ウィンドウをクリックすればそのウィンドウを撮影） |
+| **S** | スクリーンショット画面内でスクロール撮影に切り替え |
+| Esc | スクリーンショットをキャンセル / スクロール撮影を停止（撮影済みは保持） |
 | Enter | 選択範囲をクリップボードへコピー |
 | Delete | 選択した注釈を削除 |
 | Ctrl+Z / Ctrl+Y | 元に戻す / やり直す |
@@ -157,6 +160,12 @@ npm run tauri build
 *   本リポジトリ: Tauri 2 再実装。**UI を全面的に刷新**し、従来の egui ネイティブコントロールではなく Web スタック（HTML/CSS/TS）でカスタム・フレームレスウィンドウを構築
 *   設定ファイルは互換。移行ルートと判断記録は [ROADMAP.md](./ROADMAP.md) を参照
 *   移行の理由とトレードオフは ROADMAP「一、为什么迁移 / 什么时候不该迁移」に詳述
+
+## 📝 更新履歴
+
+各リリースのユーザー向け変更点は [CHANGELOG.md](./CHANGELOG.md) にまとめています。スクロール撮影の
+設計全体（アプリ別の動作検証マトリクスと、実装中に踏んだ落とし穴）は
+[SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md)（中国語）を参照してください。
 
 ## 📄 ライセンス
 

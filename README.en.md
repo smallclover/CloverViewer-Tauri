@@ -9,7 +9,7 @@
     Rust backend + Web frontend (Vite + TypeScript), with a built-in <a href="https://modelcontextprotocol.io">MCP Server</a>.
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.0-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.2-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Built with Tauri 2">
@@ -42,6 +42,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 ### 📸 Screenshot & Annotation
 
 *   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens
+*   **Scrolling capture (long screenshot)**: select a scrollable region and it scrolls automatically, stitching frames by overlapping pixels. It probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar), and skips sticky headers, pinned footers and fixed sidebars; the result can be copied, saved to Desktop, or opened in the viewer
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text
 *   **Color & line width**: long-press a tool icon to open the color palette
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
@@ -145,7 +146,9 @@ npm run tauri build
 | Shortcut | Function |
 |--------|------|
 | **Alt+S** (customizable) | Global screenshot |
-| Esc | Cancel screenshot |
+| **Alt+Shift+S** (customizable) | Go straight into scrolling capture: starts automatically once you select a region (clicking a window captures that window) |
+| **S** | Switch to scrolling capture inside the screenshot UI |
+| Esc | Cancel screenshot / stop scrolling capture (keeps what was captured) |
 | Enter | Copy selection to clipboard |
 | Delete | Delete selected annotation |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
@@ -157,6 +160,12 @@ npm run tauri build
 *   This repo: Tauri 2 reimplementation; **a complete UI generation overhaul** — a custom frameless window built with the Web stack (HTML/CSS/TS) instead of the original egui native controls
 *   Config files are interchangeable; see [ROADMAP.md](./ROADMAP.md) for the migration route and decision log
 *   Migration rationale and trade-offs are detailed in ROADMAP, "1. Why migrate / when not to"
+
+## 📝 Changelog
+
+User-visible changes for each release live in [CHANGELOG.md](./CHANGELOG.md). The full design of scrolling capture
+(including the tested per-application compatibility matrix and the pitfalls found along the way) is in
+[SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md) (Chinese).
 
 ## 📄 License
 

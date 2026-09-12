@@ -1,6 +1,6 @@
 # CloverViewer → CloverViewer-Tauri 迁移路线图
 
-> **状态（2026-09）：Phase 0-4 全部完成**，v0.1.0 已可发布（NSIS 安装包 + 源码构建均可）。本文档保留作为迁移决策与实现记录。
+> **状态（2026-09）：Phase 0-5 全部完成**，v0.1.2 已可发布（NSIS 安装包 + 源码构建均可）。本文档保留作为迁移决策与实现记录；滚动截图的详细设计见 [SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md)。
 
 > 源项目：`D:\programing\CloverViewer`（egui/eframe 0.36，约 12.9k 行 Rust，76 个文件）
 > 目标项目：`D:\programing\CloverViewer-Tauri`（Tauri 2 + Vite + TypeScript vanilla）
@@ -76,6 +76,24 @@
 - [x] 设置界面（egui 版 481 行 settings.rs → HTML 表单）
 - [x] 开机自启（launch.rs 移植）、GSV 文字提示框
 - [x] NSIS 打包 + 图标，与 egui 版产物对比体积/内存（安装包 2.8MB，currentUser 免 UAC，三语言安装界面）
+
+### Phase 5 — 滚动截图（长截图）✅（v0.1.2 达成）
+
+原 egui 版没有的能力，也是本版本的主要卖点。**设计与实测记录单独成文**：
+[SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md)（含各应用兼容性矩阵、拼接算法、
+发布前 review 抓到的 5 个问题与教训）。
+
+- [x] P0 技术验证：区域 BitBlt 捕获、目标/深层子窗口解析、四种滚动注入的兼容性实测
+      （结论：没有任何单一方式通吃所有应用 → 必须探针 + 降级；Chrome 平滑滚动 ≈1.1s 才停
+      → 稳定帧等待是必需品而非优化）
+- [x] P1 MVP：主循环「挨个试」自动选注入方式并标定每步像素、分段行指纹重叠匹配
+      （忽略滚动条 / 吸顶 / 吸底 / 固定侧栏）、实时进度 HUD 与缩略预览、部分结果保留、
+      复制 / 保存到桌面 / 在查看器中打开
+- [x] P2 入口重构：专属热键 `Alt+Shift+S`（可自定义、冲突自动降级并提示）、框选完自动开始、
+      单击窗口直接开跑、设置面板热键项
+- [ ] P3（待做）长图标注：标注器视图变换（zoom/pan）+ 结果态裁剪 + 滚轮平移
+- [ ] P4（可选）手动滚动模式（含向上滚动裁剪）、横向长截图、窗口捕获后端（WPF/PrintWindow）、
+      MCP 工具 `capture_scrolling_window`、超大图分块保存
 
 ## 四、构建命令
 

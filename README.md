@@ -9,7 +9,7 @@
     Rust 后端 + Web 前端（Vite + TypeScript），内置 <a href="https://modelcontextprotocol.io">MCP Server</a>。
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.0-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.2-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="基于 Tauri 2">
@@ -42,6 +42,7 @@ CloverViewer-Tauri 是一款**免费开源的 Windows 图片查看器与截图�
 ### 📸 截图与标注
 
 *   **多显示器支持**：跨屏拼接虚拟桌面截图
+*   **滚动截图（长截图）**：框选可滚动区域后自动滚动并拼接成长图。会自动探测目标应用吃哪种滚动方式（滚轮消息 / 模拟滚轮 / PageDown / 滚动条）并逐帧按重叠像素拼接，自动跳过吸顶标题栏、吸底工具栏与固定侧栏；完成后可复制、存到桌面或直接在查看器中打开
 *   **标注工具**：矩形、椭圆、箭头、画笔、马赛克、文字
 *   **颜色与线宽**：长按工具图标打开调色盘
 *   **放大镜取色**：实时显示坐标与像素色值，**Alt+C**（可自定义）复制颜色
@@ -145,7 +146,9 @@ npm run tauri build
 | 快捷键 | 功能 |
 |--------|------|
 | **Alt+S**（可自定义） | 全局唤起截图 |
-| Esc | 取消截图 |
+| **Alt+Shift+S**（可自定义） | 直接进入滚动截图（长截图）：框选完自动开始，单击窗口则直接对该窗口开跑 |
+| **S** | 在截图界面里临时切到滚动截图模式 |
+| Esc | 取消截图 / 停止滚动捕获（保留已捕获部分） |
 | Enter | 复制选区到剪贴板 |
 | Delete | 删除选中标注 |
 | Ctrl+Z / Ctrl+Y | 撤销 / 重做 |
@@ -157,6 +160,11 @@ npm run tauri build
 *   本仓库：Tauri 2 重实现；**界面全新换代**，改用 Web 技术栈（HTML/CSS/TS）做出自定义无边框窗口，而非原版的 egui 原生控件
 *   配置文件互通，迁移路线与决策记录见 [ROADMAP.md](./ROADMAP.md)
 *   迁移动机与取舍详见 ROADMAP「一、为什么迁移 / 什么时候不该迁移」
+
+## 📝 更新日志
+
+每个版本的用户可见变化见 [CHANGELOG.md](./CHANGELOG.md)。滚动截图（长截图）的完整设计方案、
+各应用兼容性实测矩阵与踩坑记录见 [SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md)。
 
 ## 📄 开源协议
 

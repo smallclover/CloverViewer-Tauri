@@ -21,24 +21,9 @@
       </div>
 
       <header id="toolbar">
-        <button id="btn-open" class="tb-btn primary" data-i18n-title="toolbar.openTitle">
+        <button id="btn-open" class="tb-btn" data-i18n-title="toolbar.openTitle">
           <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
           <span data-i18n="toolbar.open">打开文件夹</span>
-        </button>
-        <nav id="breadcrumb" class="breadcrumb"></nav>
-        <div class="spacer"></div>
-        <button id="btn-rotate" class="tb-btn hidden" data-i18n-title="toolbar.rotate">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg>
-        </button>
-        <button id="btn-flip-h" class="tb-btn hidden" data-i18n-title="toolbar.flipH">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></svg>
-        </button>
-        <button id="btn-flip-v" class="tb-btn hidden" data-i18n-title="toolbar.flipV">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 3-5 5-5-5h10"/><path d="m17 21-5-5-5 5h10"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/></svg>
-        </button>
-        <button id="btn-props" class="tb-btn hidden" data-i18n-title="toolbar.propsTitle">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
-          <span data-i18n="toolbar.props">属性</span>
         </button>
         <button id="btn-about" class="tb-btn" data-i18n-title="toolbar.about">
           <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
@@ -49,6 +34,16 @@
       </header>
 
       <main id="content">
+        <header id="content-header">
+          <button id="back-to-grid" class="hidden" type="button" data-i18n-title="view.gridTitle">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/><path d="M9 12h11"/></svg>
+            <span class="back-folder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+            <span id="back-to-grid-name"></span>
+          </button>
+          <nav id="breadcrumb" class="breadcrumb"></nav>
+          <span id="grid-count" class="grid-count"></span>
+          <div id="grid-menu"><button id="grid-sort" type="button"></button><button id="grid-size" type="button"></button></div>
+        </header>
         <div id="empty-state">
           <div class="empty-icon"><img src="/logo.png" alt="CloverViewer" /></div>
           <p data-i18n="empty.title">尚未打开文件夹</p>
@@ -70,6 +65,14 @@
             <button id="nav-next" class="nav-btn" title="下一张" data-i18n-title="nav.next" aria-label="下一张">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
             </button>
+            <div id="image-tools" class="hidden" aria-label="图片工具">
+              <button id="btn-rotate" class="img-tool" data-i18n-title="toolbar.rotate"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg></button>
+              <button id="btn-flip-h" class="img-tool" data-i18n-title="toolbar.flipH"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/><path d="M12 3v18"/></svg></button>
+              <button id="btn-flip-v" class="img-tool" data-i18n-title="toolbar.flipV"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 3-5 5-5-5h10"/><path d="m17 21-5-5-5 5h10"/></svg></button>
+              <span class="img-tool-sep"></span>
+              <button id="btn-reset-transform" class="img-tool" data-i18n-title="toolbar.reset"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+              <button id="btn-props" class="img-tool" data-i18n-title="toolbar.propsTitle"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+            </div>
           </div>
           <aside id="props-panel">
             <h3 data-i18n="props.title">属性</h3>
@@ -82,16 +85,6 @@
         <span id="status-left" data-i18n="status.ready">就绪</span>
         <div id="status-group">
           <span id="status-right"></span>
-          <div id="view-switch">
-            <button id="btn-grid" class="vs-btn active" data-i18n-title="view.gridTitle">
-              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              <span data-i18n="view.grid">网格</span>
-            </button>
-            <button id="btn-single" class="vs-btn" data-i18n-title="view.singleTitle">
-              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-              <span data-i18n="view.single">单图</span>
-            </button>
-          </div>
         </div>
       </footer>
 
@@ -101,12 +94,18 @@
 
       <div id="settings-overlay" class="hidden">
         <div id="settings-panel" role="dialog" aria-modal="true">
+          <nav class="settings-nav" aria-label="设置分类">
+            <h2 data-i18n="settings.title">设置</h2>
+            <button class="active" type="button" data-settings-tab="general">常规</button>
+            <button type="button" data-settings-tab="view">查看</button>
+            <button type="button" data-settings-tab="capture">截图</button>
+            <button type="button" data-settings-tab="hotkeys">快捷键</button>
+          </nav>
           <header class="settings-header">
             <h2 data-i18n="settings.title">设置</h2>
-            <button id="settings-close" class="settings-close" data-i18n-title="settings.close">✕</button>
           </header>
           <div class="settings-body">
-            <div class="setting-row">
+            <div class="setting-row" data-settings-section="general">
               <label for="set-language" data-i18n="settings.language">语言 / Language</label>
               <select id="set-language">
                 <option value="Zh" data-i18n="settings.language.zh">简体中文</option>
@@ -114,7 +113,7 @@
                 <option value="Ja" data-i18n="settings.language.ja">日本語</option>
               </select>
             </div>
-            <div class="setting-row">
+            <div class="setting-row" data-settings-section="general">
               <label for="set-theme" data-i18n="settings.theme">主题</label>
               <select id="set-theme">
                 <option value="system" data-i18n="settings.theme.system">跟随系统</option>
@@ -122,40 +121,40 @@
                 <option value="light" data-i18n="settings.theme.light">浅色</option>
               </select>
             </div>
-            <div class="setting-row">
+            <div class="setting-row" data-settings-section="view">
               <label for="set-zoom"><span data-i18n="settings.zoom">缩放灵敏度</span> <span class="hint" id="set-zoom-val"></span></label>
               <input id="set-zoom" type="range" min="0.3" max="3" step="0.1" />
             </div>
-            <div class="setting-row">
+            <div class="setting-row" data-settings-section="hotkeys">
               <label for="set-hotkey" data-i18n="settings.hotkey">截图热键</label>
               <div class="hotkey-row">
                 <input id="set-hotkey" type="text" spellcheck="false" placeholder="Alt+S" />
                 <button id="set-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
               </div>
             </div>
-            <div class="setting-row">
+            <div class="setting-row" data-settings-section="hotkeys">
               <label for="set-color-hotkey" data-i18n="settings.colorHotkey">取色热键</label>
               <div class="hotkey-row">
                 <input id="set-color-hotkey" type="text" spellcheck="false" placeholder="Alt+C" />
                 <button id="set-color-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
               </div>
             </div>
-            <div class="setting-row">
+            <div class="setting-row" data-settings-section="hotkeys">
               <label for="set-scroll-hotkey" data-i18n="settings.scrollHotkey">滚动截图热键</label>
               <div class="hotkey-row">
                 <input id="set-scroll-hotkey" type="text" spellcheck="false" placeholder="Alt+Shift+S" />
                 <button id="set-scroll-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
               </div>
             </div>
-            <div class="setting-row toggle">
+            <div class="setting-row toggle" data-settings-section="capture">
               <span data-i18n="settings.magnifier">截图放大镜</span>
               <input id="set-magnifier" type="checkbox" />
             </div>
-            <div class="setting-row toggle">
+            <div class="setting-row toggle" data-settings-section="general">
               <span data-i18n="settings.minimize">关闭时最小化到托盘</span>
               <input id="set-minimize" type="checkbox" />
             </div>
-            <div class="setting-row toggle">
+            <div class="setting-row toggle" data-settings-section="general">
               <span data-i18n="settings.autostart">开机自启</span>
               <input id="set-autostart" type="checkbox" />
             </div>

@@ -29,7 +29,7 @@ let currentDir = "";
 let images: ImageEntry[] = [];
 let activeIndex = -1; // 当前单图索引
 let viewMode: "grid" | "single" = "grid";
-let propsVisible = true; // 属性栏开关（仅在单图视图可用）
+let propsVisible = false; // 属性栏默认收起，避免初次进入单图就压缩画布
 
 // 单图缩放/平移/旋转/翻转
 let scale = 1;
@@ -59,19 +59,33 @@ const singleImg = $<HTMLImageElement>("single-img");
 const propsList = $("props-list");
 const propsPanel = $("props-panel");
 const breadcrumb = $("breadcrumb");
+const gridMenu = $("grid-menu");
+const gridSort = $<HTMLButtonElement>("grid-sort");
+const gridSize = $<HTMLButtonElement>("grid-size");
+const gridCount = $("grid-count");
+const backToGrid = $<HTMLButtonElement>("back-to-grid");
+const backToGridName = $("back-to-grid-name");
 const statusLeft = $("status-left");
 const statusRight = $("status-right");
 const btnProps = $("btn-props");
 const btnRotate = $("btn-rotate");
 const btnFlipH = $("btn-flip-h");
 const btnFlipV = $("btn-flip-v");
-const btnGrid = $<HTMLButtonElement>("btn-grid");
-const btnSingle = $<HTMLButtonElement>("btn-single");
+const btnResetTransform = $("btn-reset-transform");
+const imageTools = $("image-tools");
 const navPrev = $<HTMLButtonElement>("nav-prev");
 const navNext = $<HTMLButtonElement>("nav-next");
 const dropOverlay = $("drop-overlay");
 const toastEl = $("toast");
 const ctxMenu = $("context-menu");
+
+// 左侧导航与原型保持同一组 Lucide 轮廓：FolderOpen / Images / Settings2 / CircleHelp。
+function setRailIcon(id: string, paths: string) {
+  $(id).innerHTML = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
+setRailIcon("btn-open", `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="m6 14 1.5-2.9A2 2 0 0 1 9.28 10H20a2 2 0 0 1 1.94 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V7"/>`);
+setRailIcon("btn-settings", `<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>`);
+setRailIcon("btn-about", `<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/>`);
 
 // ---------- 工具 ----------
 let toastTimer: number | undefined;
@@ -122,23 +136,14 @@ function renderBreadcrumb() {
   breadcrumb.innerHTML = "";
   if (!currentDir) return;
   const parts = currentDir.replace(/\\/g, "/").split("/").filter(Boolean);
-  parts.forEach((part, i) => {
-    if (i > 0) {
-      const sep = document.createElement("span");
-      sep.className = "sep";
-      sep.textContent = "›";
-      breadcrumb.appendChild(sep);
-    }
-    const crumb = document.createElement("span");
-    crumb.className = "crumb";
-    crumb.textContent = part;
-    crumb.addEventListener("click", () => {
-      const target = parts.slice(0, i + 1).join("/");
-      const path = /^[a-z]:$/i.test(parts[0]) ? target : `//${target}`;
-      void openDirectory(path);
-    });
-    breadcrumb.appendChild(crumb);
-  });
+  const icon = document.createElement("span");
+  icon.className = "breadcrumb-icon";
+  icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
+  const name = document.createElement("span");
+  name.className = "crumb current";
+  name.textContent = parts[parts.length - 1] ?? currentDir;
+  backToGridName.textContent = name.textContent;
+  breadcrumb.append(icon, name);
 }
 
 // ---------- 目录加载 ----------
@@ -177,25 +182,22 @@ async function openFileOrFolder(path: string) {
   if (idx >= 0) showSingle(idx);
 }
 
-// ---------- 视图切换（右下角两键并存） ----------
-function updateViewSwitch() {
-  const single = viewMode === "single";
-  btnGrid.classList.toggle("active", !single);
-  btnSingle.classList.toggle("active", single);
-  btnSingle.disabled = images.length === 0;
-}
-
 // 单图专属工具栏按钮（旋转/翻转）显隐
 function setImageToolsVisible(v: boolean) {
+  imageTools.classList.toggle("hidden", !v);
   btnRotate.classList.toggle("hidden", !v);
   btnFlipH.classList.toggle("hidden", !v);
   btnFlipV.classList.toggle("hidden", !v);
 }
 
 // ---------- 网格视图（窗口化虚拟滚动） ----------
-const CELL_W = 160;
-const CELL_H = 154; // thumb 120 + label 30 + border 2*2
-const GAP = 10;
+const THUMB_WIDTHS = [136, 172, 220];
+let thumbSizeIndex = 1;
+let cellWidth = THUMB_WIDTHS[thumbSizeIndex];
+let thumbHeight = Math.round(cellWidth * 0.744);
+let cellHeight = thumbHeight + 52;
+let newestFirst = true;
+const GAP = 16;
 const BUFFER_ROWS = 2;
 let cols = 4;
 let leftPad = 0;
@@ -203,20 +205,20 @@ const renderedCells = new Map<number, HTMLElement>();
 let scrollRaf = 0;
 
 function computeLayout() {
-  const w = gridView.clientWidth - 20; // 减去 padding 10*2
-  cols = Math.max(1, Math.floor((w + GAP) / (CELL_W + GAP)));
-  const contentW = cols * CELL_W + (cols - 1) * GAP;
-  leftPad = Math.max(0, (w - contentW) / 2);
+  const w = gridView.clientWidth - 48; // 减去左右 padding 24*2
+  cols = Math.max(1, Math.floor((w + GAP) / (cellWidth + GAP)));
+  // 宫格遵循文件浏览器的阅读方向：始终从左侧开始，而不是把少量图片居中。
+  leftPad = 0;
 }
 
 function totalHeight(): number {
   const rows = Math.ceil(images.length / cols);
-  return rows * CELL_H + (rows - 1) * GAP;
+  return rows * cellHeight + (rows - 1) * GAP;
 }
 
 function thumbSize(): number {
   const dpr = window.devicePixelRatio || 1;
-  return Math.min(384, Math.max(160, Math.round(CELL_W * dpr)));
+  return Math.min(384, Math.max(160, Math.round(cellWidth * dpr)));
 }
 
 function showGrid() {
@@ -224,11 +226,16 @@ function showGrid() {
   emptyState.classList.toggle("hidden", images.length > 0 || !!currentDir);
   gridView.classList.toggle("hidden", images.length === 0);
   singleView.classList.add("hidden");
+  gridMenu.classList.remove("hidden");
+  breadcrumb.classList.remove("hidden");
+  gridCount.classList.remove("hidden");
+  backToGrid.classList.add("hidden");
   btnProps.classList.add("hidden");
   setImageToolsVisible(false);
-  updateViewSwitch();
+  refreshGridMenu();
   renderGrid();
   updateNavButtons();
+  refreshStatus();
 }
 
 function renderGrid() {
@@ -242,8 +249,8 @@ function renderGrid() {
 function renderVisible() {
   const scrollTop = gridView.scrollTop;
   const viewH = gridView.clientHeight;
-  const firstRow = Math.floor(scrollTop / (CELL_H + GAP));
-  const lastRow = Math.ceil((scrollTop + viewH) / (CELL_H + GAP));
+  const firstRow = Math.floor(scrollTop / (cellHeight + GAP));
+  const lastRow = Math.ceil((scrollTop + viewH) / (cellHeight + GAP));
   const from = Math.max(0, (firstRow - BUFFER_ROWS) * cols);
   const to = Math.min(images.length, (lastRow + BUFFER_ROWS) * cols);
 
@@ -272,12 +279,13 @@ function createCell(i: number): HTMLElement {
   cell.dataset.index = String(i);
   const col = i % cols;
   const row = Math.floor(i / cols);
-  cell.style.left = `${leftPad + col * (CELL_W + GAP)}px`;
-  cell.style.top = `${row * (CELL_H + GAP)}px`;
-  cell.style.width = `${CELL_W}px`;
+  cell.style.left = `${leftPad + col * (cellWidth + GAP)}px`;
+  cell.style.top = `${row * (cellHeight + GAP)}px`;
+  cell.style.width = `${cellWidth}px`;
 
   const thumb = document.createElement("div");
   thumb.className = "thumb";
+  thumb.style.height = `${thumbHeight}px`;
   const img = document.createElement("img");
   img.alt = entry.name;
   img.draggable = false;
@@ -285,8 +293,12 @@ function createCell(i: number): HTMLElement {
   const label = document.createElement("div");
   label.className = "label";
   label.textContent = entry.name;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = formatDimensions(entry.width, entry.height);
   cell.appendChild(thumb);
   cell.appendChild(label);
+  cell.appendChild(meta);
 
   cell.addEventListener("click", () => showSingle(i));
 
@@ -302,6 +314,32 @@ function createCell(i: number): HTMLElement {
     });
 
   return cell;
+}
+
+function refreshGridMenu() {
+  gridSort.textContent = newestFirst ? t("view.sortNewest") : t("view.sortOldest");
+  gridSize.textContent = t(["view.thumbSmall", "view.thumbMedium", "view.thumbLarge"][thumbSizeIndex]);
+}
+
+function toggleGridSort() {
+  newestFirst = !newestFirst;
+  const activePath = activeIndex >= 0 ? images[activeIndex]?.path : undefined;
+  images.sort((a, b) => {
+    const delta = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+    return newestFirst ? -delta : delta;
+  });
+  activeIndex = activePath ? images.findIndex((entry) => entry.path === activePath) : -1;
+  refreshGridMenu();
+  renderGrid();
+}
+
+function cycleGridSize() {
+  thumbSizeIndex = (thumbSizeIndex + 1) % THUMB_WIDTHS.length;
+  cellWidth = THUMB_WIDTHS[thumbSizeIndex];
+  thumbHeight = Math.round(cellWidth * 0.744);
+  cellHeight = thumbHeight + 52;
+  refreshGridMenu();
+  renderGrid();
 }
 
 function updateCellActive() {
@@ -327,7 +365,10 @@ function toggleProps() {
 function applyPropsState() {
   btnProps.classList.toggle("active", propsVisible);
   propsPanel.classList.toggle("collapsed", !propsVisible);
-  if (viewMode === "single") applyTransform(); // 面板显隐改变可视区域，重算适应/平移
+  if (viewMode === "single") {
+    applyTransform(); // 面板显隐改变可视区域，重算适应/平移
+    refreshStatus();
+  }
 }
 
 // ---------- 单图视图 ----------
@@ -338,9 +379,12 @@ function showSingle(index: number) {
   emptyState.classList.add("hidden");
   gridView.classList.add("hidden");
   singleView.classList.remove("hidden");
+  gridMenu.classList.add("hidden");
+  breadcrumb.classList.add("hidden");
+  gridCount.classList.add("hidden");
+  backToGrid.classList.remove("hidden");
   btnProps.classList.remove("hidden");
   setImageToolsVisible(true);
-  updateViewSwitch();
   updateCellActive();
   applyPropsState();
   updateNavButtons();
@@ -367,14 +411,19 @@ function refreshStatus() {
   if (viewMode === "single" && activeIndex >= 0 && images[activeIndex]) {
     const entry = images[activeIndex];
     statusLeft.textContent = entry.name;
-    statusRight.textContent = `${activeIndex + 1} / ${images.length} · ${formatDimensions(entry.width, entry.height)}`;
+    const zoom = `${Math.round((fitMode ? fitScale() : scale) * 100)}%`;
+    statusRight.textContent = `${activeIndex + 1} / ${images.length} · ${formatDimensions(entry.width, entry.height)} · ${formatSize(entry.size)} · ${zoom}`;
+    gridCount.classList.add("hidden");
   } else if (currentDir) {
-    statusLeft.textContent =
-      images.length > 0 ? currentDir : `${currentDir}${t("status.noImages")}`;
-    statusRight.textContent = t("status.imageCount", { count: images.length });
+    // 文件夹名与图片数量已在顶部上下文栏显示；底部只承担即时状态。
+    statusLeft.textContent = t("status.ready");
+    statusRight.textContent = "";
+    gridCount.textContent = t("status.imageCount", { count: images.length });
+    gridCount.classList.remove("hidden");
   } else {
     statusLeft.textContent = t("status.ready");
     statusRight.textContent = "";
+    gridCount.classList.add("hidden");
   }
 }
 
@@ -448,7 +497,8 @@ function fitScale(): number {
   const swapped = rotation % 180 !== 0;
   const w = swapped ? img.naturalHeight : img.naturalWidth;
   const h = swapped ? img.naturalWidth : img.naturalHeight;
-  return Math.min(rect.width / w, rect.height / h);
+  // 留出稳定的画布呼吸空间；用户仍可滚轮/双击进入 100% 或自由缩放。
+  return Math.min(rect.width / w, rect.height / h) * 0.88;
 }
 
 function applyTransform() {
@@ -465,7 +515,10 @@ function applyTransform() {
 
 singleImg.addEventListener("load", () => applyTransform());
 window.addEventListener("resize", () => {
-  if (viewMode === "single") applyTransform();
+  if (viewMode === "single") {
+    applyTransform();
+    refreshStatus();
+  }
   else if (viewMode === "grid" && images.length > 0) renderGrid();
 });
 
@@ -491,6 +544,7 @@ imgStage.addEventListener("wheel", (e) => {
   pan.y = cy - k * (cy - pan.y);
   scale = newScale;
   applyTransform();
+  refreshStatus();
 });
 
 // 拖拽平移
@@ -525,20 +579,45 @@ imgStage.addEventListener("dblclick", () => {
     fitMode = true;
   }
   applyTransform();
+  refreshStatus();
 });
 
 // 旋转/翻转
 function rotateImage() {
+  // 旋转前后保持实际显示比例：适应模式若重新 fit，会让图片看上去被放大/缩小。
+  const renderedScale = fitMode ? fitScale() : scale;
   rotation = (rotation + 90) % 360;
+  fitMode = false;
+  scale = renderedScale;
   applyTransform();
+  refreshStatus();
 }
 function flipHorizontal() {
+  const renderedScale = fitMode ? fitScale() : scale;
+  fitMode = false;
+  scale = renderedScale;
   flipH = !flipH;
   applyTransform();
+  refreshStatus();
 }
 function flipVertical() {
+  const renderedScale = fitMode ? fitScale() : scale;
+  fitMode = false;
+  scale = renderedScale;
   flipV = !flipV;
   applyTransform();
+  refreshStatus();
+}
+function resetImageTransform() {
+  rotation = 0;
+  flipH = false;
+  flipV = false;
+  pan.x = 0;
+  pan.y = 0;
+  fitMode = true;
+  scale = 1;
+  applyTransform();
+  refreshStatus();
 }
 
 // ---------- 导航 ----------
@@ -627,24 +706,19 @@ async function pickFolder() {
 
 // ---------- 事件绑定 ----------
 $("btn-open").addEventListener("click", () => void pickFolder());
-btnGrid.addEventListener("click", showGrid);
-btnSingle.addEventListener("click", () => {
-  if (images.length === 0) {
-    toast(t("toast.noImagesOpenFirst"));
-    return;
-  }
-  showSingle(Math.max(activeIndex, 0));
-});
+backToGrid.addEventListener("click", showGrid);
+gridSort.addEventListener("click", toggleGridSort);
+gridSize.addEventListener("click", cycleGridSize);
 btnProps.addEventListener("click", toggleProps);
 btnRotate.addEventListener("click", rotateImage);
 btnFlipH.addEventListener("click", flipHorizontal);
 btnFlipV.addEventListener("click", flipVertical);
+btnResetTransform.addEventListener("click", resetImageTransform);
 // 单图切图按钮：点击切换 + 阻止 mousedown 冒泡，避免误触发拖拽平移
 navPrev.addEventListener("mousedown", (e) => e.stopPropagation());
 navNext.addEventListener("mousedown", (e) => e.stopPropagation());
 navPrev.addEventListener("click", () => navigate(-1));
 navNext.addEventListener("click", () => navigate(1));
-updateViewSwitch(); // 初始状态：网格高亮；无图时禁用单图
 
 // ---------- 无边框窗口控制 ----------
 const win = getCurrentWindow();
@@ -793,6 +867,7 @@ void getCurrentWindow().onDragDropEvent((event) => {
 
 // ---------- 设置面板 ----------
 const settingsOverlay = $("settings-overlay");
+const btnSettings = $("btn-settings");
 const setLanguage = $<HTMLSelectElement>("set-language");
 const setTheme = $<HTMLSelectElement>("set-theme");
 const setZoom = $<HTMLInputElement>("set-zoom");
@@ -803,6 +878,17 @@ const setScrollHotkey = $<HTMLInputElement>("set-scroll-hotkey");
 const setMagnifier = $<HTMLInputElement>("set-magnifier");
 const setMinimize = $<HTMLInputElement>("set-minimize");
 const setAutostart = $<HTMLInputElement>("set-autostart");
+const settingsTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"));
+const settingSections = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
+
+function selectSettingsTab(tab: string) {
+  settingsTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.settingsTab === tab);
+  });
+  settingSections.forEach((section) => {
+    section.hidden = section.dataset.settingsSection !== tab;
+  });
+}
 
 function saveSettings(partial: Partial<AppConfig>, opts?: { silent?: boolean }) {
   if (!config) return;
@@ -829,15 +915,25 @@ function openSettings() {
   setMagnifier.checked = config.magnifier_enabled;
   setMinimize.checked = config.minimize_on_close;
   setAutostart.checked = config.launch_on_startup;
+  selectSettingsTab("general");
+  btnSettings.classList.add("active");
+  btnSettings.setAttribute("aria-pressed", "true");
   settingsOverlay.classList.remove("hidden");
 }
 
 function closeSettings() {
   settingsOverlay.classList.add("hidden");
+  btnSettings.classList.remove("active");
+  btnSettings.setAttribute("aria-pressed", "false");
 }
 
-$("btn-settings").addEventListener("click", openSettings);
-$("settings-close").addEventListener("click", closeSettings);
+btnSettings.addEventListener("click", () => {
+  if (settingsOverlay.classList.contains("hidden")) openSettings();
+  else closeSettings();
+});
+settingsTabs.forEach((button) => {
+  button.addEventListener("click", () => selectSettingsTab(button.dataset.settingsTab ?? "general"));
+});
 settingsOverlay.addEventListener("mousedown", (e) => {
   if (e.target === settingsOverlay) closeSettings();
 });
@@ -856,6 +952,7 @@ setLanguage.addEventListener("change", () => {
   saveSettings({ language: lang });
   setLang(lang);
   applyI18n(document);
+  refreshGridMenu();
   refreshStatus();
   // 属性面板字段名随语言变化
   if (viewMode === "single" && activeIndex >= 0) renderProps(images[activeIndex]);

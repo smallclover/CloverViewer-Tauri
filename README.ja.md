@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.png" width="120" alt="CloverViewer — オープンソース Windows 画像ビューア & スクリーンショットツール">
+  <img src="public/logo.png" width="120" alt="CloverViewer — オープンソース Windows 画像ビューア & スクリーンショットツール">
   <h1>CloverViewer-Tauri — オープンソース Windows 画像ビューア &amp; スクリーンショットツール（Tauri 2）</h1>
   <p>
     <a href="README.md">中文</a> · <a href="README.en.md">English</a> · <b>日本語</b>
@@ -9,7 +9,7 @@
     Rust バックエンド + Web フロントエンド（Vite + TypeScript）、内蔵 <a href="https://modelcontextprotocol.io">MCP Server</a> 付き。
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.2-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.3-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Tauri 2 で構築">
@@ -147,7 +147,6 @@ npm run tauri build
 |--------|------|
 | **Alt+S**（カスタマイズ可） | グローバルでスクリーンショット起動 |
 | **Alt+Shift+S**（カスタマイズ可） | スクロール撮影へ直行：範囲を選ぶと自動で開始（ウィンドウをクリックすればそのウィンドウを撮影） |
-| **S** | スクリーンショット画面内でスクロール撮影に切り替え |
 | Esc | スクリーンショットをキャンセル / スクロール撮影を停止（撮影済みは保持） |
 | Enter | 選択範囲をクリップボードへコピー |
 | Delete | 選択した注釈を削除 |
@@ -158,14 +157,11 @@ npm run tauri build
 
 *   元は egui 版: [CloverViewer](https://github.com/smallclover/CloverViewer)（eframe + 全 Rust UI）
 *   本リポジトリ: Tauri 2 再実装。**UI を全面的に刷新**し、従来の egui ネイティブコントロールではなく Web スタック（HTML/CSS/TS）でカスタム・フレームレスウィンドウを構築
-*   設定ファイルは互換。移行ルートと判断記録は [ROADMAP.md](./ROADMAP.md) を参照
-*   移行の理由とトレードオフは ROADMAP「一、为什么迁移 / 什么时候不该迁移」に詳述
+*   設定ファイルは互換
 
 ## 📝 更新履歴
 
-各リリースのユーザー向け変更点は [CHANGELOG.md](./CHANGELOG.md) にまとめています。スクロール撮影の
-設計全体（アプリ別の動作検証マトリクスと、実装中に踏んだ落とし穴）は
-[SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md)（中国語）を参照してください。
+各リリースのユーザー向け変更点は [CHANGELOG.md](./CHANGELOG.md) にまとめています。
 
 ## 📄 ライセンス
 

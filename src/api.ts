@@ -83,6 +83,8 @@ export interface ScreenshotData {
   total_height: number;
   screens: ScreenData[];
   monitor_info: MonitorInfo[];
+  /** 截图打开时的鼠标虚拟桌面物理坐标，用于将普通截图提示放到当前屏。 */
+  cursor: { x: number; y: number } | null;
 }
 
 export interface MonitorInfo {
@@ -111,6 +113,10 @@ export const finishScreenshot = (action: "save" | "clipboard", png: string) =>
   invoke<void>("finish_screenshot", { req: { action, png } });
 
 export const copyText = (text: string) => invoke<void>("copy_text", { text });
+
+/** 原生写入图片剪贴板，避开 WebView2 对 ClipboardItem 图片的兼容性限制。 */
+export const copyImageFile = (path: string) =>
+  invoke<void>("copy_image_file", { path });
 
 /** 关于页展示的应用信息（版本/标识/Tauri 版本/平台，均取自运行时真实值） */
 export interface AppInfo {
@@ -171,6 +177,8 @@ export interface ScrollCaptureRequest {
   max_height_px?: number;
   max_frames?: number;
   focus_target?: boolean;
+  /** true 表示 HUD 与捕获区重叠；后端优先排除覆盖窗，失败才整段隐藏 HUD。 */
+  hide_hud_during_capture?: boolean;
 }
 
 export interface ScrollCaptureProgress {
@@ -225,8 +233,8 @@ export const scrollCaptureProgress = () =>
 /** 会话是否在跑：窗口复用打开时用它恢复「后端仍在捕获」的界面状态 */
 export const scrollCaptureRunning = () => invoke<boolean>("scroll_capture_running");
 
-/** 汇报「HUD 是否压在捕获区上」：压在捕获区上时后端会在每次采帧前后让 HUD 临时隐藏
- *  （整屏 / 整窗选区时本屏内没有「选区之外」的空地，这是最后一道保险）。 */
+/** 汇报「HUD 是否压在捕获区上」：重叠时后端会让 HUD 在整个采集会话中保持隐藏，
+ *  整屏 / 整窗选区没有安全空地时用作最后一道保险。 */
 export const setScrollHudSafe = (overlap: boolean) =>
   invoke<void>("set_scroll_hud_safe", { overlap });
 

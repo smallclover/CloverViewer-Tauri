@@ -1,6 +1,6 @@
 //! 滚动截图（长截图）。
 //!
-//! 本模块是 [`SCROLL_CAPTURE_PLAN.md`](../../SCROLL_CAPTURE_PLAN.md) 的落地代码：
+//! 本模块实现区域捕获、滚动注入与逐帧拼接：
 //! - **P0 原语**（第 4 节）：区域 BitBlt 捕获、目标窗口解析、四种滚动注入、稳定帧等待；
 //! - **P1 会话**（第 5 节）：探针自动降级、逐帧比对拼接、进度事件、结果落地。
 //!
@@ -1756,6 +1756,10 @@ pub struct ScrollCaptureRequest {
     pub max_frames: Option<u32>,
     #[serde(default)]
     pub focus_target: Option<bool>,
+    /// 前端已判定 HUD 没有可用安全落点；优先将覆盖窗排除在 Windows 捕获结果外，
+    /// 排除不可用时才在整个会话中隐藏 HUD。
+    #[serde(default)]
+    pub hide_hud_during_capture: bool,
 }
 
 impl ScrollCaptureRequest {
@@ -1773,6 +1777,7 @@ impl ScrollCaptureRequest {
             max_height_px: None,
             max_frames: None,
             focus_target: None,
+            hide_hud_during_capture: false,
         }
     }
 
@@ -1889,6 +1894,13 @@ pub trait SessionHost {
     /// 捕获期间的任务栏进度指示（覆盖窗里没空地放 HUD 时的唯一可见反馈）。
     /// 默认空实现，命令行探针不需要。
     fn set_progress(&self, _running: bool, _ratio: f32) {}
+    /// 尝试把覆盖窗从 Windows 的捕获结果中排除。
+    ///
+    /// 返回 `true` 代表已成功启用；调用方可因此保持 HUD 可见。默认 `false`，
+    /// 让非 Windows 宿主及探针自然退回到隐藏 HUD 的兼容路径。
+    fn set_capture_exclusion(&self, _on: bool) -> bool {
+        false
+    }
 }
 
 /// 无需宿主能力的空实现（命令行/单测用）
@@ -1996,15 +2008,24 @@ pub struct FrameHideGate {
     hidden: bool,
     /// 是否启用（前端没报「HUD 压在捕获区上」时全程不触发，零开销）
     enabled: bool,
+    /// 重叠时，HUD 从首帧前隐藏到整个会话结束。恢复只发生一次，避免逐帧闪烁。
+    keep_hidden: bool,
 }
 
 impl FrameHideGate {
     pub fn new(cb: Option<Box<dyn FnMut(bool) + Send>>) -> Self {
-        Self { cb, hiding: false, hidden: false, enabled: false }
+        Self {
+            cb,
+            hiding: false,
+            hidden: false,
+            enabled: false,
+            keep_hidden: false,
+        }
     }
 
-    pub fn set_enabled(&mut self, on: bool) {
+    pub fn set_keep_hidden(&mut self, on: bool) {
         self.enabled = on;
+        self.keep_hidden = on;
     }
 
     pub fn enabled(&self) -> bool {
@@ -2032,13 +2053,13 @@ impl FrameHideGate {
         }
     }
 
-    /// 抓帧结束：恢复宿主 UI
+    /// 抓帧结束：普通模式会恢复宿主 UI；重叠模式保持隐藏，直到会话收尾。
     pub fn end_frame(&mut self) {
         if !self.hiding {
             return;
         }
         self.hiding = false;
-        if self.hidden {
+        if self.hidden && !self.keep_hidden {
             if let Some(cb) = self.cb.as_mut() {
                 cb(false);
             }
@@ -2133,18 +2154,17 @@ pub fn run_session(
     run_session_ext(req, o, host, cancel, None, None, on_progress)
 }
 
-/// `run_session` 的扩展版：多一个「采帧前后通知宿主」的回调。
+/// `run_session` 的扩展版：多一个 HUD 重叠状态与宿主通知回调。
 ///
-/// Tauri 侧用它通知前端在采帧瞬间把 HUD 让开——覆盖窗是透明 WebView，正常情况下
-/// 不会被 `BitBlt` 截进去（已实测：整屏选区的长图里没有 UI），但**整屏/整窗选区**
-/// 时 HUD 只能压在被捕获的画面上，留这一手保险比事后在长图里发现一个提示框便宜。
+/// Tauri 侧只在 HUD 与捕获区重叠、且 Windows 捕获排除不可用时让前端隐藏它，并从首帧保持到会话结束。
+/// 普通小选区无需切换可见性，因而不会出现逐帧闪烁。
 /// 命令行探针传 `None`，行为与以前完全一致。
 pub fn run_session_ext(
     req: &ScrollCaptureRequest,
     o: &SessionOptions,
     host: &dyn SessionHost,
     cancel: &AtomicBool,
-    hud_overlap: Option<&AtomicBool>,
+    _hud_overlap: Option<&AtomicBool>,
     on_frame_capture: Option<Box<dyn FnMut(bool) + Send>>,
     on_progress: &mut dyn FnMut(ScrollCaptureProgress),
 ) -> Result<ScrollCaptureResult, String> {
@@ -2167,11 +2187,22 @@ pub fn run_session_ext(
         );
     }
 
-    // 采帧期间让前端 HUD 让开（仅当它压在捕获区上时；见 `run_session_ext` 的说明）
+    // 仅当 HUD 真正压进捕获区时才隐藏。小选区的 HUD 全程保持可见；整窗/全屏
+    // 则在首帧前隐藏一次，并保持到会话结束，既防止被烤进长图，也不产生逐帧闪烁。
+    // 前端将最终判定随启动请求携带，避免独立异步上报与首帧竞争。
+    let hide_hud_for_session = req.hide_hud_during_capture;
     let frame_gate = Rc::new(RefCell::new(FrameHideGate::new(on_frame_capture)));
-    let mut hud_overlap_live = hud_overlap.map(|f| f.load(Ordering::Relaxed)).unwrap_or(false);
-    frame_gate.borrow_mut().set_enabled(hud_overlap_live);
-    tracing::info!("滚动截图: 采帧时隐藏 HUD = {hud_overlap_live}");
+    frame_gate
+        .borrow_mut()
+        .set_keep_hidden(hide_hud_for_session);
+    tracing::info!(
+        "滚动截图: HUD {}",
+        if hide_hud_for_session {
+            "采集期间保持隐藏（与捕获区重叠）"
+        } else {
+            "保持可见（位于捕获区外）"
+        },
+    );
 
     // 会话期间光标一律停在选区外（避免悬停高亮污染帧），结束时恢复
     let mut original_cursor = POINT { x: 0, y: 0 };
@@ -2311,7 +2342,10 @@ pub fn run_session_ext(
     }
 
     // ---- 3. 起始帧 ----
-    let first = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms)?;
+    frame_gate.borrow_mut().begin_frame();
+    let first = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
+    frame_gate.borrow_mut().end_frame();
+    let first = first?;
     let mut canvas: Vec<u8> = Vec::with_capacity(
         cap.w as usize * cap.h as usize * 4 * 4,
     );
@@ -2461,8 +2495,6 @@ pub fn run_session_ext(
         // 若等到超时还没稳定（Chrome 平滑滚动距离一长就要 1.5s+），别拿动画中间帧去匹配
         // ——那必然匹配失败。再给最多两轮机会。
         // 采帧期间（且仅当 HUD 压在捕获区上时）通知前端把 HUD 让开。
-        hud_overlap_live = hud_overlap.map(|f| f.load(Ordering::Relaxed)).unwrap_or(false);
-        frame_gate.borrow_mut().set_enabled(hud_overlap_live);
         frame_gate.borrow_mut().begin_frame();
         let settled = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
         frame_gate.borrow_mut().end_frame();
@@ -2476,8 +2508,9 @@ pub fn run_session_ext(
                 settled.elapsed_ms
             );
             frame_gate.borrow_mut().begin_frame();
-            settled = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms)?;
+            let retry = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
             frame_gate.borrow_mut().end_frame();
+            settled = retry?;
         }
         let mut cur = settled.image;
         let diff = frame_diff_ratio(&prev, &cur);
@@ -2568,7 +2601,10 @@ pub fn run_session_ext(
         // 与上一帧完全一致 → 再等一轮确认，仍一致就是到底了
         if diff <= SAME_FRAME_RATIO {
             std::thread::sleep(Duration::from_millis(o.settle_timeout_ms.min(1200)));
-            let again = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms)?.image;
+            frame_gate.borrow_mut().begin_frame();
+            let again = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
+            frame_gate.borrow_mut().end_frame();
+            let again = again?.image;
             if frame_diff_ratio(&cur, &again) <= SAME_FRAME_RATIO {
                 tracing::info!("滚动截图: 帧{frames} 画面不再变化 → 判定到底");
                 break; // 正常到底
@@ -2962,6 +2998,7 @@ impl Default for ScrollCaptureSession {
 struct TauriHost {
     app: tauri::AppHandle,
     escape_registered: std::sync::atomic::AtomicBool,
+    capture_exclusion_enabled: std::sync::atomic::AtomicBool,
 }
 
 impl TauriHost {
@@ -2988,6 +3025,34 @@ impl TauriHost {
                 }
             };
             let _ = w.set_progress_bar(state);
+        }
+    }
+
+    /// `WDA_EXCLUDEFROMCAPTURE` 从 Windows 10 2004（build 19041）才是真正受支持的值；
+    /// 更早系统会把它按 WDA_MONITOR 处理，API 仍可能返回成功，却造成错误的捕获结果。
+    #[cfg(target_os = "windows")]
+    fn supports_capture_exclusion() -> bool {
+        use winreg::enums::HKEY_LOCAL_MACHINE;
+        use winreg::RegKey;
+
+        let build = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
+            .and_then(|key| key.get_value::<String, _>("CurrentBuildNumber"))
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok());
+        match build {
+            Some(build) if build >= 19041 => true,
+            Some(build) => {
+                tracing::info!(
+                    "滚动截图: Windows build {build} 不支持 WDA_EXCLUDEFROMCAPTURE，改用隐藏 HUD"
+                );
+                false
+            }
+            None => {
+                // 版本读取失败时宁可走原有兼容路径，也不让旧系统退化成 WDA_MONITOR。
+                tracing::warn!("滚动截图: 无法读取 Windows build，改用隐藏 HUD");
+                false
+            }
         }
     }
 }
@@ -3043,6 +3108,60 @@ impl SessionHost for TauriHost {
     fn set_progress(&self, running: bool, ratio: f32) {
         self.set_taskbar_progress(running, ratio);
     }
+
+    fn set_capture_exclusion(&self, on: bool) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::WindowsAndMessaging::{
+                SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
+            };
+
+            if !on && !self.capture_exclusion_enabled.swap(false, Ordering::Relaxed) {
+                return true;
+            }
+            if on && !Self::supports_capture_exclusion() {
+                return false;
+            }
+
+            let Some(window) = self.screenshot_window() else {
+                tracing::warn!("滚动截图: 找不到覆盖窗，无法设置捕获排除");
+                return false;
+            };
+            let hwnd = match window.hwnd() {
+                // Tauri 与本 crate 所用的 windows crate 版本不同；HWND 都是透明
+                // 指针包装，像截图窗口拾取逻辑一样在边界处桥接即可。
+                Ok(hwnd) => HWND(hwnd.0),
+                Err(e) => {
+                    tracing::warn!("滚动截图: 读取覆盖窗 HWND 失败，改用隐藏 HUD: {e}");
+                    return false;
+                }
+            };
+            let affinity = if on { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
+            match unsafe { SetWindowDisplayAffinity(hwnd, affinity) } {
+                Ok(()) => {
+                    self.capture_exclusion_enabled.store(on, Ordering::Relaxed);
+                    tracing::debug!(
+                        "滚动截图: 覆盖窗捕获排除{}",
+                        if on { "已启用" } else { "已恢复" }
+                    );
+                    true
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "滚动截图: SetWindowDisplayAffinity({}) 失败: {e}",
+                        if on { "WDA_EXCLUDEFROMCAPTURE" } else { "WDA_NONE" }
+                    );
+                    false
+                }
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = on;
+            false
+        }
+    }
 }
 
 /// 开始滚动截图（异步跑在工作线程；进度与结果走事件）
@@ -3073,6 +3192,9 @@ pub fn start_scroll_capture(
         }
     };
     let (cancel, hud_overlap) = cancel;
+    // `begin()` 会为新会话重置 AtomicBool，因此不能依赖此前独立命令上报的状态。
+    // 将最终判定随启动请求携带，确保第一帧也采用正确的 HUD 策略。
+    state.set_hud_overlap(req.hide_hud_during_capture);
 
     let app2 = app.clone();
     tracing::info!(
@@ -3088,8 +3210,16 @@ pub fn start_scroll_capture(
         let host = TauriHost {
             app: app2.clone(),
             escape_registered: std::sync::atomic::AtomicBool::new(false),
+            capture_exclusion_enabled: std::sync::atomic::AtomicBool::new(false),
         };
         let result = {
+            // 只有 HUD 没有安全落点时才需要排除覆盖窗。若 API 可用，HUD 始终可见；
+            // 调用失败则保持原有的整段隐藏策略，不把兼容性风险交给用户。
+            let capture_excluded = req.hide_hud_during_capture && host.set_capture_exclusion(true);
+            let mut effective_req = req;
+            if capture_excluded {
+                effective_req.hide_hud_during_capture = false;
+            }
             let mut emit = |p: ScrollCaptureProgress| {
                 if let Some(state) = app2.try_state::<ScrollCaptureSession>() {
                     state.set_progress(p.clone());
@@ -3098,7 +3228,7 @@ pub fn start_scroll_capture(
                     tracing::warn!("emit scroll-capture-progress 失败: {e}");
                 }
             };
-            // 采帧瞬间让 HUD 让开（前端收到后给 HUD 加 .hud-hidden，抓完再撤掉）
+            // 重叠会话开始时让 HUD 隐藏；会话结束时再统一恢复，避免逐帧闪烁。
             let app3 = app2.clone();
             let on_frame = move |hiding: bool| {
                 if let Err(e) = app3.emit("scroll-capture-hud", serde_json::json!({ "hidden": hiding })) {
@@ -3106,7 +3236,7 @@ pub fn start_scroll_capture(
                 }
             };
             run_session_ext(
-                &req,
+                &effective_req,
                 &options,
                 &host,
                 &cancel,
@@ -3119,6 +3249,7 @@ pub fn start_scroll_capture(
         // 收尾：无论如何都要把覆盖窗的 click-through / 全局 Esc / 截图互斥恢复
         host.set_passthrough(false);
         host.set_escape_hook(false);
+        let _ = host.set_capture_exclusion(false);
         if let Some(store) = app2.try_state::<crate::screenshot::ScreenshotStore>() {
             store.end_capture();
         }
@@ -3178,7 +3309,7 @@ pub fn scroll_capture_progress(
 /// 前端落位后汇报「HUD 是否压在捕获区上」。
 ///
 /// 压在捕获区上时（整屏 / 整窗选区：本屏内没有「选区之外」的空地），
-/// 后端会在每次采帧的前后发 `scroll-capture-hud` 事件让前端临时隐藏 HUD ——
+/// HUD 与捕获区重叠时，后端会在会话起止发送 `scroll-capture-hud` 事件。
 /// 覆盖窗是透明 WebView、实测不会被 BitBlt 截进去，这是最后一道保险。
 #[tauri::command]
 pub fn set_scroll_hud_safe(state: tauri::State<'_, ScrollCaptureSession>, overlap: bool) {

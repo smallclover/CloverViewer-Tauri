@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.png" width="120" alt="CloverViewer —— 开源 Windows 图片查看器与截图工具">
+  <img src="public/logo.png" width="120" alt="CloverViewer —— 开源 Windows 图片查看器与截图工具">
   <h1>CloverViewer-Tauri —— 开源 Windows 图片查看器与截图工具（Tauri 2）</h1>
   <p>
     <b>中文</b> · <a href="README.en.md">English</a> · <a href="README.ja.md">日本語</a>
@@ -9,7 +9,7 @@
     Rust 后端 + Web 前端（Vite + TypeScript），内置 <a href="https://modelcontextprotocol.io">MCP Server</a>。
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.2-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.3-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="基于 Tauri 2">
@@ -147,7 +147,6 @@ npm run tauri build
 |--------|------|
 | **Alt+S**（可自定义） | 全局唤起截图 |
 | **Alt+Shift+S**（可自定义） | 直接进入滚动截图（长截图）：框选完自动开始，单击窗口则直接对该窗口开跑 |
-| **S** | 在截图界面里临时切到滚动截图模式 |
 | Esc | 取消截图 / 停止滚动捕获（保留已捕获部分） |
 | Enter | 复制选区到剪贴板 |
 | Delete | 删除选中标注 |
@@ -158,13 +157,11 @@ npm run tauri build
 
 *   原 egui 版：[CloverViewer](https://github.com/smallclover/CloverViewer)（eframe + 全 Rust UI）
 *   本仓库：Tauri 2 重实现；**界面全新换代**，改用 Web 技术栈（HTML/CSS/TS）做出自定义无边框窗口，而非原版的 egui 原生控件
-*   配置文件互通，迁移路线与决策记录见 [ROADMAP.md](./ROADMAP.md)
-*   迁移动机与取舍详见 ROADMAP「一、为什么迁移 / 什么时候不该迁移」
+*   配置文件互通
 
 ## 📝 更新日志
 
-每个版本的用户可见变化见 [CHANGELOG.md](./CHANGELOG.md)。滚动截图（长截图）的完整设计方案、
-各应用兼容性实测矩阵与踩坑记录见 [SCROLL_CAPTURE_PLAN.md](./SCROLL_CAPTURE_PLAN.md)。
+每个版本的用户可见变化见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 📄 开源协议
 

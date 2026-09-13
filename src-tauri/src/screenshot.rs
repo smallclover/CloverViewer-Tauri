@@ -62,6 +62,14 @@ pub struct ScreenshotData {
     pub screens: Vec<ScreenData>,
     /// 见 `MonitorInfo` 说明。
     pub monitor_info: Vec<MonitorInfo>,
+    /// 截图触发时的鼠标虚拟桌面物理坐标；前端据此把普通截图提示放在当前显示器。
+    pub cursor: Option<CursorPosition>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CursorPosition {
+    pub x: i32,
+    pub y: i32,
 }
 
 pub struct ScreenshotStore {
@@ -150,6 +158,28 @@ pub fn close_screenshot(app: AppHandle) {
 pub fn copy_text(text: String) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.set_text(text).map_err(|e| e.to_string())
+}
+
+/// 复制磁盘上的图片到系统剪贴板。
+///
+/// 查看器不能依赖 WebView 的 `ClipboardItem`：Windows WebView2 对图片写剪贴板的
+/// 支持会随运行环境变化，长截图从查看器打开后尤其容易报错。统一走 arboard，和截图
+/// 覆盖窗的图片复制保持同一套原生实现。
+#[tauri::command]
+pub fn copy_image_file(path: String) -> Result<(), String> {
+    let image = image::open(&path)
+        .map_err(|e| format!("无法读取图片 {path}: {e}"))?
+        .to_rgba8();
+    let width = image.width() as usize;
+    let height = image.height() as usize;
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard
+        .set_image(arboard::ImageData {
+            width,
+            height,
+            bytes: std::borrow::Cow::Owned(image.into_raw()),
+        })
+        .map_err(|e| e.to_string())
 }
 
 /// 物理坐标 (x, y) 处的顶层窗口矩形（物理像素）。
@@ -591,6 +621,18 @@ fn capture_all() -> Result<ScreenshotData, String> {
         max_y - min_y
     );
 
+    #[cfg(target_os = "windows")]
+    let cursor = {
+        use windows::Win32::Foundation::POINT;
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+        let mut point = POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut point) }
+            .ok()
+            .map(|_| CursorPosition { x: point.x, y: point.y })
+    };
+    #[cfg(not(target_os = "windows"))]
+    let cursor = None;
+
     Ok(ScreenshotData {
         min_x,
         min_y,
@@ -598,5 +640,6 @@ fn capture_all() -> Result<ScreenshotData, String> {
         total_height: (max_y - min_y).max(1) as u32,
         screens,
         monitor_info,
+        cursor,
     })
 }

@@ -13,7 +13,8 @@
 
 探针本体在 `src-tauri/examples/scroll_probe.rs`（`cargo run --example scroll_probe`），
 放在 `examples/` 而不是 `src/bin/` 是有意的：`src/bin/*.rs` 会让 `tauri build` 误判主程序。
-复现步骤与实测结论见 [`SCROLL_CAPTURE_PLAN.md`](../SCROLL_CAPTURE_PLAN.md) 附录 A。
+可先启动 `winforms-target.ps1`，再用 `scroll_probe` 对标题
+`cloverprobe-winforms-target` 进行探测，以复现标准控件的滚动注入验证。
 
 ## 离线复刻：不接屏幕也能跑的两个校验
 

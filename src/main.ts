@@ -6,6 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AppConfig,
   ImageEntry,
+  copyImageFile,
   fileSrc,
   formatDimensions,
   formatSize,
@@ -50,6 +51,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 
 const emptyState = $("empty-state");
+const contentHeader = $("content-header");
 const gridView = $("grid-view");
 const grid = $("grid");
 const gridSpacer = $("grid-spacer");
@@ -89,6 +91,36 @@ setRailIcon("btn-about", `<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 
 
 // ---------- 工具 ----------
 let toastTimer: number | undefined;
+const visibilityTimers = new WeakMap<HTMLElement, number>();
+
+/**
+ * 让全屏层先完成淡入/淡出，再从布局树中移除。这里不用 animationend，
+ * 因为「减少动态效果」下没有动画，定时器仍能提供稳定的收尾行为。
+ */
+function setAnimatedVisibility(el: HTMLElement, visible: boolean, duration = 180) {
+  const previousTimer = visibilityTimers.get(el);
+  if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+
+  if (visible) {
+    el.classList.remove("hidden");
+    requestAnimationFrame(() => el.classList.add("is-visible"));
+    return;
+  }
+
+  el.classList.remove("is-visible");
+  visibilityTimers.set(el, window.setTimeout(() => {
+    if (!el.classList.contains("is-visible")) el.classList.add("hidden");
+  }, duration));
+}
+
+function playEnterAnimation(el: HTMLElement, className = "view-enter") {
+  el.classList.remove(className);
+  // 强制下一帧重新开始动画；切换相邻图片时尤为明显。
+  void el.offsetWidth;
+  el.classList.add(className);
+  window.setTimeout(() => el.classList.remove(className), 240);
+}
+
 function toast(msg: string, kind: "success" | "error" | "info" = "info") {
   toastEl.textContent = "";
   const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "";
@@ -100,11 +132,15 @@ function toast(msg: string, kind: "success" | "error" | "info" = "info") {
   }
   toastEl.appendChild(document.createTextNode(msg));
   toastEl.classList.remove("hidden");
+  toastEl.classList.remove("show");
+  void toastEl.offsetWidth;
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => {
     toastEl.classList.remove("show");
-    toastEl.classList.add("hidden");
+    window.setTimeout(() => {
+      if (!toastEl.classList.contains("show")) toastEl.classList.add("hidden");
+    }, 180);
   }, 2200);
 }
 
@@ -188,6 +224,7 @@ function setImageToolsVisible(v: boolean) {
   btnRotate.classList.toggle("hidden", !v);
   btnFlipH.classList.toggle("hidden", !v);
   btnFlipV.classList.toggle("hidden", !v);
+  if (v) playEnterAnimation(imageTools, "tools-enter");
 }
 
 // ---------- 网格视图（窗口化虚拟滚动） ----------
@@ -223,6 +260,8 @@ function thumbSize(): number {
 
 function showGrid() {
   viewMode = "grid";
+  // 初始空态不需要这条上下文栏；一旦用户选定目录（即使目录里没有图片）就恢复。
+  contentHeader.classList.remove("hidden");
   emptyState.classList.toggle("hidden", images.length > 0 || !!currentDir);
   gridView.classList.toggle("hidden", images.length === 0);
   singleView.classList.add("hidden");
@@ -234,6 +273,7 @@ function showGrid() {
   setImageToolsVisible(false);
   refreshGridMenu();
   renderGrid();
+  playEnterAnimation(gridView);
   updateNavButtons();
   refreshStatus();
 }
@@ -379,6 +419,7 @@ function showSingle(index: number) {
   emptyState.classList.add("hidden");
   gridView.classList.add("hidden");
   singleView.classList.remove("hidden");
+  playEnterAnimation(singleView);
   gridMenu.classList.add("hidden");
   breadcrumb.classList.add("hidden");
   gridCount.classList.add("hidden");
@@ -513,7 +554,10 @@ function applyTransform() {
   singleImg.style.transform = `${base} rotate(${rotation}deg) ${flip}`;
 }
 
-singleImg.addEventListener("load", () => applyTransform());
+singleImg.addEventListener("load", () => {
+  applyTransform();
+  playEnterAnimation(singleImg, "image-enter");
+});
 window.addEventListener("resize", () => {
   if (viewMode === "single") {
     applyTransform();
@@ -609,6 +653,8 @@ function flipVertical() {
   refreshStatus();
 }
 function resetImageTransform() {
+  // 回到刚打开本图时的完整初始状态：适应画布、居中、未旋转、未翻转。
+  // 胶囊本身的双击已在下方隔离，因此不会与画布“适应 ↔ 100%”冲突。
   rotation = 0;
   flipH = false;
   flipV = false;
@@ -714,6 +760,10 @@ btnRotate.addEventListener("click", rotateImage);
 btnFlipH.addEventListener("click", flipHorizontal);
 btnFlipV.addEventListener("click", flipVertical);
 btnResetTransform.addEventListener("click", resetImageTransform);
+// 工具胶囊位于画布内：隔离手势，避免连续点击“还原”冒泡成画布双击，
+// 意外触发“适应窗口 ↔ 100%”缩放切换。
+imageTools.addEventListener("mousedown", (e) => e.stopPropagation());
+imageTools.addEventListener("dblclick", (e) => e.stopPropagation());
 // 单图切图按钮：点击切换 + 阻止 mousedown 冒泡，避免误触发拖拽平移
 navPrev.addEventListener("mousedown", (e) => e.stopPropagation());
 navNext.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -776,35 +826,23 @@ function showContextMenu(x: number, y: number, items: CtxItem[]) {
     ctxMenu.appendChild(el);
   }
   ctxMenu.classList.remove("hidden");
+  ctxMenu.classList.remove("is-visible");
   // 先显示再测量，clamp 到视口内
   const rect = ctxMenu.getBoundingClientRect();
   ctxMenu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - rect.width - 6))}px`;
   ctxMenu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - rect.height - 6))}px`;
+  requestAnimationFrame(() => ctxMenu.classList.add("is-visible"));
 }
 
 function hideContextMenu() {
-  ctxMenu.classList.add("hidden");
+  setAnimatedVisibility(ctxMenu, false, 120);
 }
 
-// 复制位图：统一经 canvas 转 PNG 写入剪贴板（兼容 JPG/TIFF 等非 PNG 源）
+// 复制图片走原生剪贴板，避免 Windows WebView2 对 ClipboardItem 图片支持不完整。
+// 这也让从滚动截图打开的长图和截图覆盖窗使用同一条可靠路径。
 async function copyImageBitmap(entry: ImageEntry) {
   try {
-    const src = await srcFor(entry);
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("Image load failed"));
-      img.src = src;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    canvas.getContext("2d")?.drawImage(img, 0, 0);
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png"),
-    );
-    if (!blob) throw new Error("PNG encoding failed");
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    await copyImageFile(entry.path);
     toast(t("toast.copiedImage"), "success");
   } catch (e) {
     toast(t("toast.copyFailed", { msg: String(e) }), "error");
@@ -856,9 +894,9 @@ window.addEventListener("blur", hideContextMenu);
 void getCurrentWindow().onDragDropEvent((event) => {
   const payload = event.payload;
   if (payload.type === "enter" || payload.type === "over") {
-    dropOverlay.classList.remove("hidden");
+    setAnimatedVisibility(dropOverlay, true);
   } else {
-    dropOverlay.classList.add("hidden");
+    setAnimatedVisibility(dropOverlay, false);
     if (payload.type === "drop" && payload.paths.length > 0) {
       void openFileOrFolder(payload.paths[0]);
     }
@@ -886,7 +924,9 @@ function selectSettingsTab(tab: string) {
     button.classList.toggle("active", button.dataset.settingsTab === tab);
   });
   settingSections.forEach((section) => {
-    section.hidden = section.dataset.settingsSection !== tab;
+    const selected = section.dataset.settingsSection === tab;
+    section.hidden = !selected;
+    if (selected) playEnterAnimation(section, "tab-enter");
   });
 }
 
@@ -918,17 +958,17 @@ function openSettings() {
   selectSettingsTab("general");
   btnSettings.classList.add("active");
   btnSettings.setAttribute("aria-pressed", "true");
-  settingsOverlay.classList.remove("hidden");
+  setAnimatedVisibility(settingsOverlay, true, 220);
 }
 
 function closeSettings() {
-  settingsOverlay.classList.add("hidden");
+  setAnimatedVisibility(settingsOverlay, false, 220);
   btnSettings.classList.remove("active");
   btnSettings.setAttribute("aria-pressed", "false");
 }
 
 btnSettings.addEventListener("click", () => {
-  if (settingsOverlay.classList.contains("hidden")) openSettings();
+  if (!settingsOverlay.classList.contains("is-visible")) openSettings();
   else closeSettings();
 });
 settingsTabs.forEach((button) => {
@@ -1074,7 +1114,7 @@ async function fillAboutInfo() {
 }
 
 function openAbout() {
-  aboutOverlay.classList.remove("hidden");
+  setAnimatedVisibility(aboutOverlay, true, 220);
   if (!aboutInfoLoaded) {
     aboutInfoLoaded = true;
     void fillAboutInfo();
@@ -1082,7 +1122,7 @@ function openAbout() {
 }
 
 function closeAbout() {
-  aboutOverlay.classList.add("hidden");
+  setAnimatedVisibility(aboutOverlay, false, 220);
 }
 
 $("btn-about").addEventListener("click", openAbout);

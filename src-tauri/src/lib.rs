@@ -16,7 +16,7 @@ mod ocr;
 mod screenshot;
 /// 滚动截图（长截图）核心。
 /// `pub` 是为了让开发用探针 `src-tauri/examples/scroll_probe.rs` 复用同一套实现
-/// （兼容性探测 + 完整会话 CLI + 标尺校验，见 SCROLL_CAPTURE_PLAN.md 附录 A）。
+/// （兼容性探测 + 完整会话 CLI + 标尺校验）。
 pub mod scroll_capture;
 mod startup;
 mod thumbnails;
@@ -129,6 +129,7 @@ pub fn run() {
             screenshot::close_screenshot,
             screenshot::finish_screenshot,
             screenshot::copy_text,
+            screenshot::copy_image_file,
             screenshot::pick_window_at,
             screenshot::screenshot_ui_ready,
             ocr::ocr_image,

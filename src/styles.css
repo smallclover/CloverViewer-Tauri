@@ -1031,3 +1031,145 @@ body {
   transform: none;
 }
 #toolbar .tb-btn:active { transform: none; }
+
+/* ---------- 交互动效 ----------
+   统一只动画 opacity / transform（属性栏额外动画 width），避免滚动、缩放图片
+   和虚拟网格在动画期间发生重排。 */
+:root {
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --motion-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+@keyframes workspaceIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cellIn {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes imageIn {
+  from { opacity: 0; filter: saturate(.82) brightness(.94); }
+  to { opacity: 1; filter: none; }
+}
+@keyframes toolsIn {
+  from { opacity: 0; transform: translate(-50%, 10px) scale(.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+#empty-state:not(.hidden) { animation: workspaceIn var(--motion-normal) var(--motion-ease) both; }
+#grid-view.view-enter,
+#single-view.view-enter { animation: workspaceIn var(--motion-normal) var(--motion-ease) both; }
+#grid-view.view-enter .cell { animation: cellIn var(--motion-normal) var(--motion-ease) both; }
+#grid-view.view-enter .cell:nth-child(2) { animation-delay: 18ms; }
+#grid-view.view-enter .cell:nth-child(3) { animation-delay: 36ms; }
+#grid-view.view-enter .cell:nth-child(4) { animation-delay: 54ms; }
+#single-img.image-enter { animation: imageIn var(--motion-normal) ease-out both; }
+#image-tools.tools-enter { animation: toolsIn var(--motion-normal) var(--motion-ease) both; }
+
+/* 右侧属性栏保留在 flex 布局中，以 width + translate 的组合实现无跳变滑入滑出。 */
+#props-panel {
+  width: 250px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateX(0);
+  transform-origin: right center;
+  transition: width var(--motion-normal) var(--motion-ease),
+    opacity var(--motion-fast) ease,
+    transform var(--motion-normal) var(--motion-ease),
+    border-color var(--motion-normal) ease;
+}
+#props-panel.collapsed {
+  display: flex;
+  width: 0;
+  border-left-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(16px);
+}
+#props-panel h3,
+#props-list { min-width: 250px; transition: opacity var(--motion-fast) ease; }
+#props-panel.collapsed h3,
+#props-panel.collapsed #props-list { opacity: 0; }
+.prop-row { animation: workspaceIn var(--motion-fast) ease-out both; }
+.prop-row:nth-child(2) { animation-delay: 20ms; }
+.prop-row:nth-child(3) { animation-delay: 40ms; }
+
+/* 所有顶层浮层都先淡出，再由 TypeScript 延时加回 hidden，退出不会闪断。 */
+#settings-overlay,
+#about-overlay,
+#drop-overlay,
+#context-menu {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-normal) ease;
+}
+#settings-overlay.is-visible,
+#about-overlay.is-visible,
+#drop-overlay.is-visible,
+#context-menu.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 设置像独立工作区从左侧推进；关于页则从下方轻轻浮起。 */
+#settings-panel {
+  transform: translateX(-22px);
+  opacity: 0;
+  transition: transform var(--motion-normal) var(--motion-ease), opacity var(--motion-fast) ease;
+}
+#settings-overlay.is-visible #settings-panel { transform: translateX(0); opacity: 1; }
+#about-panel {
+  transform: translateY(12px);
+  opacity: 0;
+  transition: transform var(--motion-normal) var(--motion-ease), opacity var(--motion-fast) ease;
+}
+#about-overlay.is-visible #about-panel { transform: translateY(0); opacity: 1; }
+.setting-row.tab-enter { animation: workspaceIn var(--motion-fast) var(--motion-ease) both; }
+
+#drop-overlay { transform: scale(1.015); transition: opacity var(--motion-fast) ease, transform var(--motion-normal) var(--motion-ease); }
+#drop-overlay.is-visible { transform: scale(1); pointer-events: none; }
+
+#context-menu {
+  transform: translateY(-4px) scale(.98);
+  transform-origin: top left;
+  transition: opacity 120ms ease, transform 120ms var(--motion-ease);
+}
+#context-menu.is-visible { transform: translateY(0) scale(1); }
+
+/* 通知轻微上移，反馈信息更易被注意到。 */
+#toast {
+  transform: translate(-50%, 9px) scale(.98);
+  transition: opacity 180ms ease, transform 180ms var(--motion-ease);
+}
+#toast.show { transform: translate(-50%, 0) scale(1); }
+
+/* 设置分类、行项目和图标按钮都获得一致而克制的状态反馈。 */
+.settings-nav button,
+.setting-row,
+.img-tool,
+#grid-menu button,
+#back-to-grid,
+.about-close,
+.settings-close {
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) ease;
+}
+.settings-nav button:hover { transform: translateX(3px); }
+.settings-nav button:active,
+.img-tool:active,
+#grid-menu button:active,
+#back-to-grid:active { transform: scale(.96); }
+.setting-row:hover { background: color-mix(in srgb, var(--accent-soft) 42%, transparent); }
+.about-lic details { transition: background var(--motion-fast) ease; }
+.about-lic details[open] { background: color-mix(in srgb, var(--accent-soft) 24%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -271,26 +271,26 @@
       }
 
       /* ============ 帮助框（快捷键提示） ============
-         每项一行「键帽 + 说明」，用两列网格排布（列优先，先填满 4 行再换列），
-         键帽等宽、说明左对齐 —— 比原先的三行「·」串排整齐、也便于按行扫读。
+         与滚动截图面板共用视觉语言：面板底色、圆角、边框、阴影和间距保持一致。
          由 screenshot.ts 的 HELP_ITEMS 生成 DOM，文案走 i18n。 */
       #help-box {
         position: absolute;
         left: 12px;
-        bottom: 12px;
+        bottom: auto;
         display: grid;
         grid-auto-flow: column;
         grid-template-rows: repeat(4, auto);
-        gap: 2px 16px;
-        padding: 7px 11px;
-        background: var(--s-help-bg);
-        backdrop-filter: blur(10px) saturate(150%);
-        -webkit-backdrop-filter: blur(10px) saturate(150%);
-        border: 1px solid var(--s-toolbar-border);
-        border-radius: 8px;
-        color: var(--s-fg-dim);
+        gap: 4px 16px;
+        padding: 11px 12px;
+        background: var(--s-panel-bg);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        border: 1px solid var(--s-popup-border);
+        border-radius: 10px;
+        box-shadow: var(--s-shadow);
+        color: var(--s-fg);
         font-size: 12px;
-        line-height: 1.35;
+        line-height: 1.5;
         font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
         white-space: nowrap;
         /* 工具栏落到左下角时由 render() 抬高避让，用 transform 不触发重排 */
@@ -299,7 +299,7 @@
       #help-box .hint {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 9px;
       }
       #help-box kbd {
         flex: none;
@@ -509,14 +509,6 @@
       }
       .sh-actions.result { padding-top: 2px; }
       .sh-actions.result .sh-btn.primary { order: -1; }
-      .sh-actions-footer {
-        display: none;
-        justify-content: space-between;
-        width: 100%;
-        padding-top: 3px;
-        border-top: 1px solid var(--s-toolbar-border);
-      }
-      .sh-actions-footer.result { display: flex; }
       .sh-btn {
         display: inline-flex;
         align-items: center;
@@ -538,15 +530,6 @@
         background: var(--s-accent);
         border-color: transparent;
         color: #fff;
-      }
-      .sh-btn.quiet {
-        padding-inline: 2px;
-        border-color: transparent;
-        color: var(--s-fg-dim);
-      }
-      .sh-btn.quiet:hover:not(:disabled) {
-        background: transparent;
-        color: var(--s-fg);
       }
       .sh-btn:disabled {
         opacity: 0.45;

@@ -11,7 +11,6 @@ import {
   screenshotUiReady,
   scrollCaptureProgress,
   scrollCaptureRunning,
-  setScrollHudSafe,
   startScrollCapture,
   stopScrollCapture as stopScrollCaptureCmd,
   takeScrollStartMode,
@@ -234,18 +233,6 @@ ocrBtn.addEventListener("click", (e) => {
 });
 toolbar.appendChild(ocrBtn);
 
-// 滚动截图：先进入「待框选」态，选好区域后再从浮动面板点「开始」
-const scrollBtn = makeBtn("scroll", "shot.scroll");
-scrollBtn.addEventListener("mousedown", (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-});
-scrollBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  enterScrollArm();
-});
-toolbar.appendChild(scrollBtn);
-
 // 分隔线
 const divider = document.createElement("div");
 divider.className = "divider";
@@ -413,7 +400,6 @@ const HELP_ITEMS: { kbdI18n?: string; kbd?: string; labelI18n: string }[] = [
   { kbd: "Delete", labelI18n: "shot.hint.delete" },
   { kbd: "Ctrl+Z", labelI18n: "shot.hint.undo" },
   { kbd: "Ctrl+Y", labelI18n: "shot.hint.redo" },
-  { kbd: "S", labelI18n: "shot.hint.scroll" },
 ];
 
 function makeHintRow(kbdText: string, labelI18n: string, kbdI18n?: string): HTMLDivElement {
@@ -444,27 +430,46 @@ function updateHelpBox() {
   helpColorRow.style.display = magnifierActive ? "" : "none";
 }
 
-// 与 screenshot.html 里 #help-box 的 left/bottom 保持一致
+// 与 screenshot.html 里 #help-box 的边距保持一致
 const HELP_MARGIN = 12;
+/** 截图窗打开瞬间的鼠标位置。初始时还没有 mousemove，也要把提示放在当前屏。 */
+let initialCursorPos: Pt | null = null;
 
-/// 工具栏被挤到左下角时会压住提示框 → 检测相交后把提示框整体抬到工具栏上方。
-/// 用 transform 平移（不触发重排），无冲突时还原。
+/** 将普通截图提示限制在鼠标所在显示器；多屏时不能按整个虚拟桌面的左下角摆放。 */
 function positionHelpBox() {
   if (toolbar.style.display === "none") {
+    // 未框选时不展示整块快捷键说明。截图覆盖窗刚由 Alt+S 唤起时只保留
+    // 干净的取景画面；用户完成框选后，随选区工具栏一起再显示操作提示。
+    helpBox.style.display = "none";
     helpBox.style.transform = "";
     return;
   }
-  const viewH = root.getBoundingClientRect().height;
+  helpBox.style.display = "grid";
   const hbW = helpBox.offsetWidth;
   const hbH = helpBox.offsetHeight;
   if (!hbW || !hbH) return;
-  const left = HELP_MARGIN;
-  const bottom = viewH - HELP_MARGIN;
+  const anchor = lastMousePos ?? initialCursorPos;
+  const monitor = monitorBoxCss(anchor ? { x: anchor.x, y: anchor.y, w: 1, h: 1 } : null);
+  const left = monitor.x + HELP_MARGIN;
+  const top = monitor.y + monitor.h - hbH - HELP_MARGIN;
+  helpBox.style.left = `${Math.round(left)}px`;
+  helpBox.style.top = `${Math.round(top)}px`;
+  helpBox.style.bottom = "auto";
+
+  // 工具栏被挤到本屏左下角时，把提示框抬到工具栏上方。
+  const rootRect = root.getBoundingClientRect();
   const tb = toolbar.getBoundingClientRect();
+  const toolbarBox = {
+    left: tb.left - rootRect.left,
+    right: tb.right - rootRect.left,
+    top: tb.top - rootRect.top,
+    bottom: tb.bottom - rootRect.top,
+  };
   const hit =
-    tb.left < left + hbW && tb.right > left && tb.top < bottom && tb.bottom > bottom - hbH;
+    toolbarBox.left < left + hbW && toolbarBox.right > left
+    && toolbarBox.top < top + hbH && toolbarBox.bottom > top;
   helpBox.style.transform = hit
-    ? `translateY(-${Math.ceil(bottom - tb.top + 8)}px)`
+    ? `translateY(-${Math.ceil(top + hbH - toolbarBox.top + 8)}px)`
     : "";
 }
 
@@ -890,9 +895,17 @@ function render() {
 function drawGreenBox(c: CanvasRenderingContext2D, r: Rect) {
   const asz = 8 * physScale();
   const lw = 3 * physScale();
+  // 窗口吸附拿到的是系统的外框边界；粗线即使完全画在框内，视觉上也会
+  // 压住可见窗口边沿，让人觉得选区比窗口大。再内收 1 个视觉像素，边界更贴合。
+  const visualInset = physScale();
   c.strokeStyle = "#00ff00";
   c.lineWidth = lw;
-  c.strokeRect(r.x + lw / 2, r.y + lw / 2, r.w - lw, r.h - lw);
+  c.strokeRect(
+    r.x + lw / 2 + visualInset,
+    r.y + lw / 2 + visualInset,
+    Math.max(1, r.w - lw - visualInset * 2),
+    Math.max(1, r.h - lw - visualInset * 2),
+  );
   if (r.w > asz * 3 && r.h > asz * 3) {
     const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
     c.fillStyle = "#00ff00";
@@ -1397,7 +1410,9 @@ function onMouseUp(e: MouseEvent) {
     dragMode = "none";
     dragStart = dragCur = null;
     render();
-    // 滚动模式下只完成选区；由面板里的「开始」明确触发捕获，避免误开跑。
+    // 滚动截图专属热键的语义是「框选即开始」：不要再要求用户点一次开始面板，
+    // 否则不可滚动的窗口会显得要等第二次点击才报错。
+    if (scrollPhase === "armed" && selection) void beginScrollCapture();
     return;
   }
 
@@ -1411,6 +1426,7 @@ function onMouseUp(e: MouseEvent) {
     dragStart = dragCur = null;
     dragMode = "none";
     render();
+    if (scrollPhase === "armed" && selection) void beginScrollCapture();
     return;
   }
 
@@ -1621,7 +1637,7 @@ window.addEventListener("keydown", (e) => {
   if (scrollPhase === "done") {
     if (e.key === "Escape") {
       e.preventDefault();
-      // 与结果态的「完成」按钮一致：关窗 + 释放后端的长图缓冲
+      // 关窗并释放后端的长图缓冲。
       void discardScrollCapture();
       void closeScreenshot();
     } else if (e.key === "Enter") {
@@ -1642,14 +1658,6 @@ window.addEventListener("keydown", (e) => {
       void beginScrollCapture();
       return;
     }
-  }
-
-  // S：进入滚动截图（与工具栏「滚动截图」按钮等价；armed 态下再按 S 退出）
-  if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "s") {
-    e.preventDefault();
-    if (scrollPhase === "armed") exitScrollMode();
-    else enterScrollArm();
-    return;
   }
 
   if (e.key === "Escape") {
@@ -1764,10 +1772,10 @@ async function runOcr() {
 // ============================================================
 // 滚动截图（长截图）
 //
-// 交互：工具栏「滚动截图」→ 框选区域 → 浮动面板点「开始」→ 后端逐帧捕获拼接
+// 交互：滚动截图专属热键 → 框选区域 → 浮动面板点「开始」→ 后端逐帧捕获拼接
 //       → HUD 显示进度与缩略预览 → 完成后 复制 / 保存 / 在查看器中打开。
 //
-// 捕获期间的关键约束（见 SCROLL_CAPTURE_PLAN.md 4.5）：
+// 捕获期间的关键约束：
 // - 选区内的画布必须**保持全透明**：覆盖窗是 transparent(true)，透明像素会透出真实窗口，
 //   后端按屏幕像素捕获拿到的才是真内容（否则会把自己的 UI 截进长图里）。
 // - 选区外框 / 压暗 / HUD 一律画在选区**之外**，边框还要画在选区边界外侧，
@@ -1794,6 +1802,8 @@ let scrollStopping = false;
 /** 最近一次上报给后端的「HUD 压在捕获区上」状态（只在变化时发命令；每次进入捕获态复位）。
  *  声明放在这里而不是 `reportHudOverlap` 旁边：多个状态复位函数都会写它。 */
 let hudOverlapReported = false;
+/** 没有安全落点时，HUD 在整个采集会话中保持隐藏，而不是每帧闪避。 */
+let hudHiddenForSession = false;
 
 function scrollPassthrough(): boolean {
   return !!scrollProg?.input_passthrough;
@@ -1894,8 +1904,6 @@ const shPreview = document.createElement("img");
 shPreview.className = "sh-preview";
 const shHudActions = document.createElement("div");
 shHudActions.className = "sh-actions";
-const shHudFooterActions = document.createElement("div");
-shHudFooterActions.className = "sh-actions sh-actions-footer";
 
 function makeShBtn(onClick: () => void): HTMLButtonElement {
   const b = document.createElement("button");
@@ -1915,19 +1923,10 @@ const shStopBtn = makeShBtn(() => stopScrollCaptureNow());
 const shCopyBtn = makeShBtn(() => void finishScrollAction("clipboard"));
 const shSaveBtn = makeShBtn(() => void finishScrollAction("save"));
 const shOpenBtn = makeShBtn(() => void finishScrollAction("open"));
-const shRetryBtn = makeShBtn(() => resetScrollToArm());
-shRetryBtn.classList.add("quiet");
-  // 点掉结果态就顺手把后端的长图丢掉：结果最多可以是一个 768MB 上限的 RGBA 画布，
-  // 留着等下一次截图才释放没有意义（其它出口 exitScrollMode / resetScrollToArm 都已这么做）。
-  const shDoneBtn = makeShBtn(() => {
-    void discardScrollCapture();
-    void closeScreenshot();
-  });
 const shEscStop = document.createElement("div");
 shEscStop.className = "sh-esc-stop";
 shHudActions.append(shStopBtn, shCopyBtn, shSaveBtn, shOpenBtn);
-shHudFooterActions.append(shRetryBtn, shDoneBtn);
-scrollHud.append(shHudHead, shHudMetrics, shHudStatus, shHudDetail, shEscStop, shPreview, shHudActions, shHudFooterActions);
+scrollHud.append(shHudHead, shHudMetrics, shHudStatus, shHudDetail, shEscStop, shPreview, shHudActions);
 uiLayer.appendChild(scrollHud);
 
 // 一次性提示条（成功 / 失败）。放在最后 = 叠在面板与 HUD 之上。
@@ -1945,6 +1944,7 @@ function enterScrollArm() {
   scrollError = "";
   scrollActionError = "";
   hudOverlapReported = false;
+  hudHiddenForSession = false;
   scrollStopping = false;
   selection = null;
   selectedIndex = null;
@@ -1971,25 +1971,10 @@ function exitScrollMode() {
   scrollError = "";
   scrollActionError = "";
   hudOverlapReported = false;
+  hudHiddenForSession = false;
   scrollStopping = false;
   syncScrollUi();
   void closeScreenshot();
-}
-
-/** 完成后「重新框选」：丢弃后端结果，回到 armed 态 */
-function resetScrollToArm() {
-  void discardScrollCapture();
-  scrollProg = null;
-  scrollCaptureRect = null;
-  scrollResult = null;
-  scrollError = "";
-  scrollActionError = "";
-  hudOverlapReported = false;
-  scrollStopping = false;
-  scrollPhase = "armed";
-  selection = null;
-  syncScrollUi();
-  render();
 }
 
 // 「框选完自动开始」：对齐 ShareX 的滚动截图——选定区域松手即开跑，不用再点一次。
@@ -2008,9 +1993,12 @@ async function beginScrollCapture() {
   scrollError = "";
   scrollActionError = "";
   hudOverlapReported = false;
+  hudHiddenForSession = false;
   scrollStopping = false;
   syncScrollUi();
   render();
+  // HUD 已按当前选区完成落位。重叠时优先由 Windows 将整个覆盖窗排除
+  // 在捕获结果外，因此 HUD 仍可持续显示；仅 API 不可用时后端才发事件要求隐藏。
   // 等一帧再下发：隐藏帮助框/面板、把覆盖窗底色设为透明这些 DOM 变更必须**先落到屏幕上**，
   // 否则后端抓第一帧时还能看到残留 UI，会被烤进长图顶部（用户实测踩到过）。
   await new Promise((r) => setTimeout(r, 180));
@@ -2023,8 +2011,12 @@ async function beginScrollCapture() {
       h: Math.round(sel.h),
       // 默认 false：从当前可见位置往下截；勾了才先滚到页面顶部
       auto_scroll_top: shFromTop.checked,
+      // 与请求一起交给后端：重叠时先尝试 WDA_EXCLUDEFROMCAPTURE，失败才回退隐藏 HUD。
+      hide_hud_during_capture: hudOverlapReported,
     });
   } catch (e) {
+    hudHiddenForSession = false;
+    scrollHud.classList.remove("hud-hidden");
     scrollError = String(e);
     scrollPhase = "armed";
     syncScrollUi();
@@ -2161,15 +2153,18 @@ function syncScrollUi() {
     helpBox.style.display = "";
   }
 
-  scrollPanel.classList.toggle("open", scrollPhase === "armed");
+  // 与普通截图一致：专属快捷键唤起后先只显示干净的框选画面。
+  // 滚动截图的准备面板要等用户完成选区后才出现，避免在多屏初始阶段
+  // 跑到另一块显示器，也避免打断用户先确定捕获范围的动作。
+  scrollPanel.classList.toggle("open", scrollPhase === "armed" && !!selection);
   scrollHud.classList.toggle("open", scrollActive());
   scrollHud.classList.toggle("clickthrough", scrollPassthrough());
   // 采帧让位是**瞬时**状态（后端每帧 emit 一次 hidden=true/false）。一旦离开捕获态
   // 就必须清掉，否则「最后一帧的 hidden=true 比 done 事件晚到」或「会话异常结束」时，
   // 这个类会一直留在 HUD 上 —— 现象是长图缩略预览与结果按钮全都不显示（visibility:hidden）。
   if (scrollPhase !== "capturing") scrollHud.classList.remove("hud-hidden");
-  // 选好区域之前也能看到面板（否则用户不知道下一步该干嘛）；选区不合要求时「开始」不可点，
-  // 并且**直接说明原因**（选区太矮 = 没有重叠区，拼不了）——而不是把按钮置灰让用户猜
+  // 选好区域后才显示面板；选区不合要求时「开始」不可点，并且**直接说明原因**
+  // （选区太矮 = 没有重叠区，拼不了）——而不是把按钮置灰让用户猜。
   shStartBtn.disabled = !scrollSelectionOk();
   const selTooShort = !!selection && selection.h < MIN_SCROLL_SEL_H;
   const selShortCaution = !!selection
@@ -2221,8 +2216,7 @@ function syncScrollUi() {
     shEscStop.textContent = t("shot.scrollEscStop");
     shEscStop.classList.toggle("on", scrollPassthrough());
     shHudActions.classList.remove("result");
-    shHudFooterActions.classList.remove("result");
-    for (const b of [shCopyBtn, shSaveBtn, shOpenBtn, shRetryBtn, shDoneBtn]) b.style.display = "none";
+    for (const b of [shCopyBtn, shSaveBtn, shOpenBtn]) b.style.display = "none";
   } else if (scrollPhase === "done" && res) {
     shRecDot.style.display = "none";
     shHudTitleText.textContent = t("shot.scrollDone");
@@ -2251,17 +2245,12 @@ function syncScrollUi() {
     shCopyBtn.style.display = "";
     shSaveBtn.style.display = "";
     shOpenBtn.style.display = "";
-    shRetryBtn.style.display = "";
-    shDoneBtn.style.display = "";
     shHudActions.classList.add("result");
-    shHudFooterActions.classList.add("result");
     shCopyBtn.classList.add("primary");
-    for (const b of [shSaveBtn, shOpenBtn, shRetryBtn, shDoneBtn]) b.classList.remove("primary");
+    for (const b of [shSaveBtn, shOpenBtn]) b.classList.remove("primary");
     shCopyBtn.textContent = t("shot.scrollCopy");
     shSaveBtn.textContent = t("shot.scrollSave");
     shOpenBtn.textContent = t("shot.scrollOpen");
-    shRetryBtn.textContent = t("shot.scrollRetry");
-    shDoneBtn.textContent = t("shot.scrollFinish");
   }
 
   positionScrollUi();
@@ -2399,7 +2388,7 @@ function positionScrollUi() {
 }
 
 /** 本屏内实在没有「捕获区之外」的落脚点时，HUD 只能压在捕获区上。
- *  此时告知后端：采帧瞬间让 HUD 临时隐藏（见 `set_scroll_hud_safe`）。 */
+ *  这个判定会随启动请求交给后端，用于尝试排除整个覆盖窗。 */
 function reportHudOverlap(region: CssBox) {
   const w = scrollHud.offsetWidth || 280;
   const h = scrollHud.offsetHeight || 100;
@@ -2408,7 +2397,6 @@ function reportHudOverlap(region: CssBox) {
   const on = overlaps({ x, y, w, h }, region);
   if (on === hudOverlapReported) return;
   hudOverlapReported = on;
-  void setScrollHudSafe(on).catch(() => undefined);
 }
 
 /**
@@ -2422,12 +2410,14 @@ function renderScrollOverlay() {
   // 「挖空」按**后端实际捕获区**来：矮选区会被自动向下补足，补出来的那截如果不挖空，
   // 就会截到我们自己的压暗遮罩 + 绿边（用户实测报回「上方亮下方暗、中间一条绿线」）。
   const cap = scrollCaptureRect ?? selection;
-  const grow = 2 * physScale();
+  // 绿线必须完全落在捕获区外，避免烤进长图；保留 1px 安全边即可，
+  // 不再像此前的 2px 那样看起来比窗口四周都大一圈。
+  const grow = physScale();
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.clearRect(cap.x - grow, cap.y - grow, cap.w + grow * 2, cap.h + grow * 2);
 
-  const lw = 2 * physScale();
+  const lw = physScale();
   const color =
     scrollProg?.stage === "low_confidence"
       ? "#ffb300"
@@ -2528,6 +2518,11 @@ async function loadScreenshot() {
   textInput.classList.remove("editing");
   ocrPanel.style.display = "none";
   screens = [];
+  // 截图窗口会复用。帮助框优先锚定 lastMousePos；若不在这里清掉，
+  // 下一次 Alt+S 的首帧会沿用上一次截图结束时的鼠标位置，双屏下就会
+  // 先跑到另一块屏幕。初始位置应当使用本次 capture 时后端记录的 cursor。
+  lastMousePos = null;
+  overUI = false;
 
   // 新的截图会话：滚动截图状态全部归零（后端结果也丢弃）
   scrollPhase = "idle";
@@ -2537,6 +2532,7 @@ async function loadScreenshot() {
   scrollError = "";
   scrollActionError = "";
   hudOverlapReported = false;
+  hudHiddenForSession = false;
   scrollStopping = false;
   void discardScrollCapture();
   syncScrollUi();
@@ -2545,6 +2541,9 @@ async function loadScreenshot() {
   totalH = data.total_height;
   minX = data.min_x;
   minY = data.min_y;
+  initialCursorPos = data.cursor
+    ? { x: data.cursor.x - minX, y: data.cursor.y - minY }
+    : null;
 
   canvas.width = totalW;
   canvas.height = totalH;
@@ -2691,10 +2690,11 @@ async function main() {
     scrollProg = null;
     scrollCaptureRect = null;
     scrollResult = null;
-    scrollError = "";
+  scrollError = "";
   scrollActionError = "";
   hudOverlapReported = false;
-    scrollStopping = false;
+  hudHiddenForSession = false;
+  scrollStopping = false;
     syncScrollUi();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     document.body.classList.remove("ready");
@@ -2712,23 +2712,29 @@ async function main() {
     render();
   });
 
-  // 后端在「HUD 压在捕获区上」时，于每次采帧前后要求 HUD 让开一下（避免被截进长图）
+  // 后端仅在 HUD 确实压入捕获区时通知隐藏。重叠会话保持隐藏到结束，
+  // 而不是随每一帧恢复，避免最大化窗口滚动时产生视觉闪烁。
   await listen<{ hidden: boolean }>("scroll-capture-hud", (e) => {
-    scrollHud.classList.toggle("hud-hidden", !!e.payload?.hidden);
+    const hidden = !!e.payload?.hidden;
+    if (hidden) hudHiddenForSession = true;
+    if (!hidden && hudHiddenForSession && scrollPhase === "capturing") return;
+    scrollHud.classList.toggle("hud-hidden", hidden);
   });
 
   // 滚动截图：结束事件（成功 → 结果态；失败 → 回 armed 态并显示原因）
   await listen<ScrollCaptureDone>("scroll-capture-done", (e) => {
     const p = e.payload;
     scrollStopping = false;
+    hudHiddenForSession = false;
+    scrollHud.classList.remove("hud-hidden");
     if (p.ok) {
       scrollResult = p;
       scrollPhase = "done";
     } else {
       scrollError = p.message || "";
       scrollPhase = "armed";
-      // 探针阶段就失败（一帧都没拼出来）→ 选区大概率不可滚动，清掉选区让用户重选
-      if ((p.height ?? 0) === 0) selection = null;
+      // 保留选区：滚动面板以选区为显示锚点。此前这里清掉选区，导致失败原因
+      // 虽已收到却没有地方显示，直到下一次点击重新选中才会“补出现”。
     }
     syncScrollUi();
     render();

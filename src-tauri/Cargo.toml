@@ -1,6 +1,6 @@
 [package]
 name = "cloverviewer-tauri"
-version = "0.1.4"
+version = "0.1.5"
 description = "CloverViewer 的 Tauri 2 重实现（Rust 后端 + Web 前端）"
 edition = "2021"
 
@@ -16,6 +16,7 @@ tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

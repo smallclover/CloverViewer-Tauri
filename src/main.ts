@@ -2,6 +2,8 @@ import "./styles.css";
 import { applyI18n, setLang, t, type Lang } from "./i18n";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AppConfig,
@@ -916,6 +918,7 @@ const setScrollHotkey = $<HTMLInputElement>("set-scroll-hotkey");
 const setMagnifier = $<HTMLInputElement>("set-magnifier");
 const setMinimize = $<HTMLInputElement>("set-minimize");
 const setAutostart = $<HTMLInputElement>("set-autostart");
+const checkUpdateButton = $<HTMLButtonElement>("check-update");
 const settingsTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"));
 const settingSections = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
 
@@ -1025,6 +1028,65 @@ setAutostart.addEventListener("change", () => {
       toast(t("toast.autostartFailed", { msg: String(e) }), "error");
     });
 });
+
+let checkingForUpdate = false;
+
+/**
+ * 检查并安装 Tauri 已签名的更新包。
+ *
+ * 自动检查仅在有新版本时才打扰用户；手动检查会明确反馈“已是最新”。
+ * 下载与安装均由 Tauri updater 完成，安装前会校验发布时生成的 .sig 签名。
+ */
+async function checkForUpdate(manual: boolean) {
+  if (checkingForUpdate) return;
+  checkingForUpdate = true;
+  checkUpdateButton.disabled = true;
+  if (manual) toast(t("update.checking"), "info");
+
+  try {
+    const update = await check();
+    if (!update) {
+      if (manual) toast(t("update.latest"), "success");
+      return;
+    }
+
+    const notes = update.body?.trim();
+    const message = notes
+      ? t("update.availableWithNotes", { version: update.version, notes })
+      : t("update.available", { version: update.version });
+    if (!window.confirm(message)) return;
+
+    let downloaded = 0;
+    let contentLength = 0;
+    let lastPercent = -1;
+    toast(t("update.downloading", { percent: 0 }), "info");
+    await update.downloadAndInstall((event) => {
+      if (event.event === "Started") {
+        contentLength = event.data.contentLength ?? 0;
+      } else if (event.event === "Progress") {
+        downloaded += event.data.chunkLength;
+        if (contentLength > 0) {
+          const percent = Math.min(100, Math.floor((downloaded / contentLength) * 100));
+          if (percent !== lastPercent) {
+            lastPercent = percent;
+            toast(t("update.downloading", { percent }), "info");
+          }
+        }
+      }
+    });
+    toast(t("update.installing"), "success");
+    await relaunch();
+  } catch (error) {
+    // 开发环境、离线状态或尚未配置首个 Release 都不应影响正常使用。
+    console.warn("检查更新失败", error);
+    if (manual) toast(t("update.failed", { msg: String(error) }), "error");
+  } finally {
+    checkingForUpdate = false;
+    checkUpdateButton.disabled = false;
+  }
+}
+
+checkUpdateButton.addEventListener("click", () => void checkForUpdate(true));
 $("set-hotkey-apply").addEventListener("click", () => {
   const value = setHotkey.value.trim();
   if (!value) {
@@ -1185,5 +1247,7 @@ async function showStartupNotices() {
   refreshStatus();
   void initScrollCaptureBridge();
   void showStartupNotices();
+  // 延后启动检查，避免与首屏渲染、配置加载竞争；没有更新或网络异常时保持安静。
+  window.setTimeout(() => void checkForUpdate(false), 5_000);
   // 记住上次的语言仅作展示；无目录状态由用户操作进入
 })();

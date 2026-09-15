@@ -72,6 +72,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Tauri Updater 对更新包生成独立签名。私钥只存 GitHub Secrets，绝不提交。
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # __VERSION__ 会被替换为触发本次构建的标签版本（如 v0.1.2 -> 0.1.2）
           tagName: v__VERSION__

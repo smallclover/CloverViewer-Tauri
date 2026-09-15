@@ -9,7 +9,7 @@
     Rust バックエンド + Web フロントエンド（Vite + TypeScript）、内蔵 <a href="https://modelcontextprotocol.io">MCP Server</a> 付き。
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.3-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.4-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Tauri 2 で構築">
@@ -55,8 +55,8 @@ CloverViewer-Tauri は、**Tauri 2** で構築された**無料・オープン�
 [Model Context Protocol](https://modelcontextprotocol.io) サーバーを内蔵し、スクリーンショット機能を AI クライアントに公開します:
 
 *   **stdio モード**: `CloverViewer.exe --mcp`（単一インスタンスの独立プロセス）
-*   **HTTP モード**: `CloverViewer.exe --mcp-http [--port 8787]`（streamable HTTP、エンドポイント `/mcp`）
-*   **ツール**: `take_screenshot(target, path)` — `all_monitors` / `monitor:<n>` / `active_window` に対応、PNG として保存しパスを返す
+*   **HTTP モード**: `CloverViewer.exe --mcp-http --token <secret> [--port 3000]`（streamable HTTP、エンドポイント `/mcp`、ローカル専用。リクエストには `Authorization: Bearer <secret>` が必要）
+*   **ツール**: `list_monitors`、`take_screenshot`、`get_screenshot`、`ocr_screenshot`、`delete_screenshot`。アクティブウィンドウ、指定ディスプレイ、全ディスプレイ、領域のキャプチャに対応し、視覚対応クライアント用の画像コンテンツと構造化メタデータを既定で返します。クライアントが MCP サーバーのローカル ファイルシステムにアクセスできる場合に限り、`delivery: "path"` または `"both"` でパスを要求してください。
 
 Claude Desktop の `claude_desktop_config.json` で接続:
 

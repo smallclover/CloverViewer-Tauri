@@ -9,7 +9,7 @@
     Rust 后端 + Web 前端（Vite + TypeScript），内置 <a href="https://modelcontextprotocol.io">MCP Server</a>。
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.3-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.4-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="基于 Tauri 2">
@@ -55,8 +55,8 @@ CloverViewer-Tauri 是一款**免费开源的 Windows 图片查看器与截图�
 内置 [Model Context Protocol](https://modelcontextprotocol.io) 服务器，把截图能力暴露给 AI 客户端：
 
 *   **stdio 模式**：`CloverViewer.exe --mcp`（单实例独立进程）
-*   **HTTP 模式**：`CloverViewer.exe --mcp-http [--port 8787]`（streamable HTTP，端点 `/mcp`）
-*   **工具**：`take_screenshot(target, path)`——支持 `all_monitors` / `monitor:<n>` / `active_window`，截图保存为 PNG 并返回路径
+*   **HTTP 模式**：`CloverViewer.exe --mcp-http --token <secret> [--port 3000]`（streamable HTTP，端点 `/mcp`，仅监听本机；请求须带 `Authorization: Bearer <secret>`）
+*   **工具**：`list_monitors`、`take_screenshot`、`get_screenshot`、`ocr_screenshot` 与 `delete_screenshot`。截图支持活动窗口、指定显示器、全部显示器和区域；默认直接返回供视觉模型使用的图片内容和结构化元数据。仅在客户端可访问 MCP 服务本地文件系统时，才使用 `delivery: "path"` 或 `"both"` 请求路径。
 
 在 Claude Desktop 的 `claude_desktop_config.json` 中接入：
 
@@ -70,6 +70,8 @@ CloverViewer-Tauri 是一款**免费开源的 Windows 图片查看器与截图�
   }
 }
 ```
+
+完整的接入方式、工具参数、使用场景与隐私说明见 [MCP 使用指南](docs/mcp-guide.md)。
 
 ### ⚙️ 系统功能
 

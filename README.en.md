@@ -9,7 +9,7 @@
     Rust backend + Web frontend (Vite + TypeScript), with a built-in <a href="https://modelcontextprotocol.io">MCP Server</a>.
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.3-2E7D32" alt="Version">
+    <img src="https://img.shields.io/badge/version-0.1.4-2E7D32" alt="Version">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Built with Tauri 2">
@@ -55,8 +55,8 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 A built-in [Model Context Protocol](https://modelcontextprotocol.io) server that exposes the screenshot capability to AI clients:
 
 *   **stdio mode**: `CloverViewer.exe --mcp` (independent single-instance process)
-*   **HTTP mode**: `CloverViewer.exe --mcp-http [--port 8787]` (streamable HTTP, endpoint `/mcp`)
-*   **Tool**: `take_screenshot(target, path)` — supports `all_monitors` / `monitor:<n>` / `active_window`, saves the screenshot as PNG and returns the path
+*   **HTTP mode**: `CloverViewer.exe --mcp-http --token <secret> [--port 3000]` (streamable HTTP at `/mcp`, local-only; requests must include `Authorization: Bearer <secret>`)
+*   **Tools**: `list_monitors`, `take_screenshot`, `get_screenshot`, `ocr_screenshot`, and `delete_screenshot`. Screenshots can target the active window, a monitor, all monitors, or a region. By default they return image content and structured metadata for vision-capable clients; request `delivery: "path"` or `"both"` only when the client can access the MCP server's local filesystem.
 
 Wire it up in Claude Desktop's `claude_desktop_config.json`:
 

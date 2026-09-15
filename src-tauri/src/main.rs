@@ -9,51 +9,54 @@
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
+        // MCP stdio reserves stdout exclusively for JSON-RPC messages. Keep
+        // diagnostics on stderr so a tool failure cannot corrupt the stream.
+        .with_writer(std::io::stderr)
         .init();
 
-    // MCP server 模式：--mcp 在 single-instance 检查之前处理
+    // MCP stdio must allow one independent server process per MCP client.
     if std::env::args().any(|a| a == "--mcp") {
-        let instance_guard = match single_instance::SingleInstance::new("CloverViewer_MCP") {
-            Ok(instance) => {
-                if !instance.is_single() {
-                    eprintln!("Another MCP server instance is already running, exiting.");
-                    return;
-                }
-                instance
-            }
-            Err(err) => {
-                eprintln!("Failed to create single instance guard: {err}");
-                return;
-            }
-        };
-        cloverviewer_tauri_lib::mcp::run_mcp_server(instance_guard);
+        cloverviewer_tauri_lib::mcp::run_mcp_server();
         return;
     }
 
     // MCP HTTP server 模式
     if std::env::args().any(|a| a == "--mcp-http") {
-        let port = std::env::args()
-            .collect::<Vec<_>>()
+        let args = std::env::args().collect::<Vec<_>>();
+        let port = match args
             .windows(2)
             .find_map(|w| {
                 if w[0] == "--port" {
-                    w[1].parse::<u16>().ok()
+                    Some(w[1].parse::<u16>())
                 } else {
                     None
                 }
             })
-            .unwrap_or(3000);
-        // 探测端口是否已被占用
-        if std::net::TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
-            eprintln!(
-                "Port {port} is already in use, another MCP HTTP server may be running. Exiting."
-            );
-            return;
-        }
-        cloverviewer_tauri_lib::mcp::run_mcp_http_server(port);
+            .unwrap_or(Ok(3000))
+        {
+            Ok(port) if port != 0 => port,
+            Ok(_) => {
+                eprintln!("--port must be between 1 and 65535.");
+                return;
+            }
+            Err(_) => {
+                eprintln!("--port must be a number between 1 and 65535.");
+                return;
+            }
+        };
+        let token = match args
+            .windows(2)
+            .find_map(|w| (w[0] == "--token").then_some(w[1].clone()))
+        {
+            Some(token) if !token.trim().is_empty() => token,
+            _ => {
+                eprintln!("--mcp-http requires --token <secret> for local access protection.");
+                return;
+            }
+        };
+        cloverviewer_tauri_lib::mcp::run_mcp_http_server(port, token);
         return;
     }
 

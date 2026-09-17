@@ -1266,12 +1266,28 @@ function onMouseDown(e: MouseEvent) {
 }
 
 function onMouseMove(e: MouseEvent) {
+  // 长截图捕获/结果态的区域已经锁定，鼠标不应再进入普通截图的悬停状态机。
+  // 否则预览 HUD 上的 mousemove 会冒泡到 window，重新把 canvas 写成 crosshair。
+  if (scrollActive()) {
+    if (canvas.style.cursor !== "default") canvas.style.cursor = "default";
+    return;
+  }
   const p = physPos(e);
 
   // 放大镜跟随 + 悬停 UI 检测
   lastMousePos = p;
   const el = document.elementFromPoint(e.clientX, e.clientY);
-  overUI = !!el && !!(el as HTMLElement).closest?.(".toolbar, .popup, #text-input, #ocr-panel");
+  // 所有真正接收鼠标事件的浮层统一从画布状态机隔离。此前只列出 toolbar/popup，
+  // 新增的滚动开始面板/HUD/提示条仍会冒泡到这里，继承到 crosshair。
+  overUI = !!el && !!(el as HTMLElement).closest?.(".ui-interactive, #text-input");
+  if (overUI) {
+    if (canvas.style.cursor !== "default") canvas.style.cursor = "default";
+    if (hoverWin && dragMode !== "pending-win") {
+      hoverWin = null;
+      render();
+    }
+    return;
+  }
 
   // 窗口吸附：仅在"未拉框/未选/未用工具"时，查光标下方窗口，让绿框自动框住它。
   // 节流 ~40ms + 仅在光标移动超过 2px 时查，避免高频 IPC；用序号保证只采纳最新结果。
@@ -1410,9 +1426,8 @@ function onMouseUp(e: MouseEvent) {
     dragMode = "none";
     dragStart = dragCur = null;
     render();
-    // 滚动截图专属热键的语义是「框选即开始」：不要再要求用户点一次开始面板，
-    // 否则不可滚动的窗口会显得要等第二次点击才报错。
-    if (scrollPhase === "armed" && selection) void beginScrollCapture();
+    // 滚动截图在框选后停留在 armed 态，开始面板会以该选区为锚点显示；
+    // 用户确认模式/「从顶部开始」选项后再点击开始，不能在松开鼠标时抢跑。
     return;
   }
 
@@ -1426,7 +1441,7 @@ function onMouseUp(e: MouseEvent) {
     dragStart = dragCur = null;
     dragMode = "none";
     render();
-    if (scrollPhase === "armed" && selection) void beginScrollCapture();
+    // 同上：矩形选区完成后显示开始面板，不自动开跑。
     return;
   }
 
@@ -1799,6 +1814,8 @@ let scrollError = "";
  *  由 HUD 渲染 —— 单独一个字段，避免和面板上的会话错误互相覆盖。 */
 let scrollActionError = "";
 let scrollStopping = false;
+/** 本次会话的模式在启动时锁定，避免捕获过程中切换面板控件造成前后端语义不一致。 */
+let scrollManualMode = false;
 /** 最近一次上报给后端的「HUD 压在捕获区上」状态（只在变化时发命令；每次进入捕获态复位）。
  *  声明放在这里而不是 `reportHudOverlap` 旁边：多个状态复位函数都会写它。 */
 let hudOverlapReported = false;
@@ -1870,8 +1887,21 @@ const shFromTopText = document.createElement("span");
 shFromTopText.dataset.i18n = "shot.scrollFromTop";
 shFromTopLabel.append(shFromTopText);
 
+// 手动模式不注入滚动：用户可以使用滚轮、触控板、滚动条或 PageDown，后端只观察画面变化。
+const shManual = document.createElement("input");
+shManual.type = "checkbox";
+shManual.id = "sh-manual";
+const shManualLabel = document.createElement("label");
+shManualLabel.className = "sh-check";
+shManualLabel.htmlFor = "sh-manual";
+shManualLabel.append(shManual);
+const shManualText = document.createElement("span");
+shManualText.dataset.i18n = "shot.scrollManualMode";
+shManualLabel.append(shManualText);
+shManual.addEventListener("change", () => syncScrollUi());
+
 shPanelActions.append(shStartBtn, shQuitBtn);
-scrollPanel.append(shPanelHead, shPanelMetrics, shPanelHint, shFromTopLabel, shPanelActions);
+scrollPanel.append(shPanelHead, shPanelMetrics, shPanelHint, shManualLabel, shFromTopLabel, shPanelActions);
 uiLayer.appendChild(scrollPanel);
 
 // ---------- 进度 / 结果 HUD ----------
@@ -1946,6 +1976,7 @@ function enterScrollArm() {
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
+  scrollManualMode = false;
   selection = null;
   selectedIndex = null;
   setTool(null);
@@ -1973,11 +2004,12 @@ function exitScrollMode() {
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
+  scrollManualMode = false;
   syncScrollUi();
   void closeScreenshot();
 }
 
-// 「框选完自动开始」：对齐 ShareX 的滚动截图——选定区域松手即开跑，不用再点一次。
+// 由开始面板（或 armed 态的 Enter）明确启动，避免用户来不及选择自动/手动模式。
 async function beginScrollCapture() {
   const sel = selection;
   if (!sel || sel.w < 32 || sel.h < MIN_SCROLL_SEL_H) {
@@ -1995,6 +2027,7 @@ async function beginScrollCapture() {
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
+  scrollManualMode = shManual.checked;
   syncScrollUi();
   render();
   // HUD 已按当前选区完成落位。重叠时优先由 Windows 将整个覆盖窗排除
@@ -2009,8 +2042,9 @@ async function beginScrollCapture() {
       y: Math.round(sel.y + minY),
       w: Math.round(sel.w),
       h: Math.round(sel.h),
+      mode: scrollManualMode ? "manual" : "auto",
       // 默认 false：从当前可见位置往下截；勾了才先滚到页面顶部
-      auto_scroll_top: shFromTop.checked,
+      auto_scroll_top: !scrollManualMode && shFromTop.checked,
       // 与请求一起交给后端：重叠时先尝试 WDA_EXCLUDEFROMCAPTURE，失败才回退隐藏 HUD。
       hide_hud_during_capture: hudOverlapReported,
     });
@@ -2166,6 +2200,9 @@ function syncScrollUi() {
   // 选好区域后才显示面板；选区不合要求时「开始」不可点，并且**直接说明原因**
   // （选区太矮 = 没有重叠区，拼不了）——而不是把按钮置灰让用户猜。
   shStartBtn.disabled = !scrollSelectionOk();
+  // 手动模式不允许「从顶部开始」：它不应在用户不知情时移动目标内容。
+  shFromTop.disabled = shManual.checked;
+  shFromTopLabel.style.opacity = shManual.checked ? "0.5" : "";
   const selTooShort = !!selection && selection.h < MIN_SCROLL_SEL_H;
   const selShortCaution = !!selection
     && selection.h >= MIN_SCROLL_SEL_H
@@ -2185,26 +2222,31 @@ function syncScrollUi() {
     ? t("shot.scrollFailed", { msg: scrollError })
     : scrollSelectionHint();
   shPanelHint.className = `sh-status${scrollError || selTooShort ? " err" : selShortCaution ? " warn" : ""}`;
-  shStartBtn.textContent = t("shot.scrollStart");
+  shStartBtn.textContent = shManual.checked ? t("shot.scrollManualStart") : t("shot.scrollStart");
   shQuitBtn.textContent = t("shot.scrollCancel");
 
   // ---- HUD ----
   const p = scrollProg;
   const res = scrollResult;
   if (scrollPhase === "capturing") {
+    const manual = scrollManualMode || p?.method === "manual";
     // REC 手感：呼吸红点 + 标题（扫一眼就知道在录；边框颜色/任务栏进度是补充通道）
     shRecDot.style.display = "";
-    shHudTitleText.textContent = t("shot.scrollCapturing");
+    shHudTitleText.textContent = manual ? t("shot.scrollManualCapturing") : t("shot.scrollCapturing");
     const stage = p?.stage === "probing" ? t("shot.scrollProbing") : "";
     const low = p?.stage === "low_confidence" ? t("shot.scrollStageLow") : "";
-    shHudBadge.textContent = scrollStopping ? t("shot.scrollStopping") : stage || t("shot.scrollCapturing");
+    shHudBadge.textContent = scrollStopping
+      ? t(manual ? "shot.scrollManualFinishing" : "shot.scrollStopping")
+      : stage || (manual ? t("shot.scrollManualBadge") : t("shot.scrollCapturing"));
     shHudBadge.className = `sh-badge${low ? " warn" : " recording"}`;
     shHudMetrics.style.display = "grid";
     shHudPrimaryMetric.label.textContent = t("shot.scrollCaptured");
     shHudPrimaryMetric.value.textContent = p && p.height > 0 ? `${p.height}px` : "—";
     shHudSecondaryMetric.label.textContent = t("shot.scrollFrameCount");
     shHudSecondaryMetric.value.textContent = p ? String(p.frames) : "—";
-    shHudStatus.textContent = scrollStopping ? t("shot.scrollStopping") : "";
+    shHudStatus.textContent = scrollStopping
+      ? t(manual ? "shot.scrollManualFinishing" : "shot.scrollStopping")
+      : "";
     shHudStatus.className = `sh-status${low ? " warn" : ""}`;
     const detail = low || stage || p?.message || "";
     shHudDetail.textContent = detail;
@@ -2212,8 +2254,8 @@ function syncScrollUi() {
     shPreview.classList.remove("on");
     shStopBtn.style.display = scrollPassthrough() ? "none" : "";
     shStopBtn.disabled = scrollStopping;
-    shStopBtn.textContent = t("shot.scrollStop");
-    shEscStop.textContent = t("shot.scrollEscStop");
+    shStopBtn.textContent = t(manual ? "shot.scrollManualFinish" : "shot.scrollStop");
+    shEscStop.textContent = t(manual ? "shot.scrollManualEscFinish" : "shot.scrollEscStop");
     shEscStop.classList.toggle("on", scrollPassthrough());
     shHudActions.classList.remove("result");
     for (const b of [shCopyBtn, shSaveBtn, shOpenBtn]) b.style.display = "none";
@@ -2401,7 +2443,8 @@ function reportHudOverlap(region: CssBox) {
 
 /**
  * 捕获/完成态的画布：整屏压暗 → **挖空选区**（透明，透出真实窗口）→ 选区外框。
- * 挖空的边界比选区各外扩 2px，边框画在外扩位置，保证选区本体一个像素都不被覆盖。
+ * 采集进行中绝不绘制边框：即使它理论上压在捕获区外，混合 DPI/整屏选区的边界
+ * 取整仍可能让一像素绿线被 BitBlt 带进结果。
  */
 function renderScrollOverlay() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -2417,19 +2460,20 @@ function renderScrollOverlay() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.clearRect(cap.x - grow, cap.y - grow, cap.w + grow * 2, cap.h + grow * 2);
 
-  const lw = physScale();
-  const color =
-    scrollProg?.stage === "low_confidence"
-      ? "#ffb300"
-      : scrollError
-        ? "#ff5252"
-        : "#00ff00";
+  if (scrollPhase !== "capturing") {
+    const lw = physScale();
+    const color =
+      scrollProg?.stage === "low_confidence"
+        ? "#ffb300"
+        : scrollError
+          ? "#ff5252"
+          : "#00ff00";
 
-  // 只画用户框的那一块（补足的内部范围不画任何东西：把实现细节摆到用户面前只会造成困惑）
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lw;
-  // 边框中心线落在 s.x-grow/2 处 → 线宽 2*grow 时正好覆盖 [s.x-grow, s.x]
-  ctx.strokeRect(s.x - grow / 2, s.y - grow / 2, s.w + grow, s.h + grow);
+    // 结果态才重画用户框；此时后台已经不再采集，边框不可能进入长图。
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.strokeRect(s.x - grow / 2, s.y - grow / 2, s.w + grow, s.h + grow);
+  }
 }
 
 /** OCR 面板在滚动模式里要让位（否则会压在选区上/干扰视线） */
@@ -2534,6 +2578,8 @@ async function loadScreenshot() {
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
+  scrollManualMode = false;
+  shManual.checked = false;
   void discardScrollCapture();
   syncScrollUi();
 
@@ -2690,11 +2736,13 @@ async function main() {
     scrollProg = null;
     scrollCaptureRect = null;
     scrollResult = null;
-  scrollError = "";
-  scrollActionError = "";
-  hudOverlapReported = false;
-  hudHiddenForSession = false;
-  scrollStopping = false;
+    scrollError = "";
+    scrollActionError = "";
+    hudOverlapReported = false;
+    hudHiddenForSession = false;
+    scrollStopping = false;
+    scrollManualMode = false;
+    shManual.checked = false;
     syncScrollUi();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     document.body.classList.remove("ready");
@@ -2703,6 +2751,8 @@ async function main() {
   // 滚动截图：进度事件（帧数/高度/注入方式/缩略预览）
   await listen<ScrollCaptureProgress>("scroll-capture-progress", (e) => {
     scrollProg = e.payload;
+    scrollStopping = e.payload.stage === "finishing";
+    if (e.payload.method === "manual") scrollManualMode = true;
     // 后端上报的实际捕获区（虚拟桌面物理像素）→ 转成截图窗内坐标
     const cap = e.payload.capture;
     scrollCaptureRect = cap
@@ -2727,6 +2777,10 @@ async function main() {
     scrollStopping = false;
     hudHiddenForSession = false;
     scrollHud.classList.remove("hud-hidden");
+    // 结果事件与最后一条进度事件跨线程投递，顺序不能假设。无论后端最后一条
+    // 进度是否已标记终态，结果 HUD 都必须重新接收鼠标点击。
+    if (scrollProg) scrollProg = { ...scrollProg, input_passthrough: false };
+    scrollHud.classList.remove("clickthrough");
     if (p.ok) {
       scrollResult = p;
       scrollPhase = "done";

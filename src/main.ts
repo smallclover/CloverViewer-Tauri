@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { APP_VERSION } from "./version";
 import {
   AppConfig,
   ImageEntry,
@@ -1151,10 +1152,13 @@ const ABOUT_LINKS: Array<[string, string]> = [
 let aboutInfoLoaded = false;
 
 /**
- * 填充版本信息。HTML 里已写好与 tauri.conf.json 一致的静态兜底值，
- * 这里只是用运行时真实值覆盖，取不到也不会留空。
+ * 先用构建时版本填充，再用 Tauri 运行时真实值覆盖。
+ * 即使后端暂不可用，About 也会显示本次构建的版本。
  */
 async function fillAboutInfo() {
+  aboutVersion.textContent = `v${APP_VERSION}`;
+  infoVersion.textContent = APP_VERSION;
+
   try {
     const info = await getAppInfo();
     aboutVersion.textContent = `v${info.version}`;
@@ -1171,7 +1175,7 @@ async function fillAboutInfo() {
     const arch = info.arch === "x86_64" ? "x64" : info.arch;
     infoRuntime.textContent = `${os} · ${arch}`;
   } catch {
-    // 后端不可用时保留 HTML 里的静态值
+    // 后端不可用时保留来自 package.json 的构建版本。
   }
 }
 

@@ -9,7 +9,7 @@
     Rust backend + Web frontend (Vite + TypeScript), with a built-in <a href="https://modelcontextprotocol.io">MCP Server</a>.
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.4-2E7D32" alt="Version">
+    <img src="https://img.shields.io/github/v/release/smallclover/CloverViewer-Tauri?display_name=tag&sort=semver&color=2E7D32" alt="Latest release">
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <img src="https://img.shields.io/badge/platform-Windows-blue" alt="Platform: Windows">
     <img src="https://img.shields.io/badge/Tauri-2-FFC131" alt="Built with Tauri 2">

@@ -112,6 +112,9 @@
       }
       .ui-interactive {
         pointer-events: auto;
+        /* 页面底层默认是用于框选的十字；任何浮层面板的空白处都应是普通指针。
+           各按钮、标签、文本区会在自己的规则中覆写为 pointer / text。 */
+        cursor: default;
       }
 
       /* ============ 浮动工具栏（玻璃拟态 · 暗色） ============ */
@@ -410,6 +413,8 @@
       }
       #scroll-hud {
         width: min(280px, calc(100vw - 20px));
+        /* body 默认是框选十字；结果缩略图只是预览，不应继承该鼠标样式。 */
+        cursor: default;
       }
       #scroll-panel.open,
       #scroll-hud.open {

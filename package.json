@@ -1,13 +1,15 @@
 {
   "name": "cloverviewer-tauri",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "version:sync": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check",
+    "build": "npm run version:sync && tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "npm run version:sync && tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

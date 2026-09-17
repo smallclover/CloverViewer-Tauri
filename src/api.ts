@@ -166,6 +166,8 @@ export interface ScrollCaptureRequest {
   y: number;
   w: number;
   h: number;
+  /** auto = 程序注入滚动；manual = 用户自己滚动，程序仅在画面稳定后采帧。 */
+  mode?: "auto" | "manual";
   /** "auto"（默认，后端探针自动选注入方式）或 wheel_post / wheel_post_root / wheel_input /
    *  pagedown / vscroll */
   method?: string;
@@ -185,7 +187,9 @@ export interface ScrollCaptureProgress {
   /** 与后端 `ScrollCaptureProgress::stage` 一一对应（含 cancelled：用户 Esc / 点停止） */
   stage:
     | "probing"
+    | "waiting"
     | "capturing"
+    | "finishing"
     | "matched"
     | "low_confidence"
     | "done"

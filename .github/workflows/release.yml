@@ -30,6 +30,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # package.json 是应用版本的唯一来源；标签必须与它完全一致，避免发布包、
+      # About 页面和 Release 标题出现不同版本。
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $sourceVersion = (Get-Content -Raw package.json | ConvertFrom-Json).version
+          $tagVersion = '${{ github.ref_name }}'.TrimStart('v')
+          if ($sourceVersion -ne $tagVersion) {
+            throw "Release tag v$tagVersion does not match package.json version $sourceVersion."
+          }
+          npm run version:check
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 

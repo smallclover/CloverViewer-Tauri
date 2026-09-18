@@ -63,7 +63,6 @@ pub fn scan_directory(dir: &Path) -> Vec<ImageEntry> {
             let (width, height) = image::ImageReader::open(&path)
                 .ok()
                 .and_then(|r| r.into_dimensions().ok())
-                .map(|(w, h)| (w, h))
                 .unwrap_or((0, 0));
 
             let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
@@ -114,7 +113,7 @@ mod chrono_like {
     impl LocalTime {
         /// RFC3339 本地时间（Windows 时区通过 powershell 获取太重，
         /// 这里用简单 UTC 偏移近似：仅输出 UTC，前端负责本地化显示）
-        pub fn to_rfc3339(self) -> String {
+        pub fn to_rfc3339(&self) -> String {
             let days = self.secs.div_euclid(86400);
             let rem = self.secs.rem_euclid(86400);
             let (h, m, s) = (rem / 3600, (rem % 3600) / 60, rem % 60);

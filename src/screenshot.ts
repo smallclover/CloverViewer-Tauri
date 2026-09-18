@@ -19,6 +19,24 @@ import {
 } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
 import { listen } from "@tauri-apps/api/event";
+import { ShapeHistory } from "./screenshot/history";
+import { drawAnnotation } from "./screenshot/annotation-renderer";
+import { forEachMosaicStamp } from "./screenshot/mosaic";
+import { overlaps, placeScrollOverlay, placeSelectionOverlay } from "./screenshot/overlay-layout";
+import { resizeShape, type ResizeOrigin } from "./screenshot/resize";
+import { blitScreenRegion, drawScreenBase } from "./screenshot/screen-compositor";
+import {
+  cloneShape,
+  isShapeHit,
+  normRect,
+  shapeBBox,
+  shapeHandles,
+  translateShape,
+  type Pt,
+  type Rect,
+  type Shape,
+  type Tool,
+} from "./screenshot/geometry";
 
 // ============================================================
 // 截图标注器 —— 移植自 CloverViewer feature/screenshot 的 Canvas 2D 重写
@@ -27,29 +45,6 @@ import { listen } from "@tauri-apps/api/event";
 // 前端仅做交互绘制；导出时用同一套 draw 逻辑在离屏 Canvas 上合成，
 // 再交给 Rust 落盘/写剪贴板。
 // ============================================================
-
-interface Pt {
-  x: number;
-  y: number;
-}
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-type Tool = "rect" | "circle" | "arrow" | "pen" | "mosaic" | "text";
-
-interface Shape {
-  tool: Tool;
-  start: Pt;
-  end: Pt;
-  color: string;
-  strokeWidth: number; // 逻辑像素
-  text?: string;
-  points?: Pt[];
-}
 
 const MIN_SHAPE_SIZE = 4; // 物理像素
 const HANDLE_HIT = 12; // 控制点命中半径（物理像素；不再随 devicePixelRatio 缩放）
@@ -65,8 +60,16 @@ function physScale(): number {
   return w > 0 ? totalW / w : 1;
 }
 const PALETTE = [
-  "#cc0000", "#ff0000", "#ff6600", "#ffcc00", "#00cc00",
-  "#0099ff", "#0000ff", "#9900ff", "#000000", "#ffffff",
+  "#cc0000",
+  "#ff0000",
+  "#ff6600",
+  "#ffcc00",
+  "#00cc00",
+  "#0099ff",
+  "#0000ff",
+  "#9900ff",
+  "#000000",
+  "#ffffff",
 ];
 
 // ---------- 状态 ----------
@@ -92,11 +95,10 @@ let pendingWinSelect: Rect | null = null;
 let tool: Tool | null = null;
 let color = DEFAULT_COLOR;
 let strokeWidth = DEFAULT_STROKE;
-let mosaicWidth = DEFAULT_MOSAIC;
+const mosaicWidth = DEFAULT_MOSAIC;
 
 let shapes: Shape[] = [];
-let undoStack: Shape[][] = [];
-let redoStack: Shape[][] = [];
+const history = new ShapeHistory();
 
 let curShape: Shape | null = null; // 正在绘制
 let selectedIndex: number | null = null;
@@ -107,7 +109,9 @@ let dragMode: DragMode = "none";
 let resizeHandle = -1;
 let moveStart: Pt | null = null;
 let moveOrigShape: Shape | null = null;
-let resizeOrig: { start: Pt; end: Pt; strokeWidth: number } | null = null;
+let moveHistorySnapshot: Shape[] | null = null;
+let resizeOrig: ResizeOrigin | null = null;
+let resizeHistorySnapshot: Shape[] | null = null;
 let moveSelectionStart: Pt | null = null;
 let moveSelectionOrig: Rect | null = null;
 
@@ -122,10 +126,20 @@ let copiedAt = 0; // 最近一次复制色值的时间戳
 let overUI = false; // 光标是否悬停在工具栏/弹窗上
 
 // ---------- DOM ----------
-const root = document.getElementById("screenshot-root")!;
-const canvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
-const ctx = canvas.getContext("2d")!;
-const uiLayer = document.getElementById("ui-layer")!;
+function requiredElement<T extends HTMLElement>(id: string): T {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`Missing screenshot element: ${id}`);
+  return element as T;
+}
+function requiredContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D context is unavailable");
+  return context;
+}
+const root = requiredElement("screenshot-root");
+const canvas = requiredElement<HTMLCanvasElement>("overlay-canvas");
+const ctx = requiredContext(canvas);
+const uiLayer = requiredElement("ui-layer");
 
 // ============================================================
 // 图标
@@ -313,7 +327,7 @@ let nativeColorInput: HTMLInputElement | null = null;
   nativeColorInput = native;
   for (const c of PALETTE) {
     const cell = document.createElement("div");
-    cell.className = "cell" + (c === color ? " sel" : "");
+    cell.className = `cell${c === color ? " sel" : ""}`;
     cell.style.background = c;
     cell.addEventListener("click", () => {
       color = c;
@@ -466,8 +480,10 @@ function positionHelpBox() {
     bottom: tb.bottom - rootRect.top,
   };
   const hit =
-    toolbarBox.left < left + hbW && toolbarBox.right > left
-    && toolbarBox.top < top + hbH && toolbarBox.bottom > top;
+    toolbarBox.left < left + hbW &&
+    toolbarBox.right > left &&
+    toolbarBox.top < top + hbH &&
+    toolbarBox.bottom > top;
   helpBox.style.transform = hit
     ? `translateY(-${Math.ceil(top + hbH - toolbarBox.top + 8)}px)`
     : "";
@@ -506,16 +522,11 @@ uiLayer.appendChild(ocrPanel);
 
 function positionOcrPanel() {
   if (!selection) return;
-  const r = root.getBoundingClientRect();
-  const kx = r.width / totalW, ky = r.height / totalH;
-  const pw = 320, ph = 220; // 逻辑像素
-  let px = selection.x * kx;
-  let py = (selection.y + selection.h) * ky + 10;
-  if (py + ph > r.height) py = selection.y * ky - ph - 10;
-  px = Math.max(8, Math.min(px, r.width - pw - 8));
-  py = Math.max(8, Math.min(py, r.height - ph - 8));
-  ocrPanel.style.left = `${px}px`;
-  ocrPanel.style.top = `${py}px`;
+  const pw = 320,
+    ph = 220; // 逻辑像素
+  const point = placeSelectionOverlay(toCssBox(selection), rootBoxCss(), { w: pw, h: ph }, "start");
+  ocrPanel.style.left = `${point.x}px`;
+  ocrPanel.style.top = `${point.y}px`;
   ocrPanel.style.width = `${pw}px`;
   ocrPanel.style.height = `${ph}px`;
 }
@@ -530,94 +541,11 @@ function showOcrPanel(text: string, isError = false) {
 // ============================================================
 // 几何工具
 // ============================================================
-function normRect(a: Pt, b: Pt): Rect {
-  return {
-    x: Math.min(a.x, b.x),
-    y: Math.min(a.y, b.y),
-    w: Math.abs(a.x - b.x),
-    h: Math.abs(a.y - b.y),
-  };
-}
-
-function shapeBBox(s: Shape): Rect {
-  // pen / mosaic 都用 points 数组定位（mosaic 现在是笔刷式：每个 point 涂一个 bs×bs 的块）
-  if ((s.tool === "pen" || s.tool === "mosaic") && s.points && s.points.length) {
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of s.points) {
-      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
-      x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
-    }
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-  }
-  return normRect(s.start, s.end);
-}
-
-function distToSegment(p: Pt, a: Pt, b: Pt): number {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const l2 = dx * dx + dy * dy;
-  if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
-  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-}
-
-function hitShape(s: Shape, p: Pt): boolean {
-  const tol = 8 * physScale();
-  const bb = shapeBBox(s);
-  switch (s.tool) {
-    case "arrow":
-      return distToSegment(p, s.start, s.end) <= tol;
-    case "pen":
-      if (s.points && s.points.length > 1) {
-        for (let i = 0; i < s.points.length - 1; i++) {
-          if (distToSegment(p, s.points[i], s.points[i + 1]) <= tol) return true;
-        }
-        return false;
-      }
-      return p.x >= bb.x && p.x <= bb.x + bb.w && p.y >= bb.y && p.y <= bb.y + bb.h;
-    case "circle": {
-      const cx = bb.x + bb.w / 2, cy = bb.y + bb.h / 2;
-      const a = Math.max(bb.w / 2, 0.1), b = Math.max(bb.h / 2, 0.1);
-      const dx = p.x - cx, dy = p.y - cy, dist = Math.hypot(dx, dy);
-      if (dist < 0.1 || a < 0.1 || b < 0.1) return false;
-      const r = (a * b) / Math.sqrt((b * (dx / dist)) ** 2 + (a * (dy / dist)) ** 2);
-      return Math.abs(dist - r) <= tol;
-    }
-    default:
-      return p.x >= bb.x - tol && p.x <= bb.x + bb.w + tol && p.y >= bb.y - tol && p.y <= bb.y + bb.h + tol;
-  }
-}
-
 function hitTestShapes(p: Pt): number | null {
   for (let i = shapes.length - 1; i >= 0; i--) {
-    if (hitShape(shapes[i], p)) return i;
+    if (isShapeHit(shapes[i], p, 8 * physScale())) return i;
   }
   return null;
-}
-
-// 控制点（物理坐标）
-function shapeHandles(s: Shape): Pt[] {
-  const bb = shapeBBox(s);
-  if (s.tool === "arrow") return [s.start, s.end];
-  if (s.tool === "text") {
-    return [
-      { x: bb.x, y: bb.y },
-      { x: bb.x + bb.w, y: bb.y },
-      { x: bb.x + bb.w, y: bb.y + bb.h },
-      { x: bb.x, y: bb.y + bb.h },
-    ];
-  }
-  const cx = bb.x + bb.w / 2, cy = bb.y + bb.h / 2;
-  return [
-    { x: bb.x, y: bb.y },
-    { x: bb.x + bb.w, y: bb.y },
-    { x: bb.x + bb.w, y: bb.y + bb.h },
-    { x: bb.x, y: bb.y + bb.h },
-    { x: cx, y: bb.y },
-    { x: bb.x + bb.w, y: cy },
-    { x: cx, y: bb.y + bb.h },
-    { x: bb.x, y: cy },
-  ];
 }
 
 function hitHandle(p: Pt): { index: number; handle: number } | null {
@@ -636,73 +564,6 @@ function hitHandle(p: Pt): { index: number; handle: number } | null {
 // ============================================================
 // 绘制
 // ============================================================
-function drawArrowShape(c: CanvasRenderingContext2D, start: Pt, end: Pt, sw: number) {
-  c.beginPath();
-  c.moveTo(start.x, start.y);
-  c.lineTo(end.x, end.y);
-  c.stroke();
-  const dx = end.x - start.x, dy = end.y - start.y;
-  const len = Math.hypot(dx, dy);
-  if (len === 0) return;
-  const ux = dx / len, uy = dy / len;
-  const asz = (12 + sw * 2) * physScale();
-  const px = -uy * asz * 0.5, py = ux * asz * 0.5;
-  c.beginPath();
-  c.moveTo(end.x - ux * asz + px, end.y - uy * asz + py);
-  c.lineTo(end.x, end.y);
-  c.lineTo(end.x - ux * asz - px, end.y - uy * asz - py);
-  c.stroke();
-}
-
-function textFontSize(s: Shape): number {
-  return (20 + s.strokeWidth * 2) * physScale();
-}
-
-function drawShape(c: CanvasRenderingContext2D, s: Shape) {
-  const sw = s.strokeWidth * physScale();
-  c.strokeStyle = s.color;
-  c.fillStyle = s.color;
-  c.lineWidth = sw;
-  c.lineCap = "round";
-  c.lineJoin = "round";
-
-  const bb = shapeBBox(s);
-  switch (s.tool) {
-    case "rect":
-      c.strokeRect(bb.x, bb.y, bb.w, bb.h);
-      break;
-    case "circle":
-      c.beginPath();
-      c.ellipse(bb.x + bb.w / 2, bb.y + bb.h / 2, bb.w / 2, bb.h / 2, 0, 0, Math.PI * 2);
-      c.stroke();
-      break;
-    case "arrow":
-      drawArrowShape(c, s.start, s.end, sw);
-      break;
-    case "pen":
-      if (s.points && s.points.length > 1) {
-        c.beginPath();
-        c.moveTo(s.points[0].x, s.points[0].y);
-        for (let i = 1; i < s.points.length; i++) c.lineTo(s.points[i].x, s.points[i].y);
-        c.stroke();
-      }
-      break;
-    case "text": {
-      const fs = textFontSize(s);
-      c.font = `600 ${fs}px "Segoe UI", system-ui, sans-serif`;
-      c.textBaseline = "top";
-      const lh = fs * 1.2;
-      (s.text || "").split("\n").forEach((ln, i) => {
-        c.fillText(ln, s.start.x, s.start.y + i * lh);
-      });
-      break;
-    }
-    case "mosaic":
-      // 马赛克单独用采样绘制
-      break;
-  }
-}
-
 // block 是**逻辑像素**的块边长（与原版 egui 的 mosaic_width 同义），
 // 内部转物理像素再切块：原版 block_size_phys = mosaic_width * ppp。
 // 之前直接拿 16 当物理像素用，150% DPI 下块只有原版 2/3 大（糊得不够）。
@@ -717,73 +578,26 @@ function drawMosaic(c: CanvasRenderingContext2D, s: Shape) {
   const tmp = document.createElement("canvas");
   tmp.width = 1;
   tmp.height = 1;
-  const tc = tmp.getContext("2d")!;
+  const tc = requiredContext(tmp);
   const paintDot = (px: number, py: number) => {
     const dx = px - bs / 2;
     const dy = py - bs / 2;
-    blitRegion(tc, dx, dy, bs, bs, 0, 0, 1, 1);
+    blitScreenRegion(tc, screenSources(), dx, dy, bs, bs, 0, 0, 1, 1);
     const d = tc.getImageData(0, 0, 1, 1).data;
     c.fillStyle = `rgba(${d[0]},${d[1]},${d[2]},${(d[3] / 255).toFixed(3)})`;
     c.fillRect(dx, dy, bs, bs);
   };
-  for (let i = 0; i < points.length; i++) {
-    const cur = points[i];
-    paintDot(cur.x, cur.y);
-    if (i > 0) {
-      const prev = points[i - 1];
-      const dist = Math.hypot(cur.x - prev.x, cur.y - prev.y);
-      if (dist > bs) {
-        // 相邻两点之间补块（避免快速拖动时块间距过大产生的可见空隙）
-        const steps = Math.max(1, Math.ceil(dist / bs));
-        for (let j = 1; j < steps; j++) {
-          const t = j / steps;
-          paintDot(prev.x + (cur.x - prev.x) * t, prev.y + (cur.y - prev.y) * t);
-        }
-      }
-    }
-  }
+  forEachMosaicStamp(points, bs, (point) => paintDot(point.x, point.y));
 }
 
 // 从多屏截图采样一块区域，绘制到目标矩形（用于马赛克/放大镜/导出/OCR）。
 // 坐标系约定：src 侧（sx, sy）与 screens[] 一律是 **root-local 物理像素**；
 // dst 侧（dx, dy, dw, dh）是目标 canvas 的坐标。两侧各自独立，不混用。
-function blitRegion(
-  dst: CanvasRenderingContext2D,
-  sx: number, sy: number, sw: number, sh: number,
-  dx: number, dy: number, dw: number, dh: number,
-) {
-  dst.save();
-  dst.beginPath();
-  dst.rect(dx, dy, dw, dh);
-  dst.clip();
-  dst.imageSmoothingEnabled = true;
-  for (const s of screens) {
-    const ox = Math.max(sx, s.x), oy = Math.max(sy, s.y);
-    const ex = Math.min(sx + sw, s.x + s.w), ey = Math.min(sy + sh, s.y + s.h);
-    if (ox >= ex || oy >= ey) continue;
-    const sxr = dw / sw, syr = dh / sh;
-    dst.drawImage(
-      s.img,
-      ox - s.x, oy - s.y, ex - ox, ey - oy,
-      dx + (ox - sx) * sxr, dy + (oy - sy) * syr, (ex - ox) * sxr, (ey - oy) * syr,
-    );
-  }
-  dst.restore();
-}
-
-/// 把多屏截图合成到整张画布上：先用不透明深色铺满（填补 2K 下方那截"无屏幕"的空白，
-/// 也避免透明缝隙透出活桌面），再按**精确整数物理坐标**绘制各屏，杜绝亚像素拼接细缝。
-function drawBase(c: CanvasRenderingContext2D) {
-  c.fillStyle = "#14161c";
-  c.fillRect(0, 0, c.canvas.width, c.canvas.height);
-  for (const s of screens) {
-    c.drawImage(s.img, s.x, s.y, s.w, s.h);
-  }
+function screenSources() {
+  return screens.map(({ img, x, y, w, h }) => ({ image: img, x, y, w, h }));
 }
 
 function render() {
-  const r = root.getBoundingClientRect();
-
   // 滚动截图进行中/已完成：只画「压暗 + 选区挖空 + 外框」，不画底图/标注/工具栏。
   // 选区挖空是硬要求——后端按屏幕像素捕获，覆盖窗在选区里必须完全透明。
   if (scrollActive()) {
@@ -795,13 +609,12 @@ function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // 拼接底图
-  drawBase(ctx);
+  drawScreenBase(ctx, screenSources());
 
   // 遮罩：有选区/拖动时，选区外变暗（选区用底图重新覆盖，而不是 clearRect 挖洞——
   // 挖洞会清掉画布底图、透出活桌面，跨屏时恰恰在交界处露馅）
-  const selRect = dragMode === "select" && dragStart && dragCur
-    ? normRect(dragStart, dragCur)
-    : selection;
+  const selRect =
+    dragMode === "select" && dragStart && dragCur ? normRect(dragStart, dragCur) : selection;
   if (selRect && selRect.w > 0 && selRect.h > 0) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -809,7 +622,7 @@ function render() {
     ctx.beginPath();
     ctx.rect(selRect.x, selRect.y, selRect.w, selRect.h);
     ctx.clip();
-    drawBase(ctx);
+    drawScreenBase(ctx, screenSources());
     ctx.restore();
   }
 
@@ -818,13 +631,13 @@ function render() {
     const s = shapes[i];
     // 每个图形用自己的 strokeWidth（创建时快照），改工具栏粗细不影响已画的
     if (s.tool === "mosaic") drawMosaic(ctx, s);
-    else drawShape(ctx, s);
+    else drawAnnotation(ctx, s, physScale());
   }
 
   // 当前绘制中的图形
   if (curShape) {
     if (curShape.tool === "mosaic") drawMosaic(ctx, curShape);
-    else drawShape(ctx, curShape);
+    else drawAnnotation(ctx, curShape, physScale());
   }
 
   // 选区边框（绿色 + 8 锚点）：用 selRect（= 拖拽中的动态选区 或 已定选区），
@@ -844,25 +657,32 @@ function render() {
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#3c3c3c";
       ctx.lineWidth = 1;
-      ctx.fillRect(h.x - 5 * physScale(), h.y - 5 * physScale(), 10 * physScale(), 10 * physScale());
-      ctx.strokeRect(h.x - 5 * physScale(), h.y - 5 * physScale(), 10 * physScale(), 10 * physScale());
+      ctx.fillRect(
+        h.x - 5 * physScale(),
+        h.y - 5 * physScale(),
+        10 * physScale(),
+        10 * physScale(),
+      );
+      ctx.strokeRect(
+        h.x - 5 * physScale(),
+        h.y - 5 * physScale(),
+        10 * physScale(),
+        10 * physScale(),
+      );
     }
   }
 
   // 工具栏定位
   if (selection) {
     toolbar.style.display = "flex";
-    const tbW = toolbar.offsetWidth || 360;
-    const tbH = toolbar.offsetHeight || 44;
-    const rw = r.width, rh = r.height;
-    const kx = rw / totalW, ky = rh / totalH;
-    let tx = (selection.x + selection.w) * kx - tbW;
-    let ty = (selection.y + selection.h) * ky + 10;
-    if (ty + tbH > rh) ty = selection.y * ky - tbH - 10;
-    tx = Math.max(8, Math.min(tx, rw - tbW - 8));
-    ty = Math.max(8, Math.min(ty, rh - tbH - 8));
-    toolbar.style.left = `${tx}px`;
-    toolbar.style.top = `${ty}px`;
+    const point = placeSelectionOverlay(
+      toCssBox(selection),
+      rootBoxCss(),
+      { w: toolbar.offsetWidth || 360, h: toolbar.offsetHeight || 44 },
+      "end",
+    );
+    toolbar.style.left = `${point.x}px`;
+    toolbar.style.top = `${point.y}px`;
   } else {
     toolbar.style.display = "none";
   }
@@ -907,12 +727,18 @@ function drawGreenBox(c: CanvasRenderingContext2D, r: Rect) {
     Math.max(1, r.h - lw - visualInset * 2),
   );
   if (r.w > asz * 3 && r.h > asz * 3) {
-    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const cx = r.x + r.w / 2,
+      cy = r.y + r.h / 2;
     c.fillStyle = "#00ff00";
     for (const [px, py] of [
-      [r.x + asz / 2, r.y + asz / 2], [r.x + r.w - asz / 2, r.y + asz / 2],
-      [r.x + r.w - asz / 2, r.y + r.h - asz / 2], [r.x + asz / 2, r.y + r.h - asz / 2],
-      [cx, r.y + asz / 2], [cx, r.y + r.h - asz / 2], [r.x + asz / 2, cy], [r.x + r.w - asz / 2, cy],
+      [r.x + asz / 2, r.y + asz / 2],
+      [r.x + r.w - asz / 2, r.y + asz / 2],
+      [r.x + r.w - asz / 2, r.y + r.h - asz / 2],
+      [r.x + asz / 2, r.y + r.h - asz / 2],
+      [cx, r.y + asz / 2],
+      [cx, r.y + r.h - asz / 2],
+      [r.x + asz / 2, cy],
+      [r.x + r.w - asz / 2, cy],
     ]) {
       c.fillRect(px - asz / 2, py - asz / 2, asz, asz);
     }
@@ -944,7 +770,7 @@ function drawStyleBox(c: CanvasRenderingContext2D, r: Rect) {
 const magTemp = document.createElement("canvas");
 magTemp.width = MAG_GRID;
 magTemp.height = MAG_GRID;
-const magTempCtx = magTemp.getContext("2d")!;
+const magTempCtx = requiredContext(magTemp);
 let magWarnedZero = false;
 
 function sampleMagnifier(cx: number, cy: number): Uint8ClampedArray | null {
@@ -952,7 +778,18 @@ function sampleMagnifier(cx: number, cy: number): Uint8ClampedArray | null {
   const sx = Math.round(cx) - half;
   const sy = Math.round(cy) - half;
   magTempCtx.clearRect(0, 0, MAG_GRID, MAG_GRID);
-  blitRegion(magTempCtx, sx, sy, MAG_GRID, MAG_GRID, 0, 0, MAG_GRID, MAG_GRID);
+  blitScreenRegion(
+    magTempCtx,
+    screenSources(),
+    sx,
+    sy,
+    MAG_GRID,
+    MAG_GRID,
+    0,
+    0,
+    MAG_GRID,
+    MAG_GRID,
+  );
   let data: Uint8ClampedArray;
   try {
     data = magTempCtx.getImageData(0, 0, MAG_GRID, MAG_GRID).data;
@@ -964,10 +801,12 @@ function sampleMagnifier(cx: number, cy: number): Uint8ClampedArray | null {
     magWarnedZero = true;
     const zero = data.every((v) => v === 0);
     console.warn(
-      "[screenshot] magnifier all-zero sample at", sx, sy,
-      "allZero=" + zero,
-      "screensN=" + screens.length,
-      "screensReady=" + screens.map((s) => s.img.naturalWidth + "x" + s.img.naturalHeight).join(","),
+      "[screenshot] magnifier all-zero sample at",
+      sx,
+      sy,
+      `allZero=${zero}`,
+      `screensN=${screens.length}`,
+      `screensReady=${screens.map((s) => `${s.img.naturalWidth}x${s.img.naturalHeight}`).join(",")}`,
     );
   }
   return data;
@@ -976,8 +815,13 @@ function sampleMagnifier(cx: number, cy: number): Uint8ClampedArray | null {
 function centerColorHex(data: Uint8ClampedArray): string {
   const half = Math.floor(MAG_GRID / 2);
   const i = (half * MAG_GRID + half) * 4;
-  const r = data[i], g = data[i + 1], b = data[i + 2];
-  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+  const r = data[i],
+    g = data[i + 1],
+    b = data[i + 2];
+  return `#${[r, g, b]
+    .map((v) => v.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase()}`;
 }
 
 function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
@@ -987,7 +831,8 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   const half = Math.floor(MAG_GRID / 2);
   const gridLog = MAG_GRID * MAG_PIXEL; // 150 逻辑像素
   const r = root.getBoundingClientRect();
-  const kx = r.width / totalW, ky = r.height / totalH;
+  const kx = r.width / totalW,
+    ky = r.height / totalH;
 
   // 光标逻辑坐标
   const cx = px * kx;
@@ -1048,8 +893,10 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   c.beginPath();
   const mgCx = ps(cardX) + ps(gridLog) / 2;
   const mgCy = ps(cardY) + ps(gridLog) / 2;
-  c.moveTo(ps(cardX), mgCy); c.lineTo(ps(cardX) + ps(gridLog), mgCy);
-  c.moveTo(mgCx, ps(cardY)); c.lineTo(mgCx, ps(cardY) + ps(gridLog));
+  c.moveTo(ps(cardX), mgCy);
+  c.lineTo(ps(cardX) + ps(gridLog), mgCy);
+  c.moveTo(mgCx, ps(cardY));
+  c.lineTo(mgCx, ps(cardY) + ps(gridLog));
   c.stroke();
 
   // 信息栏
@@ -1069,7 +916,11 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   c.fillStyle = "#282828";
   c.font = `${12 * physScale()}px "Segoe UI", sans-serif`;
   c.textAlign = "left";
-  c.fillText(`(${Math.round(px)}, ${Math.round(py)})`, ps(cardX) + pad, infoY + rowH * 0.5 + 2 * physScale());
+  c.fillText(
+    `(${Math.round(px)}, ${Math.round(py)})`,
+    ps(cardX) + pad,
+    infoY + rowH * 0.5 + 2 * physScale(),
+  );
 
   const recently = performance.now() - copiedAt < 1500;
   const row2Text = recently ? t("shot.copied") : hex;
@@ -1092,12 +943,23 @@ function drawMagnifier(c: CanvasRenderingContext2D, px: number, py: number) {
   // 复制提示
   c.fillStyle = "#969696";
   c.font = `${10 * physScale()}px "Segoe UI", sans-serif`;
-  c.fillText(t("shot.copyColorHint", { key: copyColorHotkey }), ps(cardX) + pad, infoY + rowH * 2.5);
+  c.fillText(
+    t("shot.copyColorHint", { key: copyColorHotkey }),
+    ps(cardX) + pad,
+    infoY + rowH * 2.5,
+  );
 
   c.restore();
 }
 
-function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   const rr = Math.min(r, w / 2, h / 2);
   c.beginPath();
   c.moveTo(x + rr, y);
@@ -1133,19 +995,17 @@ function clampToSelection(p: Pt): Pt {
 function pointInSelection(p: Pt): boolean {
   return (
     !!selection &&
-    p.x >= selection.x && p.x <= selection.x + selection.w &&
-    p.y >= selection.y && p.y <= selection.y + selection.h
+    p.x >= selection.x &&
+    p.x <= selection.x + selection.w &&
+    p.y >= selection.y &&
+    p.y <= selection.y + selection.h
   );
 }
 
 /// 把所有图形整体平移 (dx, dy)（移动选区时，标注内容跟随选区一起走，保持相对位置）
 function translateShapes(dx: number, dy: number) {
   for (const s of shapes) {
-    s.start.x += dx; s.start.y += dy;
-    s.end.x += dx; s.end.y += dy;
-    if (s.points) {
-      for (const q of s.points) { q.x += dx; q.y += dy; }
-    }
+    translateShape(s, dx, dy);
   }
 }
 
@@ -1153,27 +1013,21 @@ function translateShapes(dx: number, dy: number) {
 // 历史
 // ============================================================
 function pushHistory() {
-  undoStack.push(shapes.map(cloneShape));
-  if (undoStack.length > 50) undoStack.shift();
-  redoStack = [];
-}
-
-function cloneShape(s: Shape): Shape {
-  return { ...s, points: s.points ? s.points.map((p) => ({ ...p })) : undefined };
+  history.checkpoint(shapes);
 }
 
 function undo() {
-  if (!undoStack.length) return;
-  redoStack.push(shapes.map(cloneShape));
-  shapes = undoStack.pop()!;
+  const previous = history.undo(shapes);
+  if (!previous) return;
+  shapes = previous;
   selectedIndex = null;
   render();
 }
 
 function redo() {
-  if (!redoStack.length) return;
-  undoStack.push(shapes.map(cloneShape));
-  shapes = redoStack.pop()!;
+  const next = history.redo(shapes);
+  if (!next) return;
+  shapes = next;
   selectedIndex = null;
   render();
 }
@@ -1195,6 +1049,7 @@ function onMouseDown(e: MouseEvent) {
     resizeHandle = h.handle;
     const s = shapes[h.index];
     resizeOrig = { start: { ...s.start }, end: { ...s.end }, strokeWidth: s.strokeWidth };
+    resizeHistorySnapshot = shapes.map(cloneShape);
     return;
   }
 
@@ -1205,6 +1060,7 @@ function onMouseDown(e: MouseEvent) {
     dragMode = "move";
     moveStart = p;
     moveOrigShape = cloneShape(shapes[hit]);
+    moveHistorySnapshot = shapes.map(cloneShape);
     render();
     return;
   }
@@ -1293,13 +1149,13 @@ function onMouseMove(e: MouseEvent) {
   // 节流 ~40ms + 仅在光标移动超过 2px 时查，避免高频 IPC；用序号保证只采纳最新结果。
   if (!overUI && dragMode === "none" && !selection && !tool) {
     const now = performance.now();
-    const moved =
-      !lastQueryPos || Math.hypot(p.x - lastQueryPos.x, p.y - lastQueryPos.y) > 2;
+    const moved = !lastQueryPos || Math.hypot(p.x - lastQueryPos.x, p.y - lastQueryPos.y) > 2;
     if (now - lastWinQuery > 40 && moved) {
       lastWinQuery = now;
       lastQueryPos = { ...p };
       const seq = ++winQuerySeq;
-      const gx = Math.round(p.x + minX), gy = Math.round(p.y + minY);
+      const gx = Math.round(p.x + minX),
+        gy = Math.round(p.y + minY);
       void pickWindowAt(gx, gy).then((r) => {
         if (seq !== winQuerySeq) return; // 过期结果，丢弃
         if (!r) {
@@ -1337,13 +1193,17 @@ function onMouseMove(e: MouseEvent) {
   }
   if (dragMode === "move" && moveStart && moveOrigShape && selectedIndex != null) {
     // 移动也 clamp：算出移动后的 bbox，把 delta 收敛到选区内（原版 move_shape 行为）
-    const dx = p.x - moveStart.x, dy = p.y - moveStart.y;
+    const dx = p.x - moveStart.x,
+      dy = p.y - moveStart.y;
     const orig = moveOrigShape;
-    let ddx = dx, ddy = dy;
+    let ddx = dx,
+      ddy = dy;
     if (selection) {
       const selR = selection;
-      const minX0 = Math.min(orig.start.x, orig.end.x), maxX0 = Math.max(orig.start.x, orig.end.x);
-      const minY0 = Math.min(orig.start.y, orig.end.y), maxY0 = Math.max(orig.start.y, orig.end.y);
+      const minX0 = Math.min(orig.start.x, orig.end.x),
+        maxX0 = Math.max(orig.start.x, orig.end.x);
+      const minY0 = Math.min(orig.start.y, orig.end.y),
+        maxY0 = Math.max(orig.start.y, orig.end.y);
       if (minX0 + dx < selR.x) ddx = selR.x - minX0;
       if (maxX0 + dx > selR.x + selR.w) ddx = selR.x + selR.w - maxX0;
       if (minY0 + dy < selR.y) ddy = selR.y - minY0;
@@ -1360,16 +1220,30 @@ function onMouseMove(e: MouseEvent) {
   }
   if (dragMode === "resize" && resizeOrig && selectedIndex != null) {
     // 缩放的控制点也 clamp 到选区（原版 apply_resize 行为）
-    applyResize(shapes[selectedIndex], resizeHandle, clampToSelection(p));
+    const resized = resizeShape(
+      shapes[selectedIndex],
+      resizeOrig,
+      resizeHandle,
+      clampToSelection(p),
+      MIN_SHAPE_SIZE,
+    );
+    if (resized) shapes[selectedIndex] = resized;
     render();
     return;
   }
 
   if (dragMode === "move-selection" && moveSelectionStart && moveSelectionOrig) {
     // 拖动整体移动选区：选区四角限制在屏幕内，标注内容跟随选区平移（保持相对位置）
-    const w = moveSelectionOrig.w, h = moveSelectionOrig.h;
-    const nx = Math.min(Math.max(moveSelectionOrig.x + (p.x - moveSelectionStart.x), 0), Math.max(0, totalW - w));
-    const ny = Math.min(Math.max(moveSelectionOrig.y + (p.y - moveSelectionStart.y), 0), Math.max(0, totalH - h));
+    const w = moveSelectionOrig.w,
+      h = moveSelectionOrig.h;
+    const nx = Math.min(
+      Math.max(moveSelectionOrig.x + (p.x - moveSelectionStart.x), 0),
+      Math.max(0, totalW - w),
+    );
+    const ny = Math.min(
+      Math.max(moveSelectionOrig.y + (p.y - moveSelectionStart.y), 0),
+      Math.max(0, totalH - h),
+    );
     const appDx = nx - moveSelectionOrig.x;
     const appDy = ny - moveSelectionOrig.y;
     selection = { x: nx, y: ny, w, h };
@@ -1399,10 +1273,15 @@ function onMouseMove(e: MouseEvent) {
   // 无工具且有选区 → 选区外 not-allowed（禁止符号），选区内 move（可拖动选区）；
   // 无工具且无选区 → crosshair（确实要选）。
   const cursor =
-    hit != null ? "move" :
-    tool ? "crosshair" :
-    !selection ? "crosshair" :
-    pointInSelection(p) ? "move" : "not-allowed";
+    hit != null
+      ? "move"
+      : tool
+        ? "crosshair"
+        : !selection
+          ? "crosshair"
+          : pointInSelection(p)
+            ? "move"
+            : "not-allowed";
   if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
   if (hit !== hoverIndex) {
     hoverIndex = hit;
@@ -1448,23 +1327,37 @@ function onMouseUp(e: MouseEvent) {
   if (dragMode === "move") {
     if (moveOrigShape) {
       // 有实际位移才记历史
-      const s = shapes[selectedIndex!];
-      if (s.start.x !== moveOrigShape.start.x || s.start.y !== moveOrigShape.start.y) {
-        undoStack.push(shapes.map(cloneShape));
-        redoStack = [];
+      const s = selectedIndex == null ? null : shapes[selectedIndex];
+      if (s && (s.start.x !== moveOrigShape.start.x || s.start.y !== moveOrigShape.start.y)) {
+        if (moveHistorySnapshot) history.checkpoint(moveHistorySnapshot);
       }
     }
     dragMode = "none";
     moveStart = null;
     moveOrigShape = null;
+    moveHistorySnapshot = null;
     render();
     return;
   }
 
   if (dragMode === "resize") {
+    const s = selectedIndex == null ? null : shapes[selectedIndex];
+    if (
+      s &&
+      resizeOrig &&
+      resizeHistorySnapshot &&
+      (s.start.x !== resizeOrig.start.x ||
+        s.start.y !== resizeOrig.start.y ||
+        s.end.x !== resizeOrig.end.x ||
+        s.end.y !== resizeOrig.end.y ||
+        s.strokeWidth !== resizeOrig.strokeWidth)
+    ) {
+      history.checkpoint(resizeHistorySnapshot);
+    }
     dragMode = "none";
     resizeHandle = -1;
     resizeOrig = null;
+    resizeHistorySnapshot = null;
     render();
     return;
   }
@@ -1490,57 +1383,13 @@ function onMouseUp(e: MouseEvent) {
   }
 }
 
-// ---------- 缩放 ----------
-function applyResize(s: Shape, handle: number, p: Pt) {
-  if (!resizeOrig) return;
-  const o = resizeOrig;
-  let ns: Pt, ne: Pt;
-  if (s.tool === "arrow") {
-    if (handle === 0) { ns = p; ne = o.end; }
-    else { ns = o.start; ne = p; }
-  } else if (s.tool === "text") {
-    // 4 角控制点
-    const corners = [
-      { x: o.start.x, y: o.start.y }, { x: o.end.x, y: o.start.y },
-      { x: o.end.x, y: o.end.y }, { x: o.start.x, y: o.end.y },
-    ];
-    const c = corners[handle] ?? corners[0];
-    ns = { x: Math.min(c.x, p.x), y: Math.min(c.y, p.y) };
-    ne = { x: Math.max(c.x, p.x), y: Math.max(c.y, p.y) };
-  } else {
-    // 8 控制点（与原版 mapping 一致）
-    switch (handle) {
-      case 0: ns = p; ne = o.end; break;
-      case 1: ns = { x: o.start.x, y: p.y }; ne = { x: p.x, y: o.end.y }; break;
-      case 2: ns = o.start; ne = p; break;
-      case 3: ns = { x: p.x, y: o.start.y }; ne = { x: o.end.x, y: p.y }; break;
-      case 4: ns = { x: o.start.x, y: p.y }; ne = o.end; break;
-      case 5: ns = o.start; ne = { x: p.x, y: o.end.y }; break;
-      case 6: ns = o.start; ne = { x: o.end.x, y: p.y }; break;
-      case 7: ns = { x: p.x, y: o.start.y }; ne = o.end; break;
-      default: ns = o.start; ne = o.end;
-    }
-  }
-
-  const w = Math.abs(ne.x - ns.x), h = Math.abs(ne.y - ns.y);
-  if (w < MIN_SHAPE_SIZE || h < MIN_SHAPE_SIZE) return;
-
-  if (s.tool === "text") {
-    const prevW = Math.abs(o.end.x - o.start.x);
-    if (prevW > 1) {
-      const sw = Math.max(1, Math.min(48, o.strokeWidth * (w / prevW)));
-      s.strokeWidth = sw;
-    }
-  }
-  s.start = ns;
-  s.end = ne;
-}
-
 // ---------- 文本输入 ----------
 function showTextInput(p: Pt) {
   const r = root.getBoundingClientRect();
-  const kx = r.width / totalW, ky = r.height / totalH;
-  const lx = p.x * kx, ly = p.y * ky;
+  const kx = r.width / totalW,
+    ky = r.height / totalH;
+  const lx = p.x * kx,
+    ly = p.y * ky;
   const fs = 20 + strokeWidth * 2;
   textInput.value = "";
   textInput.style.left = `${lx}px`;
@@ -1561,7 +1410,8 @@ function commitText() {
   if (!val.trim()) return;
 
   const r = root.getBoundingClientRect();
-  const kx = totalW / r.width, ky = totalH / r.height;
+  const kx = totalW / r.width,
+    ky = totalH / r.height;
   const sx = parseFloat(textInput.style.left) * kx;
   const sy = parseFloat(textInput.style.top) * ky;
   const fs = (20 + strokeWidth * 2) * physScale();
@@ -1610,12 +1460,22 @@ interface ParsedHotkey {
 }
 
 function parseHotkey(s: string): ParsedHotkey | null {
-  const parts = s.split("+").map((p) => p.trim()).filter(Boolean);
+  const parts = s
+    .split("+")
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (parts.length === 0) return null;
   const acc: ParsedHotkey = { ctrl: false, alt: false, shift: false, key: "" };
   for (const p of parts) {
     const lp = p.toLowerCase();
-    if (lp === "ctrl" || lp === "control" || lp === "cmd" || lp === "meta" || lp === "super" || lp === "cmdorctrl") {
+    if (
+      lp === "ctrl" ||
+      lp === "control" ||
+      lp === "cmd" ||
+      lp === "meta" ||
+      lp === "super" ||
+      lp === "cmdorctrl"
+    ) {
       acc.ctrl = true;
     } else if (lp === "alt") {
       acc.alt = true;
@@ -1679,7 +1539,12 @@ window.addEventListener("keydown", (e) => {
     void closeScreenshot();
   } else if (e.key === "Enter") {
     if (selection && selection.w > 0) void exportImage("clipboard");
-  } else if (matchesHotkey(e, parseHotkey(copyColorHotkey) ?? { ctrl: true, alt: false, shift: false, key: "c" })) {
+  } else if (
+    matchesHotkey(
+      e,
+      parseHotkey(copyColorHotkey) ?? { ctrl: true, alt: false, shift: false, key: "c" },
+    )
+  ) {
     // 放大镜取色：复制中心像素十六进制色值
     if (magnifierActive && lastMousePos && !overUI) {
       const data = sampleMagnifier(lastMousePos.x, lastMousePos.y);
@@ -1693,7 +1558,8 @@ window.addEventListener("keydown", (e) => {
     }
   } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
     e.preventDefault();
-    if (e.shiftKey) redo(); else undo();
+    if (e.shiftKey) redo();
+    else undo();
   } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
     e.preventDefault();
     redo();
@@ -1728,18 +1594,18 @@ async function exportImage(action: "save" | "clipboard") {
   const out = document.createElement("canvas");
   out.width = Math.round(sel.w);
   out.height = Math.round(sel.h);
-  const oc = out.getContext("2d")!;
+  const oc = requiredContext(out);
   oc.imageSmoothingEnabled = true;
 
   // 1. 裁剪多屏截图
-  blitRegion(oc, sel.x, sel.y, sel.w, sel.h, 0, 0, out.width, out.height);
+  blitScreenRegion(oc, screenSources(), sel.x, sel.y, sel.w, sel.h, 0, 0, out.width, out.height);
 
   // 2. 平移后重绘标注
   oc.save();
   oc.translate(-sel.x, -sel.y);
   for (const s of shapes) {
     if (s.tool === "mosaic") drawMosaic(oc, s);
-    else drawShape(oc, s);
+    else drawAnnotation(oc, s, physScale());
   }
   oc.restore();
 
@@ -1763,9 +1629,9 @@ async function runOcr() {
   const out = document.createElement("canvas");
   out.width = Math.round(sel.w);
   out.height = Math.round(sel.h);
-  const oc = out.getContext("2d")!;
+  const oc = requiredContext(out);
   oc.imageSmoothingEnabled = true;
-  blitRegion(oc, sel.x, sel.y, sel.w, sel.h, 0, 0, out.width, out.height);
+  blitScreenRegion(oc, screenSources(), sel.x, sel.y, sel.w, sel.h, 0, 0, out.width, out.height);
 
   const blob = await new Promise<Blob>((resolve, reject) =>
     out.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
@@ -1901,7 +1767,14 @@ shManualLabel.append(shManualText);
 shManual.addEventListener("change", () => syncScrollUi());
 
 shPanelActions.append(shStartBtn, shQuitBtn);
-scrollPanel.append(shPanelHead, shPanelMetrics, shPanelHint, shManualLabel, shFromTopLabel, shPanelActions);
+scrollPanel.append(
+  shPanelHead,
+  shPanelMetrics,
+  shPanelHint,
+  shManualLabel,
+  shFromTopLabel,
+  shPanelActions,
+);
 uiLayer.appendChild(scrollPanel);
 
 // ---------- 进度 / 结果 HUD ----------
@@ -1956,7 +1829,15 @@ const shOpenBtn = makeShBtn(() => void finishScrollAction("open"));
 const shEscStop = document.createElement("div");
 shEscStop.className = "sh-esc-stop";
 shHudActions.append(shStopBtn, shCopyBtn, shSaveBtn, shOpenBtn);
-scrollHud.append(shHudHead, shHudMetrics, shHudStatus, shHudDetail, shEscStop, shPreview, shHudActions);
+scrollHud.append(
+  shHudHead,
+  shHudMetrics,
+  shHudStatus,
+  shHudDetail,
+  shEscStop,
+  shPreview,
+  shHudActions,
+);
 uiLayer.appendChild(scrollHud);
 
 // 一次性提示条（成功 / 失败）。放在最后 = 叠在面板与 HUD 之上。
@@ -2124,7 +2005,9 @@ function placeScrollNotice() {
   const monitor = box ? monitorBoxCss(box) : rootBoxCss();
   const w = scrollNotice.offsetWidth || 320;
   const h = scrollNotice.offsetHeight || 40;
-  const x = uiClamp(monitor.x + (monitor.w - w) / 2, monitor.x + 10, Math.max(monitor.x + 10, monitor.x + monitor.w - w - 10));
+  const minX = monitor.x + 10;
+  const maxX = Math.max(minX, monitor.x + monitor.w - w - 10);
+  const x = Math.max(minX, Math.min(monitor.x + (monitor.w - w) / 2, maxX));
   let y = monitor.y + monitor.h - h - 16;
   if (box) {
     // 与捕获区相交就翻到显示器顶部（提示条本身也可能被截进长图）
@@ -2204,9 +2087,8 @@ function syncScrollUi() {
   shFromTop.disabled = shManual.checked;
   shFromTopLabel.style.opacity = shManual.checked ? "0.5" : "";
   const selTooShort = !!selection && selection.h < MIN_SCROLL_SEL_H;
-  const selShortCaution = !!selection
-    && selection.h >= MIN_SCROLL_SEL_H
-    && selection.h < RECOMMENDED_SCROLL_SEL_H;
+  const selShortCaution =
+    !!selection && selection.h >= MIN_SCROLL_SEL_H && selection.h < RECOMMENDED_SCROLL_SEL_H;
 
   shPanelTitle.textContent = t("shot.scroll");
   shPanelBadge.textContent = t("shot.scrollReady");
@@ -2232,7 +2114,9 @@ function syncScrollUi() {
     const manual = scrollManualMode || p?.method === "manual";
     // REC 手感：呼吸红点 + 标题（扫一眼就知道在录；边框颜色/任务栏进度是补充通道）
     shRecDot.style.display = "";
-    shHudTitleText.textContent = manual ? t("shot.scrollManualCapturing") : t("shot.scrollCapturing");
+    shHudTitleText.textContent = manual
+      ? t("shot.scrollManualCapturing")
+      : t("shot.scrollCapturing");
     const stage = p?.stage === "probing" ? t("shot.scrollProbing") : "";
     const low = p?.stage === "low_confidence" ? t("shot.scrollStageLow") : "";
     shHudBadge.textContent = scrollStopping
@@ -2272,7 +2156,10 @@ function syncScrollUi() {
     shHudBadge.className = `sh-badge${res.confidence === "high" ? " ok" : " warn"}`;
     shHudMetrics.style.display = "grid";
     shHudPrimaryMetric.label.textContent = t("shot.scrollResult");
-    shHudPrimaryMetric.value.textContent = t("shot.scrollSize", { w: res.width ?? 0, h: res.height ?? 0 });
+    shHudPrimaryMetric.value.textContent = t("shot.scrollSize", {
+      w: res.width ?? 0,
+      h: res.height ?? 0,
+    });
     shHudSecondaryMetric.label.textContent = t("shot.scrollFrameCount");
     shHudSecondaryMetric.value.textContent = String(res.frames ?? 0);
     shHudStatus.textContent = scrollActionError;
@@ -2350,63 +2237,19 @@ function monitorBoxCss(anchor: Rect | null): CssBox {
   return { x: hit.x * kx, y: hit.y * ky, w: hit.w * kx, h: hit.h * ky };
 }
 
-const uiClamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-function overlaps(a: CssBox, b: CssBox): boolean {
-  return a.x + a.w > b.x && a.x < b.x + b.w && a.y + a.h > b.y && a.y < b.y + b.h;
-}
-
-function overlapArea(a: CssBox, b: CssBox): number {
-  const w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-  const h = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  return w * h;
-}
-
 /** 在选区四周评估多个落点。优先完全避开捕获区，其次才是离首选锚点更近。
  * 这比「先横移、再纵移」的贪心路径稳定，浮层文字/预览尺寸改变时也不容易跳到另一侧。 */
-function placeScrollUi(el: HTMLElement, region: CssBox, monitor: CssBox, kind: "panel" | "hud"): void {
+function placeScrollUi(
+  el: HTMLElement,
+  region: CssBox,
+  monitor: CssBox,
+  kind: "panel" | "hud",
+): void {
   const w = el.offsetWidth || 280;
   const h = el.offsetHeight || 100;
-  const gap = 10;
-  const minX = monitor.x + 10;
-  const maxX = Math.max(minX, monitor.x + monitor.w - w - 10);
-  const minY = monitor.y + 10;
-  const maxY = Math.max(minY, monitor.y + monitor.h - h - 10);
-  const right = region.x + region.w + gap;
-  const left = region.x - w - gap;
-  const above = region.y - h - gap;
-  const below = region.y + region.h + gap;
-  const candidates = kind === "panel"
-    ? [
-        { x: region.x + region.w - w, y: below },
-        { x: region.x, y: below },
-        { x: region.x + region.w - w, y: above },
-        { x: region.x, y: above },
-        { x: right, y: region.y },
-        { x: left, y: region.y },
-      ]
-    : [
-        { x: right, y: region.y },
-        { x: left, y: region.y },
-        { x: region.x + region.w - w, y: above },
-        { x: region.x + region.w - w, y: below },
-        { x: region.x, y: above },
-        { x: region.x, y: below },
-      ];
-  let best: { x: number; y: number; score: number } | null = null;
-  for (const [index, candidate] of candidates.entries()) {
-    const x = uiClamp(candidate.x, minX, maxX);
-    const y = uiClamp(candidate.y, minY, maxY);
-    const displaced = Math.abs(x - candidate.x) + Math.abs(y - candidate.y);
-    const covered = overlapArea({ x, y, w, h }, region);
-    // 覆盖捕获区的代价远大于离理想位置多走几像素；index 用来稳定同分选择。
-    const score = covered * 10000 + displaced * 10 + index;
-    if (!best || score < best.score) best = { x, y, score };
-  }
-  if (best) {
-    el.style.left = `${best.x}px`;
-    el.style.top = `${best.y}px`;
-  }
+  const point = placeScrollOverlay(region, monitor, { w, h }, kind);
+  el.style.left = `${point.x}px`;
+  el.style.top = `${point.y}px`;
 }
 
 /** 依据当前捕获区摆放开始面板与进度 / 结果 HUD */
@@ -2463,11 +2306,7 @@ function renderScrollOverlay() {
   if (scrollPhase !== "capturing") {
     const lw = physScale();
     const color =
-      scrollProg?.stage === "low_confidence"
-        ? "#ffb300"
-        : scrollError
-          ? "#ff5252"
-          : "#00ff00";
+      scrollProg?.stage === "low_confidence" ? "#ffb300" : scrollError ? "#ff5252" : "#00ff00";
 
     // 结果态才重画用户框；此时后台已经不再采集，边框不可能进入长图。
     ctx.strokeStyle = color;
@@ -2518,7 +2357,12 @@ widthBtn.addEventListener("click", (e) => {
 // 点击弹窗/切换按钮以外的地方时关闭弹窗
 window.addEventListener("mousedown", (e) => {
   const t = e.target as Node;
-  if (colorPopup.contains(t) || widthPopup.contains(t) || colorBtn.contains(t) || widthBtn.contains(t)) {
+  if (
+    colorPopup.contains(t) ||
+    widthPopup.contains(t) ||
+    colorBtn.contains(t) ||
+    widthBtn.contains(t)
+  ) {
     return;
   }
   closePopups();
@@ -2537,10 +2381,11 @@ async function loadScreenshot() {
   // 清旧状态（旧 img 元素 + 标注历史）。
   // ⚠ 用 `:scope > img` 只清 root 的**直接子** img：曾经的 `querySelectorAll("img")`
   // 会连 HUD 里的结果缩略预览（#scroll-hud 内的 img）一起删掉，于是预览永远不显示。
-  root.querySelectorAll(":scope > img").forEach((el) => el.remove());
+  root.querySelectorAll(":scope > img").forEach((el) => {
+    el.remove();
+  });
   shapes = [];
-  undoStack = [];
-  redoStack = [];
+  history.clear();
   selection = null;
   dragStart = dragCur = null;
   dragMode = "none";
@@ -2556,6 +2401,7 @@ async function loadScreenshot() {
   moveStart = null;
   moveOrigShape = null;
   resizeOrig = null;
+  resizeHistorySnapshot = null;
   resizeHandle = -1;
   moveSelectionStart = null;
   moveSelectionOrig = null;
@@ -2587,9 +2433,7 @@ async function loadScreenshot() {
   totalH = data.total_height;
   minX = data.min_x;
   minY = data.min_y;
-  initialCursorPos = data.cursor
-    ? { x: data.cursor.x - minX, y: data.cursor.y - minY }
-    : null;
+  initialCursorPos = data.cursor ? { x: data.cursor.x - minX, y: data.cursor.y - minY } : null;
 
   canvas.width = totalW;
   canvas.height = totalH;
@@ -2622,8 +2466,15 @@ async function loadScreenshot() {
   await Promise.all(pending);
 
   console.info(
-    "[screenshot] bounds", data.min_x, data.min_y, data.total_width, data.total_height,
-    "scale", physScale().toFixed(2), "screens", data.screens.length,
+    "[screenshot] bounds",
+    data.min_x,
+    data.min_y,
+    data.total_width,
+    data.total_height,
+    "scale",
+    physScale().toFixed(2),
+    "screens",
+    data.screens.length,
   );
   // 一次性诊断：完整 viewport + 每屏 img 状态，在跨屏/混合 DPI 异常时可一眼定位。
   // 数据来源完全靠前端能拿到的字段（getBoundingClientRect + data.monitor_info），
@@ -2632,9 +2483,14 @@ async function loadScreenshot() {
   console.info(
     "[screenshot] viewport:",
     JSON.stringify({
-      totalW, totalH, minX: data.min_x, minY: data.min_y,
-      rootW: +rr.width.toFixed(1), rootH: +rr.height.toFixed(1),
-      rootLeft: +rr.left.toFixed(1), rootTop: +rr.top.toFixed(1),
+      totalW,
+      totalH,
+      minX: data.min_x,
+      minY: data.min_y,
+      rootW: +rr.width.toFixed(1),
+      rootH: +rr.height.toFixed(1),
+      rootLeft: +rr.left.toFixed(1),
+      rootTop: +rr.top.toFixed(1),
       dpr: window.devicePixelRatio,
       physScale: +physScale().toFixed(4),
       canvasAttr: `${canvas.width}x${canvas.height}`,
@@ -2696,8 +2552,7 @@ async function refreshConfig() {
 function applyTheme(theme: "dark" | "light" | "system") {
   const dark =
     theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
+    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
@@ -2718,14 +2573,20 @@ async function main() {
   // 后端隐藏窗口前 emit：清掉画面，避免下次 show 时闪旧截图
   await listen("screenshot-clear", () => {
     // 同 loadScreenshot：只清 root 的直接子 img，别误删 HUD 里的结果缩略预览
-    root.querySelectorAll(":scope > img").forEach((el) => el.remove());
+    root.querySelectorAll(":scope > img").forEach((el) => {
+      el.remove();
+    });
     screens = [];
     shapes = [];
+    history.clear();
     selection = null;
     curShape = null;
     dragStart = dragCur = null;
     dragMode = "none";
     selectedIndex = null;
+    resizeOrig = null;
+    resizeHistorySnapshot = null;
+    resizeHandle = -1;
     hoverWin = null;
     pendingWinSelect = null;
     ocrPanel.style.display = "none";
@@ -2755,9 +2616,7 @@ async function main() {
     if (e.payload.method === "manual") scrollManualMode = true;
     // 后端上报的实际捕获区（虚拟桌面物理像素）→ 转成截图窗内坐标
     const cap = e.payload.capture;
-    scrollCaptureRect = cap
-      ? { x: cap[0] - minX, y: cap[1] - minY, w: cap[2], h: cap[3] }
-      : null;
+    scrollCaptureRect = cap ? { x: cap[0] - minX, y: cap[1] - minY, w: cap[2], h: cap[3] } : null;
     syncScrollUi();
     render();
   });

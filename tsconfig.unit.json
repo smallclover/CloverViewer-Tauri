@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "isolatedModules": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "noEmit": false,
+    "outDir": ".unit-test-dist"
+  },
+  "include": [
+    "src/viewer/grid-layout.ts",
+    "src/viewer/image-source.ts",
+    "src/screenshot/geometry.ts",
+    "src/screenshot/history.ts",
+    "src/screenshot/annotation-renderer.ts",
+    "src/screenshot/mosaic.ts",
+    "src/screenshot/overlay-layout.ts",
+    "src/screenshot/resize.ts",
+    "src/screenshot/screen-compositor.ts"
+  ]
+}

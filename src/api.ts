@@ -33,8 +33,7 @@ export interface AppConfig {
 
 export const getConfig = () => invoke<AppConfig>("get_config");
 
-export const setConfig = (config: AppConfig) =>
-  invoke<void>("set_config", { config });
+export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
 
 export const setLaunchOnStartup = (enabled: boolean) =>
   invoke<void>("set_launch_on_startup", { enabled });
@@ -45,11 +44,9 @@ export const setShowScreenshotHotkey = (hotkey: string) =>
 export const setScrollCaptureHotkey = (hotkey: string) =>
   invoke<void>("set_scroll_capture_hotkey", { hotkey });
 
-export const listImages = (dir: string) =>
-  invoke<ImageEntry[]>("list_images", { dir });
+export const listImages = (dir: string) => invoke<ImageEntry[]>("list_images", { dir });
 
-export const readImageData = (path: string) =>
-  invoke<string>("read_image_data", { path });
+export const readImageData = (path: string) => invoke<string>("read_image_data", { path });
 
 export const getThumbnail = (path: string, size: number) =>
   invoke<string>("get_thumbnail", { path, size });
@@ -65,8 +62,7 @@ export interface ExifInfo {
   lens_model: string;
 }
 
-export const getImageInfo = (path: string) =>
-  invoke<ExifInfo>("get_image_info", { path });
+export const getImageInfo = (path: string) => invoke<ExifInfo>("get_image_info", { path });
 
 export interface ScreenData {
   x: number;
@@ -98,8 +94,7 @@ export interface MonitorInfo {
   is_primary: boolean;
 }
 
-export const getScreenshotData = () =>
-  invoke<ScreenshotData | null>("get_screenshot_data");
+export const getScreenshotData = () => invoke<ScreenshotData | null>("get_screenshot_data");
 
 /** 前端把截图渲染完成后通知后端：此时才显示截图窗口（避免冷启动白屏/锁屏） */
 export const screenshotUiReady = () => invoke<void>("screenshot_ui_ready");
@@ -115,8 +110,7 @@ export const finishScreenshot = (action: "save" | "clipboard", png: string) =>
 export const copyText = (text: string) => invoke<void>("copy_text", { text });
 
 /** 原生写入图片剪贴板，避开 WebView2 对 ClipboardItem 图片的兼容性限制。 */
-export const copyImageFile = (path: string) =>
-  invoke<void>("copy_image_file", { path });
+export const copyImageFile = (path: string) => invoke<void>("copy_image_file", { path });
 
 /** 关于页展示的应用信息（版本/标识/Tauri 版本/平台，均取自运行时真实值） */
 export interface AppInfo {
@@ -137,8 +131,7 @@ export interface StartupNotice {
   used: string | null;
 }
 
-export const takeStartupNotices = () =>
-  invoke<StartupNotice[]>("take_startup_notices");
+export const takeStartupNotices = () => invoke<StartupNotice[]>("take_startup_notices");
 
 /** 用系统默认浏览器打开 https 链接（后端限制只放行 https://） */
 export const openUrl = (url: string) => invoke<void>("open_url", { url });
@@ -242,8 +235,7 @@ export const scrollCaptureRunning = () => invoke<boolean>("scroll_capture_runnin
 export const setScrollHudSafe = (overlap: boolean) =>
   invoke<void>("set_scroll_hud_safe", { overlap });
 
-export const hasScrollCaptureResult = () =>
-  invoke<boolean>("has_scroll_capture_result");
+export const hasScrollCaptureResult = () => invoke<boolean>("has_scroll_capture_result");
 
 /** 本地文件 → asset protocol URL */
 export const fileSrc = convertFileSrc;

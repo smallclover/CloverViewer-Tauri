@@ -24,7 +24,10 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
+    WebviewWindowBuilder,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ScreenData {
@@ -198,15 +201,21 @@ pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
     #[cfg(target_os = "windows")]
     {
         use windows::Win32::Foundation::{HWND, LPARAM, RECT};
-        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS};
+        use windows::Win32::Graphics::Dwm::{
+            DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
+        };
         use windows::Win32::UI::WindowsAndMessaging::{
             EnumWindows, GetClassNameW, GetWindowRect, IsIconic, IsWindowVisible,
         };
 
         // 桌面 / 任务栏这类"背景窗口"，光标落到它们上面时不应框选（否则绿框会框到整块屏幕）
         const BG_CLASSES: &[&str] = &[
-            "Progman", "WorkerW", "SHELLDLL_DefView", "Shell_TrayWnd",
-            "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow",
+            "Progman",
+            "WorkerW",
+            "SHELLDLL_DefView",
+            "Shell_TrayWnd",
+            "Shell_SecondaryTrayWnd",
+            "NotifyIconOverflowWindow",
         ];
 
         unsafe fn window_class(hwnd: HWND) -> String {
@@ -297,7 +306,12 @@ pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
             true.into()
         }
 
-        let mut ctx = Ctx { x, y, own, found: None };
+        let mut ctx = Ctx {
+            x,
+            y,
+            own,
+            found: None,
+        };
         unsafe {
             let _ = EnumWindows(Some(enum_proc), LPARAM(&mut ctx as *mut Ctx as isize));
         }
@@ -327,9 +341,7 @@ pub struct FinishRequest {
 
 #[tauri::command]
 pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), String> {
-    let b64 = req
-        .png
-        .trim_start_matches("data:image/png;base64,");
+    let b64 = req.png.trim_start_matches("data:image/png;base64,");
     let png = base64::engine::general_purpose::STANDARD
         .decode(b64)
         .map_err(|e| e.to_string())?;
@@ -390,7 +402,11 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
         store.set_scroll_start(scroll);
         tracing::info!(
             "覆盖窗启动: 模式={}",
-            if scroll { "滚动截图" } else { "普通截图" }
+            if scroll {
+                "滚动截图"
+            } else {
+                "普通截图"
+            }
         );
 
         // 已在截图状态（截图窗口可见）时忽略再次触发，避免重新截屏/重开窗口导致闪屏。
@@ -443,7 +459,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
                 .map(|m| m.scale_factor())
                 .unwrap_or(1.0)
                 .max(0.5);
-            let s = scale as f64;
+            let s = scale;
 
             match WebviewWindowBuilder::new(
                 &app,
@@ -507,7 +523,10 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             Err(e) => eprintln!("[screenshot] window inner pos read failed: {e}"),
         }
         match win.inner_size() {
-            Ok(s) => eprintln!("[screenshot] window actual inner size: {}x{}", s.width, s.height),
+            Ok(s) => eprintln!(
+                "[screenshot] window actual inner size: {}x{}",
+                s.width, s.height
+            ),
             Err(e) => eprintln!("[screenshot] window inner size read failed: {e}"),
         }
 
@@ -558,13 +577,9 @@ fn capture_all() -> Result<ScreenshotData, String> {
         // PNG 用 Fast 压缩 + NoFilter：默认设置（Best/Adaptive）在 4K 屏上
         // 单张编码要几百 ms，是 Alt+S 延迟的大头之一。
         let mut png = Vec::new();
-        PngEncoder::new_with_quality(
-            &mut png,
-            CompressionType::Fast,
-            FilterType::NoFilter,
-        )
-        .write_image(img.as_raw(), width, height, ExtendedColorType::Rgba8)
-        .map_err(|e| e.to_string())?;
+        PngEncoder::new_with_quality(&mut png, CompressionType::Fast, FilterType::NoFilter)
+            .write_image(img.as_raw(), width, height, ExtendedColorType::Rgba8)
+            .map_err(|e| e.to_string())?;
         let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
 
         min_x = min_x.min(x);
@@ -628,7 +643,10 @@ fn capture_all() -> Result<ScreenshotData, String> {
         let mut point = POINT { x: 0, y: 0 };
         unsafe { GetCursorPos(&mut point) }
             .ok()
-            .map(|_| CursorPosition { x: point.x, y: point.y })
+            .map(|_| CursorPosition {
+                x: point.x,
+                y: point.y,
+            })
     };
     #[cfg(not(target_os = "windows"))]
     let cursor = None;

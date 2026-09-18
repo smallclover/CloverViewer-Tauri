@@ -197,8 +197,11 @@ pub fn read_image_data(path: String) -> Result<String, String> {
         .map_err(|e| format!("解码失败: {e}"))?;
 
     let mut png_bytes = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png_bytes), image::ImageFormat::Png)
-        .map_err(|e| format!("编码失败: {e}"))?;
+    img.write_to(
+        &mut std::io::Cursor::new(&mut png_bytes),
+        image::ImageFormat::Png,
+    )
+    .map_err(|e| format!("编码失败: {e}"))?;
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
     Ok(format!("data:image/png;base64,{b64}"))

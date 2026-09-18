@@ -143,7 +143,11 @@ mod win_impl {
                         h: n[3].max(1) as u32,
                     });
                 }
-                "--inset" => a.inset = next("--inset")?.parse().map_err(|e| format!("--inset: {e}"))?,
+                "--inset" => {
+                    a.inset = next("--inset")?
+                        .parse()
+                        .map_err(|e| format!("--inset: {e}"))?
+                }
                 "--methods" => {
                     let v = next("--methods")?;
                     let mut list = Vec::new();
@@ -153,8 +157,7 @@ mod win_impl {
                             continue;
                         }
                         list.push(
-                            ScrollMethod::parse(part)
-                                .ok_or_else(|| format!("未知方法: {part}"))?,
+                            ScrollMethod::parse(part).ok_or_else(|| format!("未知方法: {part}"))?,
                         );
                     }
                     if list.is_empty() {
@@ -163,18 +166,33 @@ mod win_impl {
                     a.methods = list;
                 }
                 "--notches" => {
-                    a.notches = next("--notches")?.parse().map_err(|e| format!("--notches: {e}"))?
+                    a.notches = next("--notches")?
+                        .parse()
+                        .map_err(|e| format!("--notches: {e}"))?
                 }
-                "--steps" => a.steps = next("--steps")?.parse().map_err(|e| format!("--steps: {e}"))?,
+                "--steps" => {
+                    a.steps = next("--steps")?
+                        .parse()
+                        .map_err(|e| format!("--steps: {e}"))?
+                }
                 "--timeout" => {
-                    a.timeout_ms = next("--timeout")?.parse().map_err(|e| format!("--timeout: {e}"))?
+                    a.timeout_ms = next("--timeout")?
+                        .parse()
+                        .map_err(|e| format!("--timeout: {e}"))?
                 }
-                "--poll" => a.poll_ms = next("--poll")?.parse().map_err(|e| format!("--poll: {e}"))?,
+                "--poll" => {
+                    a.poll_ms = next("--poll")?
+                        .parse()
+                        .map_err(|e| format!("--poll: {e}"))?
+                }
                 "--dump" => a.dump = Some(PathBuf::from(next("--dump")?)),
                 "--ascii" => {
-                    a.ascii = next("--ascii")?.parse().map_err(|e| format!("--ascii: {e}"))?
+                    a.ascii = next("--ascii")?
+                        .parse()
+                        .map_err(|e| format!("--ascii: {e}"))?
                 }
-                "--no-maximize" => a.maximize = false,                "--no-focus" => a.focus = false,
+                "--no-maximize" => a.maximize = false,
+                "--no-focus" => a.focus = false,
                 "--no-restore" => a.restore_foreground = false,
                 "--verbose" | "-v" => a.verbose = true,
                 "--session" => a.session = true,
@@ -193,8 +211,8 @@ mod win_impl {
 
     fn print_windows() {
         println!(
-            "{:<12} {:<8} {:<28} {:<22} {}",
-            "HWND", "PID", "CLASS", "RECT", "TITLE"
+            "{:<12} {:<8} {:<28} {:<22} TITLE",
+            "HWND", "PID", "CLASS", "RECT"
         );
         for w in sc::list_top_windows() {
             println!(
@@ -253,12 +271,15 @@ mod win_impl {
                 for y in (y0..y1).step_by(3) {
                     for x in (x0..x1).step_by(3) {
                         let i = ((y * w + x) * 4) as usize;
-                        let l = (299 * raw[i] as u64 + 587 * raw[i + 1] as u64 + 114 * raw[i + 2] as u64) / 1000;
+                        let l = (299 * raw[i] as u64
+                            + 587 * raw[i + 1] as u64
+                            + 114 * raw[i + 2] as u64)
+                            / 1000;
                         sum += l;
                         n += 1;
                     }
                 }
-                let l = if n == 0 { 0 } else { (sum / n) as usize };
+                let l = sum.checked_div(n).unwrap_or(0) as usize;
                 out.push(ramp[(l * (ramp.len() - 1) / 255).min(ramp.len() - 1)] as char);
             }
             out.push('\n');
@@ -417,7 +438,11 @@ mod win_impl {
             }
         }
         println!("  标尺行: {rows_ok}（非灰/越界跳过 {rows_skipped}）");
-        println!("  段序号序列（已折叠连续重复，共 {} 段）: {:?}", seq.len(), seq);
+        println!(
+            "  段序号序列（已折叠连续重复，共 {} 段）: {:?}",
+            seq.len(),
+            seq
+        );
 
         let mut errs: Vec<String> = Vec::new();
         if seq.is_empty() {
@@ -521,7 +546,14 @@ mod win_impl {
         }
         if args.focus {
             let ok = sc::focus_window(win.hwnd);
-            println!("  focus     : {}", if ok { "ok" } else { "被系统拒绝（继续）" });
+            println!(
+                "  focus     : {}",
+                if ok {
+                    "ok"
+                } else {
+                    "被系统拒绝（继续）"
+                }
+            );
             std::thread::sleep(Duration::from_millis(400));
         }
 
@@ -623,7 +655,11 @@ mod win_impl {
             baseline.image.height(),
             baseline.elapsed_ms,
             baseline.polls,
-            if baseline.timed_out { "，⚠ 超时未稳定" } else { "" }
+            if baseline.timed_out {
+                "，⚠ 超时未稳定"
+            } else {
+                ""
+            }
         );
         dump_frame(&args.dump, "00_baseline", &baseline.image);
         println!("  基线帧统计: {}", slot_stats(&baseline.image));
@@ -712,7 +748,8 @@ mod win_impl {
                     step + 1,
                     inject_desc,
                     diff,
-                    est.map(|e| format!("{}px", e.shift)).unwrap_or_else(|| "n/a".into()),
+                    est.map(|e| format!("{}px", e.shift))
+                        .unwrap_or_else(|| "n/a".into()),
                     est.map(|e| format!(
                         " (err={:.2}, err@0={:.2}, x{})",
                         e.err,

@@ -6,9 +6,18 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { APP_VERSION } from "./version";
+import { createToast, playEnterAnimation, setAnimatedVisibility } from "./ui/presentation";
 import {
-  AppConfig,
-  ImageEntry,
+  createGridLayout,
+  GRID_GAP,
+  thumbnailPixelSize,
+  THUMB_WIDTHS,
+  visibleItemRange,
+} from "./viewer/grid-layout";
+import { createImageSourceResolver } from "./viewer/image-source";
+import {
+  type AppConfig,
+  type ImageEntry,
   copyImageFile,
   fileSrc,
   formatDimensions,
@@ -43,15 +52,13 @@ let rotation = 0; // 0/90/180/270
 let flipH = false;
 let flipV = false;
 
-// 非 WebView 友好格式的解码缓存（path -> dataURL）
-const decodedCache = new Map<string, string>();
+const imageSource = createImageSourceResolver({ fileSrc, readImageData });
 
 // 属性面板渲染 token（防止快速切换时旧 EXIF 异步结果串台）
 let propsToken = 0;
 
 // ---------- DOM ----------
-const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
-  document.getElementById(id) as T;
+const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const emptyState = $("empty-state");
 const contentHeader = $("content-header");
@@ -86,87 +93,29 @@ const ctxMenu = $("context-menu");
 
 // 左侧导航与原型保持同一组 Lucide 轮廓：FolderOpen / Images / Settings2 / CircleHelp。
 function setRailIcon(id: string, paths: string) {
-  $(id).innerHTML = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  $(id).innerHTML =
+    `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 }
-setRailIcon("btn-open", `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="m6 14 1.5-2.9A2 2 0 0 1 9.28 10H20a2 2 0 0 1 1.94 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V7"/>`);
-setRailIcon("btn-settings", `<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>`);
-setRailIcon("btn-about", `<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/>`);
+setRailIcon(
+  "btn-open",
+  `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="m6 14 1.5-2.9A2 2 0 0 1 9.28 10H20a2 2 0 0 1 1.94 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V7"/>`,
+);
+setRailIcon(
+  "btn-settings",
+  `<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>`,
+);
+setRailIcon(
+  "btn-about",
+  `<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/>`,
+);
 
-// ---------- 工具 ----------
-let toastTimer: number | undefined;
-const visibilityTimers = new WeakMap<HTMLElement, number>();
-
-/**
- * 让全屏层先完成淡入/淡出，再从布局树中移除。这里不用 animationend，
- * 因为「减少动态效果」下没有动画，定时器仍能提供稳定的收尾行为。
- */
-function setAnimatedVisibility(el: HTMLElement, visible: boolean, duration = 180) {
-  const previousTimer = visibilityTimers.get(el);
-  if (previousTimer !== undefined) window.clearTimeout(previousTimer);
-
-  if (visible) {
-    el.classList.remove("hidden");
-    requestAnimationFrame(() => el.classList.add("is-visible"));
-    return;
-  }
-
-  el.classList.remove("is-visible");
-  visibilityTimers.set(el, window.setTimeout(() => {
-    if (!el.classList.contains("is-visible")) el.classList.add("hidden");
-  }, duration));
-}
-
-function playEnterAnimation(el: HTMLElement, className = "view-enter") {
-  el.classList.remove(className);
-  // 强制下一帧重新开始动画；切换相邻图片时尤为明显。
-  void el.offsetWidth;
-  el.classList.add(className);
-  window.setTimeout(() => el.classList.remove(className), 240);
-}
-
-function toast(msg: string, kind: "success" | "error" | "info" = "info") {
-  toastEl.textContent = "";
-  const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "";
-  if (icon) {
-    const ic = document.createElement("span");
-    ic.className = `toast-ic ${kind}`;
-    ic.textContent = icon;
-    toastEl.appendChild(ic);
-  }
-  toastEl.appendChild(document.createTextNode(msg));
-  toastEl.classList.remove("hidden");
-  toastEl.classList.remove("show");
-  void toastEl.offsetWidth;
-  toastEl.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => {
-    toastEl.classList.remove("show");
-    window.setTimeout(() => {
-      if (!toastEl.classList.contains("show")) toastEl.classList.add("hidden");
-    }, 180);
-  }, 2200);
-}
-
-async function srcFor(entry: ImageEntry): Promise<string> {
-  if (entry.web_supported) return fileSrc(entry.path);
-  const cached = decodedCache.get(entry.path);
-  if (cached) return cached;
-  const dataUrl = await readImageData(entry.path);
-  decodedCache.set(entry.path, dataUrl);
-  if (decodedCache.size > 20) {
-    // 简单限制缓存规模
-    const first = decodedCache.keys().next().value;
-    if (first) decodedCache.delete(first);
-  }
-  return dataUrl;
-}
+const toast = createToast(toastEl);
 
 // ---------- 主题 ----------
 function applyTheme(theme: "dark" | "light" | "system") {
   const dark =
     theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
+    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
@@ -191,7 +140,7 @@ async function openDirectory(dir: string) {
     const entries = await listImages(dir);
     images = entries;
     currentDir = dir;
-    decodedCache.clear();
+    imageSource.clear();
     renderBreadcrumb();
     if (entries.length === 0) {
       toast(t("toast.noImages"));
@@ -231,34 +180,17 @@ function setImageToolsVisible(v: boolean) {
 }
 
 // ---------- 网格视图（窗口化虚拟滚动） ----------
-const THUMB_WIDTHS = [136, 172, 220];
 let thumbSizeIndex = 1;
 let cellWidth = THUMB_WIDTHS[thumbSizeIndex];
 let thumbHeight = Math.round(cellWidth * 0.744);
 let cellHeight = thumbHeight + 52;
 let newestFirst = true;
-const GAP = 16;
-const BUFFER_ROWS = 2;
 let cols = 4;
-let leftPad = 0;
 const renderedCells = new Map<number, HTMLElement>();
 let scrollRaf = 0;
 
-function computeLayout() {
-  const w = gridView.clientWidth - 48; // 减去左右 padding 24*2
-  cols = Math.max(1, Math.floor((w + GAP) / (cellWidth + GAP)));
-  // 宫格遵循文件浏览器的阅读方向：始终从左侧开始，而不是把少量图片居中。
-  leftPad = 0;
-}
-
-function totalHeight(): number {
-  const rows = Math.ceil(images.length / cols);
-  return rows * cellHeight + (rows - 1) * GAP;
-}
-
 function thumbSize(): number {
-  const dpr = window.devicePixelRatio || 1;
-  return Math.min(384, Math.max(160, Math.round(cellWidth * dpr)));
+  return thumbnailPixelSize(cellWidth);
 }
 
 function showGrid() {
@@ -282,8 +214,11 @@ function showGrid() {
 }
 
 function renderGrid() {
-  computeLayout();
-  gridSpacer.style.height = `${totalHeight()}px`;
+  const layout = createGridLayout(gridView.clientWidth, images.length, cellWidth);
+  cols = layout.columns;
+  thumbHeight = layout.thumbHeight;
+  cellHeight = layout.cellHeight;
+  gridSpacer.style.height = `${layout.totalHeight}px`;
   for (const [, el] of renderedCells) el.remove();
   renderedCells.clear();
   renderVisible();
@@ -292,10 +227,8 @@ function renderGrid() {
 function renderVisible() {
   const scrollTop = gridView.scrollTop;
   const viewH = gridView.clientHeight;
-  const firstRow = Math.floor(scrollTop / (cellHeight + GAP));
-  const lastRow = Math.ceil((scrollTop + viewH) / (cellHeight + GAP));
-  const from = Math.max(0, (firstRow - BUFFER_ROWS) * cols);
-  const to = Math.min(images.length, (lastRow + BUFFER_ROWS) * cols);
+  const layout = createGridLayout(gridView.clientWidth, images.length, cellWidth);
+  const [from, to] = visibleItemRange(scrollTop, viewH, images.length, layout);
 
   const needed = new Set<number>();
   for (let i = from; i < to; i++) needed.add(i);
@@ -318,12 +251,12 @@ function renderVisible() {
 function createCell(i: number): HTMLElement {
   const entry = images[i];
   const cell = document.createElement("div");
-  cell.className = "cell" + (i === activeIndex ? " active" : "");
+  cell.className = `cell${i === activeIndex ? " active" : ""}`;
   cell.dataset.index = String(i);
   const col = i % cols;
   const row = Math.floor(i / cols);
-  cell.style.left = `${leftPad + col * (cellWidth + GAP)}px`;
-  cell.style.top = `${row * (cellHeight + GAP)}px`;
+  cell.style.left = `${col * (cellWidth + GRID_GAP)}px`;
+  cell.style.top = `${row * (cellHeight + GRID_GAP)}px`;
   cell.style.width = `${cellWidth}px`;
 
   const thumb = document.createElement("div");
@@ -351,7 +284,7 @@ function createCell(i: number): HTMLElement {
       img.src = dataUrl;
     })
     .catch(() => {
-      void srcFor(entry).then((s) => {
+      void imageSource.for(entry).then((s) => {
         img.src = s;
       });
     });
@@ -361,7 +294,9 @@ function createCell(i: number): HTMLElement {
 
 function refreshGridMenu() {
   gridSort.textContent = newestFirst ? t("view.sortNewest") : t("view.sortOldest");
-  gridSize.textContent = t(["view.thumbSmall", "view.thumbMedium", "view.thumbLarge"][thumbSizeIndex]);
+  gridSize.textContent = t(
+    ["view.thumbSmall", "view.thumbMedium", "view.thumbLarge"][thumbSizeIndex],
+  );
 }
 
 function toggleGridSort() {
@@ -442,7 +377,7 @@ function showSingle(index: number) {
   pan.x = 0;
   pan.y = 0;
   applyTransform();
-  void srcFor(entry).then((src) => {
+  void imageSource.for(entry).then((src) => {
     singleImg.src = src;
   });
   renderProps(entry);
@@ -565,8 +500,7 @@ window.addEventListener("resize", () => {
   if (viewMode === "single") {
     applyTransform();
     refreshStatus();
-  }
-  else if (viewMode === "grid" && images.length > 0) renderGrid();
+  } else if (viewMode === "grid" && images.length > 0) renderGrid();
 });
 
 // 滚轮缩放
@@ -799,8 +733,11 @@ resizeHandles.forEach((h) => {
     e.preventDefault();
     const dir = h.dataset.dir;
     if (
-      dir === "East" || dir === "West" || dir === "South" ||
-      dir === "SouthEast" || dir === "SouthWest"
+      dir === "East" ||
+      dir === "West" ||
+      dir === "South" ||
+      dir === "SouthEast" ||
+      dir === "SouthWest"
     ) {
       void win.startResizeDragging(dir);
     }
@@ -920,8 +857,12 @@ const setMagnifier = $<HTMLInputElement>("set-magnifier");
 const setMinimize = $<HTMLInputElement>("set-minimize");
 const setAutostart = $<HTMLInputElement>("set-autostart");
 const checkUpdateButton = $<HTMLButtonElement>("check-update");
-const settingsTabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"));
-const settingSections = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
+const settingsTabs = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"),
+);
+const settingSections = Array.from(
+  document.querySelectorAll<HTMLElement>("[data-settings-section]"),
+);
 
 function selectSettingsTab(tab: string) {
   settingsTabs.forEach((button) => {
@@ -976,7 +917,9 @@ btnSettings.addEventListener("click", () => {
   else closeSettings();
 });
 settingsTabs.forEach((button) => {
-  button.addEventListener("click", () => selectSettingsTab(button.dataset.settingsTab ?? "general"));
+  button.addEventListener("click", () =>
+    selectSettingsTab(button.dataset.settingsTab ?? "general"),
+  );
 });
 settingsOverlay.addEventListener("mousedown", (e) => {
   if (e.target === settingsOverlay) closeSettings();
@@ -1113,13 +1056,25 @@ $("set-color-hotkey-apply").addEventListener("click", () => {
     toast(t("toast.hotkeyEmpty"));
     return;
   }
-  saveSettings({ hotkeys: { ...(config?.hotkeys ?? { show_screenshot: "Alt+S", copy_color: "Alt+C", scroll_capture: "Alt+Shift+S" }), copy_color: value } }, { silent: true });
+  saveSettings(
+    {
+      hotkeys: {
+        ...(config?.hotkeys ?? {
+          show_screenshot: "Alt+S",
+          copy_color: "Alt+C",
+          scroll_capture: "Alt+Shift+S",
+        }),
+        copy_color: value,
+      },
+    },
+    { silent: true },
+  );
   toast(t("toast.colorHotkeySet", { key: value }), "success");
 });
 // 滚动截图专属热键：与截图热键同样需要真正重注册（不能只写配置）
 $("set-scroll-hotkey-apply").addEventListener("click", () => {
   const value = setScrollHotkey.value.trim();
-  if (!value || !value.includes("+")) {
+  if (!value?.includes("+")) {
     toast(t("toast.hotkeyEmpty"));
     return;
   }
@@ -1224,10 +1179,7 @@ async function showStartupNotices() {
     const notices = await takeStartupNotices();
     for (const n of notices) {
       if (n.kind === "hotkey_fallback") {
-        toast(
-          t("notice.hotkeyFallback", { wanted: n.wanted ?? "", used: n.used ?? "" }),
-          "info",
-        );
+        toast(t("notice.hotkeyFallback", { wanted: n.wanted ?? "", used: n.used ?? "" }), "info");
       } else if (n.kind === "hotkey_conflict") {
         toast(t("notice.hotkeyConflict", { wanted: n.wanted ?? "" }), "error");
       }

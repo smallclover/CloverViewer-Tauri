@@ -31,6 +31,12 @@ impl CloverMcpServer {
     }
 }
 
+impl Default for CloverMcpServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Deserialize, schemars::JsonSchema)]
 struct RegionParams {
     /// Virtual-desktop physical pixel coordinate. Negative x/y values are supported.

@@ -168,11 +168,7 @@ pub fn run() {
                         // 小尺寸，若被记进 config.json，下次打开主窗口就会变得很小。
                         // 以窗口最小逻辑尺寸（640x480）× 当前缩放作为下限，低于则忽略，
                         // 保留 tauri.conf.json 里的默认 1024x768。
-                        let scale = win
-                            .scale_factor()
-                            .map(|s| s as f32)
-                            .unwrap_or(1.0)
-                            .max(0.5);
+                        let scale = win.scale_factor().map(|s| s as f32).unwrap_or(1.0).max(0.5);
                         if w >= MIN_WINDOW_LOGICAL_W * scale && h >= MIN_WINDOW_LOGICAL_H * scale {
                             let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
                         } else {
@@ -185,12 +181,14 @@ pub fn run() {
             // 注册全局截图热键（直接进入截图模式）
             let gs = app.global_shortcut();
             let hk_log = hotkey_show_screenshot.clone();
-            if let Err(e) = gs.on_shortcut(hotkey_show_screenshot.as_str(), move |app, _sc, event| {
-                if event.state() == ShortcutState::Pressed {
-                    tracing::info!("热键触发: 截图 {hk_log}");
-                    screenshot::start_screenshot(app);
-                }
-            }) {
+            if let Err(e) =
+                gs.on_shortcut(hotkey_show_screenshot.as_str(), move |app, _sc, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        tracing::info!("热键触发: 截图 {hk_log}");
+                        screenshot::start_screenshot(app);
+                    }
+                })
+            {
                 tracing::warn!("热键 {hotkey_show_screenshot} 注册失败: {e}");
             }
 
@@ -276,7 +274,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        show_main_window(&app);
+                        show_main_window(app);
                     }
                 })
                 .build(app)?;
@@ -364,7 +362,7 @@ pub fn run() {
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 pub fn hide_console_window() {
     use windows::Win32::System::Console::GetConsoleWindow;
-    use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, ShowWindow};
+    use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
 
     unsafe {
         let hwnd = GetConsoleWindow();

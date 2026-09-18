@@ -94,7 +94,8 @@ const zh: Dict = {
   "update.checking": "正在检查更新…",
   "update.latest": "当前已是最新版本",
   "update.available": "发现新版本 v{version}。现在下载并安装吗？",
-  "update.availableWithNotes": "发现新版本 v{version}。\n\n更新内容：\n{notes}\n\n现在下载并安装吗？",
+  "update.availableWithNotes":
+    "发现新版本 v{version}。\n\n更新内容：\n{notes}\n\n现在下载并安装吗？",
   "update.downloading": "正在下载更新：{percent}%",
   "update.installing": "更新已下载，正在安装并重启…",
   "update.failed": "检查更新失败：{msg}",
@@ -175,8 +176,10 @@ const zh: Dict = {
   "shot.scrollResult": "结果",
   "shot.scrollFrameCount": "帧数",
   "shot.scrollHint": "框选可滚动的区域（悬停窗口可自动吸附），然后点「开始」",
-  "shot.scrollTooShort": "选区太矮（{h}px）：滚动截图至少需要 {min}px 高 —— 一次滚动约 100~200px，太矮就没有重叠区、无法拼接",
-  "shot.scrollShortCaution": "选区较矮（{h}px）：建议至少 {recommended}px；将先探测实际滚动位移，重叠不足时会停止",
+  "shot.scrollTooShort":
+    "选区太矮（{h}px）：滚动截图至少需要 {min}px 高 —— 一次滚动约 100~200px，太矮就没有重叠区、无法拼接",
+  "shot.scrollShortCaution":
+    "选区较矮（{h}px）：建议至少 {recommended}px；将先探测实际滚动位移，重叠不足时会停止",
   "shot.scrollFromTop": "从页面顶部开始（默认从当前位置往下）",
   "shot.scrollManualMode": "手动滚动（由我控制滚动位置）",
   "shot.scrollStart": "开始滚动截图",
@@ -209,7 +212,8 @@ const zh: Dict = {
   "shot.scrollCopied": "已复制到剪贴板",
   "shot.savedTo": "已保存：{path}",
   "toast.opened": "已在查看器中打开长图",
-  "notice.hotkeyFallback": "滚动截图热键 {wanted} 已被其它程序占用，本次临时改用 {used}（可在设置里改）",
+  "notice.hotkeyFallback":
+    "滚动截图热键 {wanted} 已被其它程序占用，本次临时改用 {used}（可在设置里改）",
   "notice.hotkeyConflict": "滚动截图热键 {wanted} 注册失败（被其它程序占用），请在设置里换一个组合",
 };
 
@@ -236,7 +240,8 @@ const en: Dict = {
   "about.kBackend": "Backend",
   "about.kRt": "Runtime",
   "about.licenses": "Open-source Licenses",
-  "about.lic.self": "This app is open source under MIT, sharing its lineage with the original CloverViewer (egui).",
+  "about.lic.self":
+    "This app is open source under MIT, sharing its lineage with the original CloverViewer (egui).",
   "about.lic.framework": "Desktop framework: native window, WebView and IPC.",
   "about.lic.image": "Screen capture, image codecs and EXIF parsing.",
   "about.lic.mcp": "Built-in MCP server (stdio and streamable HTTP transports).",
@@ -289,7 +294,8 @@ const en: Dict = {
   "update.checking": "Checking for updates…",
   "update.latest": "You're up to date",
   "update.available": "Version v{version} is available. Download and install it now?",
-  "update.availableWithNotes": "Version v{version} is available.\n\nWhat's new:\n{notes}\n\nDownload and install it now?",
+  "update.availableWithNotes":
+    "Version v{version} is available.\n\nWhat's new:\n{notes}\n\nDownload and install it now?",
   "update.downloading": "Downloading update: {percent}%",
   "update.installing": "Update downloaded. Installing and restarting…",
   "update.failed": "Update check failed: {msg}",
@@ -364,8 +370,10 @@ const en: Dict = {
   "shot.scrollResult": "Result",
   "shot.scrollFrameCount": "Frames",
   "shot.scrollHint": "Select a scrollable region (hover a window to snap), then click Start",
-  "shot.scrollTooShort": "Selection too short ({h}px): scrolling capture needs at least {min}px — one scroll step is 100-200px, so shorter regions leave no overlap to stitch",
-  "shot.scrollShortCaution": "Short selection ({h}px): {recommended}px is recommended. Capture will probe the real scroll distance and stop if overlap is insufficient",
+  "shot.scrollTooShort":
+    "Selection too short ({h}px): scrolling capture needs at least {min}px — one scroll step is 100-200px, so shorter regions leave no overlap to stitch",
+  "shot.scrollShortCaution":
+    "Short selection ({h}px): {recommended}px is recommended. Capture will probe the real scroll distance and stop if overlap is insufficient",
   "shot.scrollFromTop": "Start from the top of the page (default: from the current position)",
   "shot.scrollManualMode": "Manual scrolling (I control the position)",
   "shot.scrollStart": "Start scrolling capture",
@@ -378,11 +386,14 @@ const en: Dict = {
   "shot.scrollManualBadge": "Manual mode",
   "shot.scrollManualFinish": "Finish and capture the final frame",
   "shot.scrollManualFinishing": "Capturing the final frame…",
-  "shot.scrollManualEscFinish": "Mouse is passed to the target · Press Esc to finish and capture the final frame",
-  "shot.scrollEscStop": "Mouse passes through to the target · Press Esc to stop and keep the result",
+  "shot.scrollManualEscFinish":
+    "Mouse is passed to the target · Press Esc to finish and capture the final frame",
+  "shot.scrollEscStop":
+    "Mouse passes through to the target · Press Esc to stop and keep the result",
   "shot.scrollProbing": "Detecting a usable scroll method…",
   "shot.scrollSize": "{w} × {h}",
-  "shot.scrollStageLow": "Some frames have weak registration evidence (animation, fixed UI, or repetitive layout)",
+  "shot.scrollStageLow":
+    "Some frames have weak registration evidence (animation, fixed UI, or repetitive layout)",
   "shot.scrollDone": "Scrolling capture complete",
   "shot.scrollConfHigh": "Stitched cleanly",
   "shot.scrollConfLow": "May be misaligned",
@@ -398,8 +409,10 @@ const en: Dict = {
   "shot.scrollCopied": "Copied to clipboard",
   "shot.savedTo": "Saved: {path}",
   "toast.opened": "Long screenshot opened in the viewer",
-  "notice.hotkeyFallback": "Scrolling-capture hotkey {wanted} is taken by another app; using {used} for now (changeable in Settings)",
-  "notice.hotkeyConflict": "Scrolling-capture hotkey {wanted} could not be registered (taken by another app); pick another combo in Settings",
+  "notice.hotkeyFallback":
+    "Scrolling-capture hotkey {wanted} is taken by another app; using {used} for now (changeable in Settings)",
+  "notice.hotkeyConflict":
+    "Scrolling-capture hotkey {wanted} could not be registered (taken by another app); pick another combo in Settings",
 };
 
 const ja: Dict = {
@@ -425,14 +438,16 @@ const ja: Dict = {
   "about.kBackend": "バックエンド",
   "about.kRt": "実行環境",
   "about.licenses": "オープンソースライセンス",
-  "about.lic.self": "本ソフトは MIT ライセンスで公開されています（オリジナルの CloverViewer / egui 版と同系統）。",
+  "about.lic.self":
+    "本ソフトは MIT ライセンスで公開されています（オリジナルの CloverViewer / egui 版と同系統）。",
   "about.lic.framework": "デスクトップフレームワーク：ネイティブウィンドウ、WebView、IPC。",
   "about.lic.image": "画面キャプチャ、画像コーデック、EXIF 解析。",
   "about.lic.mcp": "内蔵 MCP サーバー（stdio と streamable HTTP）。",
   "about.lic.system": "クリップボード、レジストリ、単一インスタンス、ログ。",
   "about.credits": "謝辞",
   "about.th": "私の妻に捧げます",
-  "about.tm": "数え切れないほどの週末をモニターの前で過ごす私を、文句も言わずに見守ってくれたことに感謝して",
+  "about.tm":
+    "数え切れないほどの週末をモニターの前で過ごす私を、文句も言わずに見守ってくれたことに感謝して",
   "win.min": "最小化",
   "win.close": "閉じる",
   "empty.title": "フォルダが開かれていません",
@@ -477,8 +492,10 @@ const ja: Dict = {
   "settings.checkUpdate": "更新を確認",
   "update.checking": "更新を確認中…",
   "update.latest": "最新バージョンです",
-  "update.available": "新しいバージョン v{version} があります。今すぐダウンロードしてインストールしますか？",
-  "update.availableWithNotes": "新しいバージョン v{version} があります。\n\n更新内容：\n{notes}\n\n今すぐダウンロードしてインストールしますか？",
+  "update.available":
+    "新しいバージョン v{version} があります。今すぐダウンロードしてインストールしますか？",
+  "update.availableWithNotes":
+    "新しいバージョン v{version} があります。\n\n更新内容：\n{notes}\n\n今すぐダウンロードしてインストールしますか？",
   "update.downloading": "更新をダウンロード中：{percent}%",
   "update.installing": "更新をインストールして再起動しています…",
   "update.failed": "更新の確認に失敗しました：{msg}",
@@ -552,9 +569,12 @@ const ja: Dict = {
   "shot.scrollCaptured": "取得済み",
   "shot.scrollResult": "結果",
   "shot.scrollFrameCount": "フレーム数",
-  "shot.scrollHint": "スクロールできる範囲を選択し（ウィンドウに重ねると吸着）、「開始」を押してください",
-  "shot.scrollTooShort": "選択範囲が低すぎます（{h}px）：スクロール撮影には {min}px 以上が必要です（1 回のスクロールで 100〜200px 進むため、低すぎると重なりが取れず結合できません）",
-  "shot.scrollShortCaution": "選択範囲がやや低めです（{h}px）：{recommended}px 以上を推奨します。実際のスクロール量を測定し、重なりが足りなければ停止します",
+  "shot.scrollHint":
+    "スクロールできる範囲を選択し（ウィンドウに重ねると吸着）、「開始」を押してください",
+  "shot.scrollTooShort":
+    "選択範囲が低すぎます（{h}px）：スクロール撮影には {min}px 以上が必要です（1 回のスクロールで 100〜200px 進むため、低すぎると重なりが取れず結合できません）",
+  "shot.scrollShortCaution":
+    "選択範囲がやや低めです（{h}px）：{recommended}px 以上を推奨します。実際のスクロール量を測定し、重なりが足りなければ停止します",
   "shot.scrollFromTop": "ページ先頭から開始（既定は現在位置から下へ）",
   "shot.scrollManualMode": "手動スクロール（位置は自分で操作）",
   "shot.scrollStart": "スクロール撮影を開始",
@@ -567,11 +587,13 @@ const ja: Dict = {
   "shot.scrollManualBadge": "手動モード",
   "shot.scrollManualFinish": "完了して最後のフレームを取得",
   "shot.scrollManualFinishing": "最後のフレームを取得中…",
-  "shot.scrollManualEscFinish": "マウスは対象ウィンドウに透過中です · Esc で完了して最後のフレームを取得",
+  "shot.scrollManualEscFinish":
+    "マウスは対象ウィンドウに透過中です · Esc で完了して最後のフレームを取得",
   "shot.scrollEscStop": "マウスは対象ウィンドウに透過中です · Esc で停止して結果を保持",
   "shot.scrollProbing": "利用できるスクロール方式を検出中…",
   "shot.scrollSize": "{w} × {h}",
-  "shot.scrollStageLow": "一部フレームの位置合わせの根拠が弱めです（アニメーション、固定UI、または反復レイアウトの可能性）",
+  "shot.scrollStageLow":
+    "一部フレームの位置合わせの根拠が弱めです（アニメーション、固定UI、または反復レイアウトの可能性）",
   "shot.scrollDone": "スクロール撮影が完了しました",
   "shot.scrollConfHigh": "きれいに結合",
   "shot.scrollConfLow": "ずれの可能性あり",
@@ -587,8 +609,10 @@ const ja: Dict = {
   "shot.scrollCopied": "クリップボードにコピーしました",
   "shot.savedTo": "保存しました：{path}",
   "toast.opened": "長い画像をビューアで開きました",
-  "notice.hotkeyFallback": "スクロール撮影のホットキー {wanted} は他アプリが使用中のため、今回は {used} を使用します（設定で変更可）",
-  "notice.hotkeyConflict": "スクロール撮影のホットキー {wanted} を登録できませんでした（他アプリが使用中）。設定で別の組み合わせに変更してください",
+  "notice.hotkeyFallback":
+    "スクロール撮影のホットキー {wanted} は他アプリが使用中のため、今回は {used} を使用します（設定で変更可）",
+  "notice.hotkeyConflict":
+    "スクロール撮影のホットキー {wanted} を登録できませんでした（他アプリが使用中）。設定で別の組み合わせに変更してください",
 };
 
 const DICTS: Record<Lang, Dict> = { Zh: zh, En: en, Ja: ja };
@@ -623,12 +647,12 @@ export function t(key: string, vars?: Record<string, string | number>): string {
  */
 export function applyI18n(root: ParentNode = document) {
   root.querySelectorAll<HTMLElement>("[data-i18n]").forEach((el) => {
-    el.textContent = t(el.dataset.i18n!);
+    if (el.dataset.i18n) el.textContent = t(el.dataset.i18n);
   });
   root.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((el) => {
-    el.title = t(el.dataset.i18nTitle!);
+    if (el.dataset.i18nTitle) el.title = t(el.dataset.i18nTitle);
   });
   root.querySelectorAll<HTMLInputElement>("[data-i18n-placeholder]").forEach((el) => {
-    el.placeholder = t(el.dataset.i18nPlaceholder!);
+    if (el.dataset.i18nPlaceholder) el.placeholder = t(el.dataset.i18nPlaceholder);
   });
 }

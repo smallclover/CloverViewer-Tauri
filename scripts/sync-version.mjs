@@ -11,7 +11,8 @@ const files = {
 
 const packageInfo = JSON.parse(await readFile(files.packageJson, "utf8"));
 const version = packageInfo.version;
-const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const semver =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 if (typeof version !== "string" || !semver.test(version)) {
   throw new Error(`package.json version must be valid semver, got: ${String(version)}`);
@@ -28,12 +29,13 @@ const targets = [
   {
     label: "package-lock root",
     url: files.packageLock,
-    pattern: /^(\{\r?\n  "name": "[^"]+",\r?\n  "version": )"[^"]+"/,
+    pattern: /^(\{\r?\n {2}"name": "[^"]+",\r?\n {2}"version": )"[^"]+"/,
   },
   {
     label: "package-lock workspace package",
     url: files.packageLock,
-    pattern: /(  "packages": \{\r?\n    "": \{\r?\n      "name": "[^"]+",\r?\n      "version": )"[^"]+"/,
+    pattern:
+      /( {2}"packages": \{\r?\n {4}"": \{\r?\n {6}"name": "[^"]+",\r?\n {6}"version": )"[^"]+"/,
   },
   {
     label: "Cargo.toml package",
@@ -49,7 +51,7 @@ const targets = [
 
 const contents = new Map();
 for (const target of targets) {
-  const content = contents.get(target.url) ?? await readFile(target.url, "utf8");
+  const content = contents.get(target.url) ?? (await readFile(target.url, "utf8"));
   const updated = replaceExactly(content, target.pattern, target.label);
   contents.set(target.url, updated);
 }
@@ -65,10 +67,16 @@ if (checkOnly) {
     const labels = targets
       .filter((target) => pending.some(([url]) => url === target.url))
       .map((target) => target.label);
-    throw new Error(`Version metadata is out of sync with package.json (${version}): ${labels.join(", ")}`);
+    throw new Error(
+      `Version metadata is out of sync with package.json (${version}): ${labels.join(", ")}`,
+    );
   }
   console.log(`Version metadata is in sync: ${version}`);
 } else {
   for (const [url, updated] of pending) await writeFile(url, updated, "utf8");
-  console.log(pending.length === 0 ? `Version metadata already in sync: ${version}` : `Synchronized version metadata: ${version}`);
+  console.log(
+    pending.length === 0
+      ? `Version metadata already in sync: ${version}`
+      : `Synchronized version metadata: ${version}`,
+  );
 }

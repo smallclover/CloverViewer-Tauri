@@ -49,11 +49,11 @@ mod imp {
     use pollster::block_on;
     use std::future::IntoFuture;
     use windows::{
+        core::{Result, HSTRING},
         Globalization::Language as WinLanguage,
         Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap},
         Media::Ocr::OcrEngine,
         Security::Cryptography::CryptographicBuffer,
-        core::{HSTRING, Result},
     };
 
     #[derive(Clone, Copy)]
@@ -68,10 +68,7 @@ mod imp {
         preferred: Option<Language>,
     }
 
-    pub(super) fn recognize_text_internal(
-        img: DynamicImage,
-        language: Language,
-    ) -> Result<String> {
+    pub(super) fn recognize_text_internal(img: DynamicImage, language: Language) -> Result<String> {
         let preprocessed_img = preprocess_for_ocr(img);
         let rgba_img = preprocessed_img.into_rgba8();
         let width = rgba_img.width() as i32;
@@ -79,12 +76,8 @@ mod imp {
         let bytes = rgba_img.into_raw();
 
         let buffer = CryptographicBuffer::CreateFromByteArray(&bytes)?;
-        let bitmap = SoftwareBitmap::CreateCopyFromBuffer(
-            &buffer,
-            BitmapPixelFormat::Rgba8,
-            width,
-            height,
-        )?;
+        let bitmap =
+            SoftwareBitmap::CreateCopyFromBuffer(&buffer, BitmapPixelFormat::Rgba8, width, height)?;
 
         let mut best_score = f64::MIN;
         let mut best_text: Option<String> = None;
@@ -227,9 +220,10 @@ mod imp {
             }
             if ch.is_ascii() {
                 match ch {
-                    '{' | '}' | '(' | ')' | '[' | ']' | '<' | '>' | ';' | ':' | ',' | '.'
-                    | '_' | '=' | '+' | '-' | '*' | '/' | '\\' | '|' | '&' | '!' | '?'
-                    | '\'' | '"' => code_symbols += 1,
+                    '{' | '}' | '(' | ')' | '[' | ']' | '<' | '>' | ';' | ':' | ',' | '.' | '_'
+                    | '=' | '+' | '-' | '*' | '/' | '\\' | '|' | '&' | '!' | '?' | '\'' | '"' => {
+                        code_symbols += 1
+                    }
                     _ => {}
                 }
             }
@@ -312,7 +306,11 @@ fn preprocess_for_ocr(img: DynamicImage) -> DynamicImage {
         invert_in_place(&mut gray);
     }
 
-    gray = auto_contrast(gray, OCR_CONTRAST_LOW_PERCENTILE, OCR_CONTRAST_HIGH_PERCENTILE);
+    gray = auto_contrast(
+        gray,
+        OCR_CONTRAST_LOW_PERCENTILE,
+        OCR_CONTRAST_HIGH_PERCENTILE,
+    );
 
     let scale = choose_scale(gray.width(), gray.height());
     if scale > 1 {
@@ -334,7 +332,11 @@ fn preprocess_for_ocr(img: DynamicImage) -> DynamicImage {
 
 fn choose_scale(width: u32, height: u32) -> u32 {
     let min_dim = width.min(height);
-    if min_dim < 500 || height < 260 { 3 } else { 2 }
+    if min_dim < 500 || height < 260 {
+        3
+    } else {
+        2
+    }
 }
 
 fn should_invert(gray: &GrayImage) -> bool {
@@ -486,7 +488,10 @@ fn binarize(mut gray: GrayImage, threshold: u8) -> GrayImage {
 #[tauri::command]
 pub async fn ocr_image(app: tauri::AppHandle, png: String) -> Result<String, String> {
     use tauri::Manager;
-    let language = app.state::<crate::config::ConfigStore>().snapshot().language;
+    let language = app
+        .state::<crate::config::ConfigStore>()
+        .snapshot()
+        .language;
     tauri::async_runtime::spawn_blocking(move || {
         crate::ocr::recognize_text_from_base64(&png, language)
     })

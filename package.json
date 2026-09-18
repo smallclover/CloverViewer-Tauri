@@ -7,6 +7,12 @@
     "dev": "vite",
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run version:check",
     "build": "npm run version:sync && tsc && vite build",
     "preview": "vite preview",
     "tauri": "npm run version:sync && tauri"
@@ -19,8 +25,10 @@
     "@tauri-apps/plugin-updater": "^2.11.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@tauri-apps/cli": "^2",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^5.0.1"
   }
 }

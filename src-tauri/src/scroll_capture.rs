@@ -30,6 +30,17 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use serde::{Deserialize, Serialize};
 
+#[path = "scroll_capture/stitching.rs"]
+mod stitching;
+use stitching::{append_band, attach_footer, duplicate_ratio, trim_initial_footer};
+#[path = "scroll_capture/frame_metrics.rs"]
+mod frame_metrics;
+#[path = "scroll_capture/frame_shift.rs"]
+pub mod frame_shift;
+pub use frame_shift::ShiftEstimate;
+#[path = "scroll_capture/grayscale.rs"]
+mod grayscale;
+
 /// 一格滚轮的 delta（`WHEEL_DELTA`，windows crate 里没有该常量，硬编码）
 pub const WHEEL_DELTA: u32 = 120;
 
@@ -54,7 +65,6 @@ const SCROLLED_DIFF_RATIO: f32 = 0.002;
 const MIN_SHIFT: u32 = 4;
 /// 连续匹配失败多少次就放弃（保留已拼接部分）
 const MAX_MATCH_FAILURES: u32 = 3;
-
 
 // ============================================================
 // 通用数据类型（平台无关）
@@ -132,13 +142,16 @@ impl ScrollMethod {
 
     pub fn parse(s: &str) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
-        Self::ALL.into_iter().find(|m| m.name() == s).or(match s.as_str() {
-            // 便利别名
-            "post" => Some(ScrollMethod::WheelPost),
-            "input" => Some(ScrollMethod::WheelInput),
-            "all" => Some(ScrollMethod::WheelPost),
-            _ => None,
-        })
+        Self::ALL
+            .into_iter()
+            .find(|m| m.name() == s)
+            .or(match s.as_str() {
+                // 便利别名
+                "post" => Some(ScrollMethod::WheelPost),
+                "input" => Some(ScrollMethod::WheelInput),
+                "all" => Some(ScrollMethod::WheelPost),
+                _ => None,
+            })
     }
 }
 
@@ -175,7 +188,7 @@ pub struct ScrollState {
 impl ScrollState {
     /// 是否已到底（ShareX 的判据）
     pub fn at_bottom(&self) -> bool {
-        self.page > 0 && self.track_pos + self.page - 1 >= self.max
+        self.page > 0 && self.track_pos + self.page > self.max
     }
 }
 
@@ -189,28 +202,6 @@ pub struct SettleResult {
     pub polls: u32,
     /// true = 等到超时仍未稳定（页面一直在动，如动画/视频）
     pub timed_out: bool,
-}
-
-/// 两帧之间的纵向位移估计
-#[derive(Debug, Clone, Copy)]
-pub struct ShiftEstimate {
-    /// 估计位移（像素，正数 = 内容向上移动了这么多，即向下滚了多少）
-    pub shift: u32,
-    /// 该位移下的平均灰度误差（越小越可信）
-    pub err: f32,
-    /// 位移 0（即没滚动）时的平均灰度误差，用作对照
-    pub err_at_zero: f32,
-}
-
-impl ShiftEstimate {
-    /// 误差相对「没滚动」的改善倍数；远大于 1 才说明确实滚动了
-    pub fn improvement(&self) -> f32 {
-        if self.err <= f32::EPSILON {
-            f32::INFINITY
-        } else {
-            self.err_at_zero / self.err
-        }
-    }
 }
 
 // ============================================================
@@ -235,10 +226,11 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     ChildWindowFromPointEx, EnumWindows, GetAncestor, GetClassNameW, GetClientRect, GetCursorPos,
     GetDesktopWindow, GetForegroundWindow, GetScrollInfo, GetSystemMetrics, GetWindowRect,
-    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW, SetCursorPos,
-    SetForegroundWindow, ShowWindow, WindowFromPoint, CWP_SKIPINVISIBLE, GA_ROOT, SB_LINEDOWN,
-    SB_VERT, SCROLLINFO, SIF_ALL, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-    SM_YVIRTUALSCREEN, SW_MAXIMIZE, SW_RESTORE, WM_KEYDOWN, WM_KEYUP, WM_MOUSEWHEEL, WM_VSCROLL,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW,
+    SetCursorPos, SetForegroundWindow, ShowWindow, WindowFromPoint, CWP_SKIPINVISIBLE, GA_ROOT,
+    SB_LINEDOWN, SB_VERT, SCROLLINFO, SIF_ALL, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE, SW_RESTORE, WM_KEYDOWN, WM_KEYUP,
+    WM_MOUSEWHEEL, WM_VSCROLL,
 };
 
 /// 把裸指针封装的 HWND 在跨函数传递时用 isize 表示（HWND 不是 Send）。
@@ -336,7 +328,8 @@ pub fn capture_rect(rect: &RectPx) -> Result<RgbaImage, String> {
             px.swap(0, 2);
             px[3] = 255;
         }
-        RgbaImage::from_raw(rect.w, rect.h, buf).ok_or_else(|| "RgbaImage::from_raw 失败".to_string())
+        RgbaImage::from_raw(rect.w, rect.h, buf)
+            .ok_or_else(|| "RgbaImage::from_raw 失败".to_string())
     }
 }
 
@@ -344,34 +337,7 @@ pub fn capture_rect(rect: &RectPx) -> Result<RgbaImage, String> {
 
 /// 两帧的差异像素占比（隔行隔列采样，只用于「是否稳定」的判定）
 pub fn frame_diff_ratio(a: &RgbaImage, b: &RgbaImage) -> f32 {
-    if a.dimensions() != b.dimensions() {
-        return 1.0;
-    }
-    let (w, h) = a.dimensions();
-    let (pa, pb) = (a.as_raw(), b.as_raw());
-    let mut diff = 0u32;
-    let mut total = 0u32;
-    let mut y = 0;
-    while y < h {
-        let mut x = 0;
-        while x < w {
-            let i = ((y * w + x) * 4) as usize;
-            let d = (pa[i] as i16 - pb[i] as i16).abs()
-                | (pa[i + 1] as i16 - pb[i + 1] as i16).abs()
-                | (pa[i + 2] as i16 - pb[i + 2] as i16).abs();
-            if d > DIFF_TOLERANCE {
-                diff += 1;
-            }
-            total += 1;
-            x += 2;
-        }
-        y += 2;
-    }
-    if total == 0 {
-        0.0
-    } else {
-        diff as f32 / total as f32
-    }
+    frame_metrics::diff_ratio(a, b, DIFF_TOLERANCE)
 }
 
 /// 等待画面稳定后返回一帧。
@@ -379,7 +345,11 @@ pub fn frame_diff_ratio(a: &RgbaImage, b: &RgbaImage) -> f32 {
 /// 比 ShareX 的固定 `ScrollDelay` 稳：慢渲染页面 / 懒加载列表在固定延迟下会截到
 /// 「滚了一半」的中间态，这里改成「连续 [`STABLE_POLLS`] 次捕获一致才认为稳定」
 /// （不能只比两次：Chrome 的平滑滚动收尾阶段每次只挪一两个像素，两次就够骗过阈值了）。
-pub fn settle_capture(rect: &RectPx, timeout_ms: u64, poll_ms: u64) -> Result<SettleResult, String> {
+pub fn settle_capture(
+    rect: &RectPx,
+    timeout_ms: u64,
+    poll_ms: u64,
+) -> Result<SettleResult, String> {
     settle_capture_ext(rect, timeout_ms, poll_ms, None)
 }
 
@@ -438,98 +408,7 @@ pub fn settle_capture_ext(
 
 // ---------- 纵向位移估计（P0 的粗糙版，P1 会被行指纹匹配取代） ----------
 
-/// 灰度降采样：宽固定 `target_w`，每个输出列取该块内几个采样的**平均值**。
-///
-/// 必须是块平均而不是取块中心单点：亚像素滚动/整屏重绘的目标（典型是 WinForms ListBox，
-/// 它的行高是 18.33px 这种小数）会让同一内容在不同滚动位置**重新渲染**，逐点比较必然有
-/// 边缘差异。块平均把这些差异平均掉，SAD 才能看出真正的对齐位置（P1 实测：
-/// 取单点时 ListBox 的 SAD 在真位移 55px 与 0 之间几乎分不开，块平均后是 0.66 vs 0.90）。
-fn gray_downsample(img: &RgbaImage, target_w: u32) -> (Vec<u8>, u32, u32) {
-    let (w, h) = img.dimensions();
-    let step_x = (w / target_w.max(1)).max(1);
-    let out_w = (w / step_x).max(1);
-    let out_h = h;
-    let raw = img.as_raw();
-    // 每列最多取 4 个采样求平均
-    let taps = step_x.min(4).max(1);
-    let tap_step = (step_x / taps).max(1);
-    let mut out = Vec::with_capacity((out_w * out_h) as usize);
-    for y in 0..out_h {
-        let base = y as usize * w as usize * 4;
-        for ox in 0..out_w {
-            let x_start = ox * step_x;
-            let mut sum = 0u32;
-            let mut n = 0u32;
-            let mut t = 0;
-            while t < taps {
-                let x = (x_start + t * tap_step).min(w - 1);
-                let i = base + x as usize * 4;
-                sum += (299 * raw[i] as u32 + 587 * raw[i + 1] as u32 + 114 * raw[i + 2] as u32) / 1000;
-                n += 1;
-                t += 1;
-            }
-            out.push(if n == 0 { 0 } else { (sum / n) as u8 });
-        }
-    }
-    (out, out_w, out_h)
-}
-
-/// 容差版位移测量：见下方 `tolerant_shift`（定义在 SAD 核心旁）。
-
 /// SAD 核心：在给定的灰度行图上找最佳位移
-fn shift_from_grays(gp: &[u8], gc: &[u8], gw: usize, h: u32) -> Option<ShiftEstimate> {
-    if gw == 0 || h < 32 {
-        return None;
-    }
-    // 左右各忽略 5% 列（躲滚动条/边框）
-    let margin = (gw / 20).max(1);
-    let x0 = margin;
-    let x1 = gw.saturating_sub(margin).max(x0 + 1);
-
-    let hh = h as usize;
-    let max_shift = (hh / 2).max(1);
-    let rows: Vec<usize> = (0..hh).step_by(2).collect();
-
-    let score = |shift: usize| -> f32 {
-        let mut sum = 0u64;
-        let mut n = 0u64;
-        for &y in &rows {
-            let py = y + shift;
-            if py >= hh {
-                break;
-            }
-            let a = &gc[y * gw + x0..y * gw + x1];
-            let b = &gp[py * gw + x0..py * gw + x1];
-            for (x, av) in a.iter().enumerate() {
-                sum += (*av as i32 - b[x] as i32).unsigned_abs() as u64;
-                n += 1;
-            }
-        }
-        if n == 0 {
-            f32::MAX
-        } else {
-            sum as f32 / n as f32
-        }
-    };
-
-    let err_at_zero = score(0);
-    let mut best = (0usize, err_at_zero);
-    for shift in 1..=max_shift {
-        let e = score(shift);
-        if e < best.1 {
-            best = (shift, e);
-        }
-        if e < 0.4 {
-            break;
-        }
-    }
-    Some(ShiftEstimate {
-        shift: best.0 as u32,
-        err: best.1,
-        err_at_zero,
-    })
-}
-
 /// 估计「内容向上移动了多少像素」。
 ///
 /// 仅用于采集「一格滚轮实际滚多少像素」这种标定信息，**不参与最终拼接**
@@ -539,9 +418,9 @@ pub fn estimate_shift(prev: &RgbaImage, cur: &RgbaImage) -> Option<ShiftEstimate
         return None;
     }
     let (_w, h) = prev.dimensions();
-    let (gp, gw, _gh) = gray_downsample(prev, 96);
-    let (gc, _cw, _ch) = gray_downsample(cur, 96);
-    shift_from_grays(&gp, &gc, gw as usize, h)
+    let (gp, gw, _gh) = grayscale::downsample(prev, 96);
+    let (gc, _cw, _ch) = grayscale::downsample(cur, 96);
+    frame_shift::from_grays(&gp, &gc, gw as usize, h)
 }
 
 /// 粗测哪些横向分段是「不随滚动移动的固定区域」（资源管理器导航窗格、VS Code 侧栏…）。
@@ -605,7 +484,7 @@ pub fn tolerant_shift(prev: &RgbaImage, cur: &RgbaImage) -> Option<(u32, f32)> {
     } else {
         let (gp, gw, _gh) = gray_masked(prev, &moving, 96);
         let (gc, _cw, _ch) = gray_masked(cur, &moving, 96);
-        shift_from_grays(&gp, &gc, gw as usize, h)?
+        frame_shift::from_grays(&gp, &gc, gw as usize, h)?
     };
     if est.shift < MIN_SHIFT || est.err_at_zero <= f32::EPSILON {
         return None;
@@ -624,7 +503,7 @@ fn gray_masked(img: &RgbaImage, ranges: &[(u32, u32)], target_w: u32) -> (Vec<u8
     let step_x = (total_cols / target_w.max(1)).max(1);
     let out_w = (total_cols / step_x).max(1);
     let raw = img.as_raw();
-    let taps = step_x.min(4).max(1);
+    let taps = step_x.clamp(1, 4);
     let tap_step = (step_x / taps).max(1);
     let mut out = Vec::with_capacity((out_w * h) as usize);
     for y in 0..h {
@@ -647,11 +526,12 @@ fn gray_masked(img: &RgbaImage, ranges: &[(u32, u32)], target_w: u32) -> (Vec<u8
                 }
                 let x = x.min(w - 1);
                 let i = base + x as usize * 4;
-                sum += (299 * raw[i] as u32 + 587 * raw[i + 1] as u32 + 114 * raw[i + 2] as u32) / 1000;
+                sum += (299 * raw[i] as u32 + 587 * raw[i + 1] as u32 + 114 * raw[i + 2] as u32)
+                    / 1000;
                 n += 1;
                 col += tap_step;
             }
-            out.push(if n == 0 { 0 } else { (sum / n) as u8 });
+            out.push(sum.checked_div(n).unwrap_or(0) as u8);
         }
     }
     (out, out_w, h)
@@ -733,8 +613,18 @@ fn window_info(hwnd: HWND) -> Option<WinInfo> {
         pid,
         title: window_title(hwnd),
         class: window_class(hwnd),
-        rect: window_rect(raw).unwrap_or(RectPx { x: 0, y: 0, w: 0, h: 0 }),
-        client: client_rect(raw).unwrap_or(RectPx { x: 0, y: 0, w: 0, h: 0 }),
+        rect: window_rect(raw).unwrap_or(RectPx {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }),
+        client: client_rect(raw).unwrap_or(RectPx {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }),
         is_own: pid == std::process::id(),
     })
 }
@@ -789,16 +679,15 @@ pub fn resolve_window(pid: Option<u32>, title_substr: Option<&str>) -> Result<Wi
         if w.client.w < 200 || w.client.h < 200 {
             continue;
         }
-        if best.as_ref().map(|b| w.rect.area() > b.rect.area()).unwrap_or(true) {
+        if best
+            .as_ref()
+            .map(|b| w.rect.area() > b.rect.area())
+            .unwrap_or(true)
+        {
             best = Some(w);
         }
     }
-    best.ok_or_else(|| {
-        format!(
-            "未找到匹配窗口 (pid={:?}, title~={:?})",
-            pid, title_substr
-        )
-    })
+    best.ok_or_else(|| format!("未找到匹配窗口 (pid={:?}, title~={:?})", pid, title_substr))
 }
 
 /// 当前前台窗口（探针跑完后尽力恢复）
@@ -936,10 +825,13 @@ pub fn virtual_screen() -> (i32, i32, i32, i32) {
 }
 
 /// `GetScrollInfo(SB_VERT)`：只对带标准滚动条的窗口有效（Chrome 顶层窗口没有）
-pub fn scroll_state(raw: isize) -> Option<ScrollState> {    unsafe {
-        let mut si = SCROLLINFO::default();
-        si.cbSize = std::mem::size_of::<SCROLLINFO>() as u32;
-        si.fMask = SIF_ALL;
+pub fn scroll_state(raw: isize) -> Option<ScrollState> {
+    unsafe {
+        let mut si = SCROLLINFO {
+            cbSize: std::mem::size_of::<SCROLLINFO>() as u32,
+            fMask: SIF_ALL,
+            ..Default::default()
+        };
         GetScrollInfo(hwnd_from(raw), SB_VERT, &mut si).ok()?;
         Some(ScrollState {
             min: si.nMin,
@@ -1014,7 +906,9 @@ pub fn inject_scroll(
                 if sent == 0 {
                     return Err("SendInput 失败（可能被 UIPI 拦截）".to_string());
                 }
-                Ok(format!("SendInput(MOUSEEVENTF_WHEEL x{notches}) @ ({cx},{cy})"))
+                Ok(format!(
+                    "SendInput(MOUSEEVENTF_WHEEL x{notches}) @ ({cx},{cy})"
+                ))
             }
             ScrollMethod::VScroll => {
                 // 关键：滚动条长在**子窗口**上（ListBox/Edit/Explorer 的 DirectUIHWND），
@@ -1029,7 +923,9 @@ pub fn inject_scroll(
                     )
                     .map_err(|e| format!("PostMessage(WM_VSCROLL) 失败: {e}"))?;
                 }
-                Ok(format!("WM_VSCROLL/SB_LINEDOWN x{notches} → hwnd 0x{target:X}"))
+                Ok(format!(
+                    "WM_VSCROLL/SB_LINEDOWN x{notches} → hwnd 0x{target:X}"
+                ))
             }
             ScrollMethod::PageDown => {
                 // 同理：按键消息要发给光标下的子窗口（通常就是有焦点的那个控件），
@@ -1054,14 +950,21 @@ pub fn inject_scroll(
                     )
                     .map_err(|e| format!("PostMessage(WM_KEYUP) 失败: {e}"))?;
                 }
-                Ok(format!("WM_KEYDOWN/UP VK_NEXT x{notches} → hwnd 0x{target:X}"))
+                Ok(format!(
+                    "WM_KEYDOWN/UP VK_NEXT x{notches} → hwnd 0x{target:X}"
+                ))
             }
         }
     }
 }
 
 /// 把目标区域滚回顶部：向上狂发滚轮（顶部处无效滚动是安全的空操作）。
-pub fn scroll_to_top(root: isize, rect: &RectPx, method: ScrollMethod, notches: u32) -> Result<(), String> {
+pub fn scroll_to_top(
+    root: isize,
+    rect: &RectPx,
+    method: ScrollMethod,
+    notches: u32,
+) -> Result<(), String> {
     let (cx, cy) = rect.center();
     unsafe {
         let target = if matches!(method, ScrollMethod::WheelPost) {
@@ -1237,9 +1140,7 @@ impl FpGrid {
             let fp_prev = row_fingerprints(prev, sx0, sx1, step);
             let fp_cur = row_fingerprints(cur, sx0, sx1, step);
             // 「同一行下标处相同」的比例高 = 这一段整体没动（固定区域）
-            let same = (0..h)
-                .filter(|y| fp_prev[*y] == fp_cur[*y])
-                .count();
+            let same = (0..h).filter(|y| fp_prev[*y] == fp_cur[*y]).count();
             let frac = if h == 0 { 1.0 } else { same as f32 / h as f32 };
             moving.push(frac < 0.5);
             segs_prev.push(fp_prev);
@@ -1251,8 +1152,16 @@ impl FpGrid {
             moving.iter_mut().for_each(|m| *m = true);
         }
         (
-            Self { segs: segs_prev, moving: moving.clone(), has_static },
-            Self { segs: segs_cur, moving, has_static },
+            Self {
+                segs: segs_prev,
+                moving: moving.clone(),
+                has_static,
+            },
+            Self {
+                segs: segs_cur,
+                moving,
+                has_static,
+            },
         )
     }
 
@@ -1488,164 +1397,6 @@ pub fn match_frames(
     })
 }
 
-/// 单行指纹（整行采样 + 量化哈希）。用于「查重」——只关心两行是不是同一行内容。
-fn row_hash(raw: &[u8], row_index: usize, w: u32, step: u32) -> u64 {
-    let base = row_index * w as usize * 4;
-    let mut hsh: u64 = 0xcbf2_9ce4_8422_2325;
-    let mut x = 0u32;
-    while x < w {
-        let i = base + x as usize * 4;
-        let packed = ((raw[i] >> 3) as u64) << 10
-            | ((raw[i + 1] >> 3) as u64) << 5
-            | (raw[i + 2] >> 3) as u64;
-        hsh = (hsh ^ packed).wrapping_mul(0x0000_0100_0000_01b3);
-        x += step;
-    }
-    hsh
-}
-
-/// **追加前查重**：即将追加的**新内容**（不含吸底栏）有多大比例已经存在于画布尾部？
-///
-/// ⚠ 这个指标**只能当参考，不能当否决票**（实测踩过）：它按「整行 64 位哈希完全相同」计数，
-/// 而真实网页里大量行本来就长得一样（空白、纯色、重复正文、条纹）。于是**位移完全正确**时
-/// 它照样可能报 80%+，把好帧全否掉 → 一帧都拼不上 → 报「没有捕获到可拼接的内容」。
-/// 现在的用法：只在「匹配本身就很弱」时把它当作提前收兵的依据，并且**永远不丢帧**
-/// （见主循环里对 `dup` 的处理：接受 + 标记低置信）。
-///
-/// `band_end` 由调用方给（= 帧高 - 吸底栏高）：吸底栏每步都必然与上一帧不同（含滚动位置
-/// 提示时），算进来会每步都误判。
-///
-/// 返回 0.0-1.0；没有可比对的行时返回 0.0（不误报）。
-fn duplicate_ratio(
-    canvas: &[u8],
-    canvas_w: u32,
-    canvas_h: u32,
-    cur: &RgbaImage,
-    append_y: u32,
-    band_end: u32,
-) -> f32 {
-    // 只检查「新内容」部分：吸底栏那几行天然与上一帧相同，不能算重复
-    let band_end = band_end.min(cur.height());
-    let band_rows = band_end.saturating_sub(append_y);
-    if band_rows == 0 || canvas_h == 0 || canvas_w != cur.width() {
-        return 0.0;
-    }
-    // 尾部一屏以内的行作为参照（再往前的重复属于「隔很远才重复」，噪声更大）
-    let tail_rows = canvas_h.min(cur.height());
-    let tail_start = canvas_h - tail_rows;
-    let step = 4u32;
-    let mut seen: std::collections::HashSet<u64> =
-        std::collections::HashSet::with_capacity(tail_rows as usize);
-    for y in tail_start..canvas_h {
-        seen.insert(row_hash(canvas, y as usize, canvas_w, step));
-    }
-    let raw = cur.as_raw();
-    let mut hits = 0u32;
-    // 只比对「新内容」行（不含吸底栏）
-    for y in append_y..band_end {
-        if seen.contains(&row_hash(raw, y as usize, canvas_w, step)) {
-            hits += 1;
-        }
-    }
-    hits as f32 / band_rows as f32
-}
-
-/// 把 `cur` 的正文新内容接到累积画布上。
-///
-/// **约定：画布只保存「吸顶页头 + 累积正文」，不保存吸底栏**（吸底栏在收尾时补一次，
-/// 见 `run_session` 末尾的 `attach_footer`）。这样拼接算式最干净：
-///
-/// - 页面往上滚了 `shift` ⇒ `cur` 里最新的正文是正文区最后 `shift` 行，
-///   即整帧的 `cur[h-shift-footer_h .. h-footer_h)`。
-/// - 画布尾部 `shift` 行是上一帧写进去的同一段正文，丢掉后再追加这 `shift` 行。
-/// - 于是画布**净增恰好 = shift** —— 核心不变量。
-/// - 起始帧（`shift = 0`）：写入 `header + body`（不含吸底栏）。
-///
-/// ⚠ 早期版本用 `append_y = h - bottom_fixed - shift`（且只丢 `bottom_fixed` 行）：
-/// 净增只有 `shift - bottom_fixed`。页脚一大（浏览器固定工具条 30-60px）净增就≈0，
-/// 画布永远超不过一帧 —— 表现就是「只拼进 1 帧」，最后报「没有捕获到可拼接的内容」。
-/// 另外「最后一帧的最后 `shift` 行」会把上一帧的正文行覆盖成新吸底栏（实测行号跳变），
-/// 所以这里改成「划出正文区 + 收尾单独贴吸底栏」。有
-/// `stitch_reproduces_expected_long_image` 断言住这些不变量。
-fn append_band(
-    canvas: &mut Vec<u8>,
-    canvas_w: u32,
-    canvas_h: &mut u32,
-    cur: &RgbaImage,
-    header_h: u32,
-    footer_h: u32,
-    shift: u32,
-) -> Result<(), String> {
-    let h = cur.height();
-    if canvas_w == 0 || h == 0 {
-        return Err("append_band: 空帧".to_string());
-    }
-    if cur.width() != canvas_w {
-        return Err(format!(
-            "append_band: 帧宽 {} 与画布宽 {canvas_w} 不一致",
-            cur.width()
-        ));
-    }
-    let row_bytes = canvas_w as usize * 4;
-    let header_h = header_h.min(h / 2);
-    let footer_h = footer_h.min(h.saturating_sub(header_h).saturating_sub(1));
-    let body_bottom = h - footer_h;
-    if body_bottom <= header_h {
-        return Err("append_band: 帧高不足以容纳页头/页脚".to_string());
-    }
-    let raw = cur.as_raw();
-    if shift == 0 {
-        // 起始帧：页头 + 正文（吸底栏留给收尾）
-        canvas.extend_from_slice(&raw[..body_bottom as usize * row_bytes]);
-        *canvas_h += body_bottom;
-        return Ok(());
-    }
-    let shift = shift.min(*canvas_h);
-    // 正文区高度（画布只存 页头+正文，所以可直接按行数换算）
-    let body_h = h - header_h - footer_h;
-    // 本帧正文里最新的 shift 行：正文下标 (body_h - shift)，换算到整帧下标要加 header_h
-    let new_start = body_h.saturating_sub(shift) + header_h;
-    // 画布**全保留**：画布尾部就是上一帧正文的末尾，正好等于本帧新内容的前一行
-    // （画布不含吸底栏，所以不存在「旧吸底栏要被覆盖」的问题）
-    canvas.extend_from_slice(&raw[new_start as usize * row_bytes..body_bottom as usize * row_bytes]);
-    *canvas_h += body_bottom - new_start;
-    debug_assert_eq!(
-        canvas.len(),
-        *canvas_h as usize * row_bytes,
-        "画布长度与行数记账不一致"
-    );
-    Ok(())
-}
-
-/// 收尾：把最后一帧的吸底栏贴到长图最底部（整个会话只出现一次）。
-fn attach_footer(canvas: &mut Vec<u8>, canvas_w: u32, canvas_h: &mut u32, last: &RgbaImage, footer_h: u32) {
-    let h = last.height();
-    let footer_h = footer_h.min(h.saturating_sub(1));
-    if footer_h == 0 || last.width() != canvas_w {
-        return;
-    }
-    let row_bytes = canvas_w as usize * 4;
-    let raw = last.as_raw();
-    canvas.extend_from_slice(&raw[(h - footer_h) as usize * row_bytes..]);
-    *canvas_h += footer_h;
-}
-
-/// 首帧在还不知道吸底栏高度时会完整入画布。第一对帧匹配出吸底栏后，
-/// 必须把这块从首帧尾部拿掉：后续 `append_band` 的不变量是「画布只存
-/// 页头 + 正文」，否则首帧页脚会烤进长图中间，最后收尾又会再贴一次页脚。
-fn trim_initial_footer(canvas: &mut Vec<u8>, canvas_w: u32, canvas_h: &mut u32, footer_h: u32) -> bool {
-    if canvas_w == 0 || footer_h == 0 || footer_h > *canvas_h {
-        return false;
-    }
-    let bytes = footer_h as usize * canvas_w as usize * 4;
-    if bytes > canvas.len() {
-        return false;
-    }
-    canvas.truncate(canvas.len() - bytes);
-    *canvas_h -= footer_h;
-    true
-}
-
 // ============================================================
 // P1：实时预览（缩略图）
 // ============================================================
@@ -1673,14 +1424,12 @@ impl PreviewBuilder {
             return;
         }
         let py0 = (canvas_y0 as f32 * self.scale).round() as u32;
-        let py1 = ((canvas_y0 + strip.height()) as f32 * self.scale).round().max(py0 as f32 + 1.0) as u32;
+        let py1 = ((canvas_y0 + strip.height()) as f32 * self.scale)
+            .round()
+            .max(py0 as f32 + 1.0) as u32;
         let ph = py1 - py0;
-        let scaled = image::imageops::resize(
-            strip,
-            self.width,
-            ph,
-            image::imageops::FilterType::Triangle,
-        );
+        let scaled =
+            image::imageops::resize(strip, self.width, ph, image::imageops::FilterType::Triangle);
         if self.img.height() < py1 {
             let mut bigger = RgbaImage::new(self.width, py1);
             image::imageops::overlay(&mut bigger, &self.img, 0, 0);
@@ -1722,7 +1471,12 @@ fn encode_png(img: &RgbaImage, small: bool) -> Result<Vec<u8>, String> {
         (CompressionType::Default, FilterType::Adaptive)
     };
     PngEncoder::new_with_quality(&mut out, ct, ft)
-        .write_image(img.as_raw(), img.width(), img.height(), ExtendedColorType::Rgba8)
+        .write_image(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            ExtendedColorType::Rgba8,
+        )
         .map_err(|e| format!("PNG 编码失败: {e}"))?;
     Ok(out)
 }
@@ -1812,7 +1566,9 @@ impl SessionOptions {
     pub fn from_request(req: &ScrollCaptureRequest) -> Result<Self, String> {
         let method = match req.method.as_deref() {
             None | Some("") | Some("auto") => None,
-            Some(other) => Some(ScrollMethod::parse(other).ok_or_else(|| format!("未知滚动方式: {other}"))?),
+            Some(other) => {
+                Some(ScrollMethod::parse(other).ok_or_else(|| format!("未知滚动方式: {other}"))?)
+            }
         };
         Ok(Self {
             method,
@@ -1939,7 +1695,7 @@ fn pad_capture_rect(rect: &RectPx, target_root: isize, need_h: u32) -> (RectPx, 
     }
     let (_vx, _vy, _vw, vh) = virtual_screen();
     // 向下扩展的上限：屏幕底边 与 目标窗口底边 取小（否则会把窗口外的桌面/别的窗口截进来）
-    let mut bottom_limit = rect.y.saturating_add(vh as i32);
+    let mut bottom_limit = rect.y.saturating_add(vh);
     if let Some(wr) = window_rect(target_root) {
         if wr.h > 0 {
             bottom_limit = bottom_limit.min(wr.bottom());
@@ -2122,12 +1878,18 @@ struct SessionLog {
 
 impl SessionLog {
     fn open(tag: &str) -> Self {
-        let on = std::env::var("CLOVER_SCROLL_DEBUG").map(|v| v != "0" && !v.is_empty()).unwrap_or(false);
+        let on = std::env::var("CLOVER_SCROLL_DEBUG")
+            .map(|v| v != "0" && !v.is_empty())
+            .unwrap_or(false);
         if !on {
             return Self { file: None };
         }
         let path = std::env::temp_dir().join("clover_scroll_debug.log");
-        let file = std::fs::OpenOptions::new().create(true).append(true).open(&path).ok();
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .ok();
         let mut log = Self { file };
         log.log(&format!(
             "==== {tag} {} pid={} ====",
@@ -2182,7 +1944,8 @@ pub fn run_session_ext(
     }
 
     let (cx, cy) = rect.center();
-    let deepest = deepest_child_at(cx, cy).ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
+    let deepest =
+        deepest_child_at(cx, cy).ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
     let root = root_window(deepest);
     {
         // 诊断：把「最终认定的目标窗口」写进日志。多屏/覆盖窗/置顶窗叠在一起时，
@@ -2215,7 +1978,10 @@ pub fn run_session_ext(
     // 会话期间光标一律停在选区外（避免悬停高亮污染帧），结束时恢复
     let mut original_cursor = POINT { x: 0, y: 0 };
     let had_cursor = unsafe { GetCursorPos(&mut original_cursor).is_ok() };
-    let _cursor_guard = CursorGuard { had: had_cursor, pos: original_cursor };
+    let _cursor_guard = CursorGuard {
+        had: had_cursor,
+        pos: original_cursor,
+    };
 
     // 实际捕获区：矮选区向下补足（宽度不变）。逐帧捕获与前端的「挖空范围」都用它。
     // 只有**确实太矮**的选区才补足高度：
@@ -2268,7 +2034,8 @@ pub fn run_session_ext(
         let deep = deepest_child_at(cx, cy);
         dlog.log(&format!(
             "target root=0x{root:X} deepest={} park={:?} vscroll(root)={:?} vscroll(deep)={:?}",
-            deep.map(|h| format!("0x{h:X}")).unwrap_or_else(|| "none".into()),
+            deep.map(|h| format!("0x{h:X}"))
+                .unwrap_or_else(|| "none".into()),
             park_point(&cap),
             scroll_state(root),
             deep.and_then(scroll_state)
@@ -2354,9 +2121,7 @@ pub fn run_session_ext(
     let first = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
     frame_gate.borrow_mut().end_frame();
     let first = first?;
-    let mut canvas: Vec<u8> = Vec::with_capacity(
-        cap.w as usize * cap.h as usize * 4 * 4,
-    );
+    let mut canvas: Vec<u8> = Vec::with_capacity(cap.w as usize * cap.h as usize * 4 * 4);
     let mut canvas_h = 0u32;
     // 首帧：整帧入画布（无重叠）
     append_band(&mut canvas, canvas_w, &mut canvas_h, &first.image, 0, 0, 0)?;
@@ -2410,7 +2175,10 @@ pub fn run_session_ext(
             break;
         }
         if canvas_h >= o.max_height_px {
-            stop_reason = Some(format!("达到高度上限 {}px，已保留当前结果", o.max_height_px));
+            stop_reason = Some(format!(
+                "达到高度上限 {}px，已保留当前结果",
+                o.max_height_px
+            ));
             break;
         }
 
@@ -2558,7 +2326,9 @@ pub fn run_session_ext(
             method = Some(m);
             if wheel_like(m) {
                 // 顺手标定「一格滚多少像素」，用于后续每步的格数（这一步只用了 1 格）
-                if let Some(mm) = match_frames(&prev, &cur, &params, None).filter(|mm| mm.shift >= MIN_SHIFT) {
+                if let Some(mm) =
+                    match_frames(&prev, &cur, &params, None).filter(|mm| mm.shift >= MIN_SHIFT)
+                {
                     let usable_h = cap
                         .h
                         .saturating_sub(mm.top_fixed)
@@ -2649,7 +2419,8 @@ pub fn run_session_ext(
                     if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, m.bottom_fixed) {
                         // 预览也必须和画布保持同一不变量，否则结果虽正确、缩略图却仍会在
                         // 中间显示一次首帧页脚。
-                        if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone()) {
+                        if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
+                        {
                             preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
                             preview.append_strip(&body, 0);
                         }
@@ -2666,11 +2437,21 @@ pub fn run_session_ext(
                     .saturating_sub(m.top_fixed)
                     .saturating_sub(m.bottom_fixed);
                 let append_from = body_h.saturating_sub(m.shift) + m.top_fixed;
-                let net = cur.height().saturating_sub(m.bottom_fixed).saturating_sub(append_from);
+                let net = cur
+                    .height()
+                    .saturating_sub(m.bottom_fixed)
+                    .saturating_sub(append_from);
                 let new_h = canvas_h + net;
                 // 内容重复率仅用于诊断：白底、段落留白、表格行等都会让它很高，不能再
                 // 把它当成拼接正确性的证据或结果置信度。
-                let dup = duplicate_ratio(&canvas, canvas_w, canvas_h, &cur, append_from, cur.height().saturating_sub(m.bottom_fixed));
+                let dup = duplicate_ratio(
+                    &canvas,
+                    canvas_w,
+                    canvas_h,
+                    &cur,
+                    append_from,
+                    cur.height().saturating_sub(m.bottom_fixed),
+                );
                 dlog.log(&format!(
                     "  append? shift={} header={} footer={} append_from={append_from} net={net} new_h={new_h} duplicate_diagnostic={dup:.3} support={:.3} error={:.2} gap={:.3} canvas_h={canvas_h}",
                     m.shift, m.top_fixed, m.bottom_fixed, m.block_inlier_ratio, m.mean_block_error, m.runner_up_gap
@@ -2694,8 +2475,17 @@ pub fn run_session_ext(
                             m.runner_up_gap * 100.0,
                         );
                     }
-                    append_band(&mut canvas, canvas_w, &mut canvas_h, &cur, m.top_fixed, m.bottom_fixed, m.shift)?;
-                    let strip = image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
+                    append_band(
+                        &mut canvas,
+                        canvas_w,
+                        &mut canvas_h,
+                        &cur,
+                        m.top_fixed,
+                        m.bottom_fixed,
+                        m.shift,
+                    )?;
+                    let strip =
+                        image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
                     preview.append_strip(&strip, canvas_h - net);
                     frames += 1;
                     last_shift = Some(m.shift);
@@ -2722,7 +2512,10 @@ pub fn run_session_ext(
                         mm.shift,
                         m.name()
                     );
-                    dlog.log(&format!("  shift {} < MIN_SHIFT -> 换注入方式重探测", mm.shift));
+                    dlog.log(&format!(
+                        "  shift {} < MIN_SHIFT -> 换注入方式重探测",
+                        mm.shift
+                    ));
                     dead_methods.push(m);
                     method = None;
                     last_shift = None;
@@ -2757,9 +2550,18 @@ pub fn run_session_ext(
                     let shift = shift.min(cur.height().saturating_sub(footer_h).saturating_sub(1));
                     let append_from = cur.height().saturating_sub(footer_h).saturating_sub(shift);
                     let net = cur.height().saturating_sub(footer_h) - append_from;
-                    let _ = append_band(&mut canvas, canvas_w, &mut canvas_h, &cur, 0, footer_h, shift);
+                    let _ = append_band(
+                        &mut canvas,
+                        canvas_w,
+                        &mut canvas_h,
+                        &cur,
+                        0,
+                        footer_h,
+                        shift,
+                    );
                     if net > 0 {
-                        let strip = image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
+                        let strip = image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net)
+                            .to_image();
                         preview.append_strip(&strip, canvas_h - net);
                     }
                     frames += 1;
@@ -2769,8 +2571,17 @@ pub fn run_session_ext(
                 } else {
                     failures += 1;
                     low_conf = true;
-                    if let Some(guess) = last_shift.filter(|g| *g >= MIN_SHIFT && *g < cur.height()) {
-                        let _ = append_band(&mut canvas, canvas_w, &mut canvas_h, &cur, 0, last_bottom_fixed, guess);
+                    if let Some(guess) = last_shift.filter(|g| *g >= MIN_SHIFT && *g < cur.height())
+                    {
+                        let _ = append_band(
+                            &mut canvas,
+                            canvas_w,
+                            &mut canvas_h,
+                            &cur,
+                            0,
+                            last_bottom_fixed,
+                            guess,
+                        );
                         frames += 1;
                     }
                     if failures >= MAX_MATCH_FAILURES {
@@ -2788,7 +2599,8 @@ pub fn run_session_ext(
         // 进度事件（含缩略预览）。本帧没追加成功时不要报「匹配成功」，
         // 否则前端会看到一串「帧数不变」的进度、以为卡住了。
         let progressed = frames > frames_before;
-        let mut p = ScrollCaptureProgress::bare(if progressed { "matched" } else { "capturing" }, &cap);
+        let mut p =
+            ScrollCaptureProgress::bare(if progressed { "matched" } else { "capturing" }, &cap);
         p.frames = frames;
         p.height = canvas_h;
         p.width = canvas_w;
@@ -2796,7 +2608,8 @@ pub fn run_session_ext(
         p.input_passthrough = method == Some(ScrollMethod::WheelInput);
         if low_conf {
             p.stage = "low_confidence".to_string();
-            p.message = Some("部分帧的位移配准证据不足（可能有动画、固定控件或重复布局）".to_string());
+            p.message =
+                Some("部分帧的位移配准证据不足（可能有动画、固定控件或重复布局）".to_string());
         }
         p.preview = preview.data_url(PREVIEW_MAX_H);
         on_progress(p.with_capture(&cap));
@@ -2820,7 +2633,13 @@ pub fn run_session_ext(
     // ---- 5. 收尾 ----
     // 画布只存「页头 + 累积正文」（见 append_band 的约定），这里把最后一帧的吸底栏贴上，
     // 于是它整张长图只出现一次。
-    attach_footer(&mut canvas, canvas_w, &mut canvas_h, &prev, last_bottom_fixed);
+    attach_footer(
+        &mut canvas,
+        canvas_w,
+        &mut canvas_h,
+        &prev,
+        last_bottom_fixed,
+    );
     if canvas_h <= cap.h.saturating_sub(last_bottom_fixed) {
         // 只截到一帧：说明根本没滚动起来（画布只含 页头+正文，所以拿「一帧的正文高」比）
         dlog.log(&format!(
@@ -2852,7 +2671,11 @@ pub fn run_session_ext(
     };
 
     let mut p = ScrollCaptureProgress::bare(
-        if result.confidence == "partial" { "partial" } else { "done" },
+        if result.confidence == "partial" {
+            "partial"
+        } else {
+            "done"
+        },
         &rect,
     );
     dlog.log(&format!(
@@ -2902,13 +2725,16 @@ pub fn run_manual_session_ext(
     }
 
     let (cx, cy) = rect.center();
-    let deepest = deepest_child_at(cx, cy).ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
+    let deepest =
+        deepest_child_at(cx, cy).ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
     let root = root_window(deepest);
     let cap = rect;
     let params = MatchParams::for_height(cap.h);
     let canvas_w = cap.w;
     let frame_gate = Rc::new(RefCell::new(FrameHideGate::new(on_frame_capture)));
-    frame_gate.borrow_mut().set_keep_hidden(req.hide_hud_during_capture);
+    frame_gate
+        .borrow_mut()
+        .set_keep_hidden(req.hide_hud_during_capture);
 
     // 鼠标事件必须穿透透明覆盖窗；键盘焦点则留给目标窗口以支持 PageDown 等手动滚动。
     host.focus_target_for_manual(root);
@@ -2997,7 +2823,10 @@ pub fn run_manual_session_ext(
             break;
         }
         if canvas_h >= o.max_height_px {
-            stop_reason = Some(format!("达到高度上限 {}px，已保留当前结果", o.max_height_px));
+            stop_reason = Some(format!(
+                "达到高度上限 {}px，已保留当前结果",
+                o.max_height_px
+            ));
             break;
         }
 
@@ -3045,16 +2874,23 @@ pub fn run_manual_session_ext(
             Some(m) if m.shift >= MIN_SHIFT => {
                 if initial_footer_pending {
                     if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, m.bottom_fixed) {
-                        if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone()) {
+                        if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
+                        {
                             preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
                             preview.append_strip(&body, 0);
                         }
                     }
                     initial_footer_pending = false;
                 }
-                let body_h = cur.height().saturating_sub(m.top_fixed).saturating_sub(m.bottom_fixed);
+                let body_h = cur
+                    .height()
+                    .saturating_sub(m.top_fixed)
+                    .saturating_sub(m.bottom_fixed);
                 let append_from = body_h.saturating_sub(m.shift) + m.top_fixed;
-                let net = cur.height().saturating_sub(m.bottom_fixed).saturating_sub(append_from);
+                let net = cur
+                    .height()
+                    .saturating_sub(m.bottom_fixed)
+                    .saturating_sub(append_from);
                 let new_h = canvas_h + net;
                 let weak = m.ambiguous
                     || (m.run as u64) * 2 < cur.height().saturating_sub(m.shift) as u64
@@ -3064,8 +2900,17 @@ pub fn run_manual_session_ext(
                 if new_h as u64 * canvas_w as u64 * 4 > MAX_CANVAS_BYTES {
                     stop_reason = Some("结果过大（内存上限），已保留当前结果".to_string());
                 } else {
-                    append_band(&mut canvas, canvas_w, &mut canvas_h, &cur, m.top_fixed, m.bottom_fixed, m.shift)?;
-                    let strip = image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
+                    append_band(
+                        &mut canvas,
+                        canvas_w,
+                        &mut canvas_h,
+                        &cur,
+                        m.top_fixed,
+                        m.bottom_fixed,
+                        m.shift,
+                    )?;
+                    let strip =
+                        image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
                     preview.append_strip(&strip, canvas_h - net);
                     frames += 1;
                     last_shift = Some(m.shift);
@@ -3086,18 +2931,34 @@ pub fn run_manual_session_ext(
                     let footer_h = last_bottom_fixed.min(cur.height().saturating_sub(1));
                     let shift = shift.min(cur.height().saturating_sub(footer_h).saturating_sub(1));
                     if shift >= MIN_SHIFT {
-                        let append_from = cur.height().saturating_sub(footer_h).saturating_sub(shift);
-                        let net = cur.height().saturating_sub(footer_h).saturating_sub(append_from);
-                        append_band(&mut canvas, canvas_w, &mut canvas_h, &cur, 0, footer_h, shift)?;
+                        let append_from =
+                            cur.height().saturating_sub(footer_h).saturating_sub(shift);
+                        let net = cur
+                            .height()
+                            .saturating_sub(footer_h)
+                            .saturating_sub(append_from);
+                        append_band(
+                            &mut canvas,
+                            canvas_w,
+                            &mut canvas_h,
+                            &cur,
+                            0,
+                            footer_h,
+                            shift,
+                        )?;
                         if net > 0 {
-                            let strip = image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
+                            let strip =
+                                image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net)
+                                    .to_image();
                             preview.append_strip(&strip, canvas_h - net);
                         }
                         frames += 1;
                         last_shift = Some(shift);
                         low_conf = true;
                         appended = true;
-                        tracing::debug!("手动滚动截图: 使用容差配准 shift={shift} ratio={ratio:.3}");
+                        tracing::debug!(
+                            "手动滚动截图: 使用容差配准 shift={shift} ratio={ratio:.3}"
+                        );
                     }
                 } else {
                     low_conf = true;
@@ -3131,14 +2992,26 @@ pub fn run_manual_session_ext(
 
     host.set_progress(false, 0.0);
     frame_gate.borrow_mut().restore();
-    attach_footer(&mut canvas, canvas_w, &mut canvas_h, &prev, last_bottom_fixed);
+    attach_footer(
+        &mut canvas,
+        canvas_w,
+        &mut canvas_h,
+        &prev,
+        last_bottom_fixed,
+    );
     if canvas_h <= cap.h.saturating_sub(last_bottom_fixed) {
         return Err("没有捕获到可拼接的内容（请先向下滚动至少一段，再按 Esc 完成）".to_string());
     }
     let img = RgbaImage::from_raw(canvas_w, canvas_h, canvas)
         .ok_or_else(|| "拼接缓冲区尺寸不一致".to_string())?;
     let png = encode_png(&img, false)?;
-    let confidence = if stop_reason.is_some() { "partial" } else if low_conf { "low" } else { "high" };
+    let confidence = if stop_reason.is_some() {
+        "partial"
+    } else if low_conf {
+        "low"
+    } else {
+        "high"
+    };
     let result = ScrollCaptureResult {
         width: canvas_w,
         height: canvas_h,
@@ -3148,7 +3021,11 @@ pub fn run_manual_session_ext(
         png,
     };
     emit_progress(
-        if result.confidence == "partial" { "partial" } else { "done" },
+        if result.confidence == "partial" {
+            "partial"
+        } else {
+            "done"
+        },
         result.frames,
         result.height,
         preview.data_url(PREVIEW_MAX_H),
@@ -3437,7 +3314,11 @@ impl SessionHost for TauriHost {
                 SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
             };
 
-            if !on && !self.capture_exclusion_enabled.swap(false, Ordering::Relaxed) {
+            if !on
+                && !self
+                    .capture_exclusion_enabled
+                    .swap(false, Ordering::Relaxed)
+            {
                 return true;
             }
             if on && !Self::supports_capture_exclusion() {
@@ -3470,7 +3351,11 @@ impl SessionHost for TauriHost {
                 Err(e) => {
                     tracing::warn!(
                         "滚动截图: SetWindowDisplayAffinity({}) 失败: {e}",
-                        if on { "WDA_EXCLUDEFROMCAPTURE" } else { "WDA_NONE" }
+                        if on {
+                            "WDA_EXCLUDEFROMCAPTURE"
+                        } else {
+                            "WDA_NONE"
+                        }
                     );
                     false
                 }
@@ -3557,7 +3442,10 @@ pub fn start_scroll_capture(
             // 重叠会话开始时让 HUD 隐藏；会话结束时再统一恢复，避免逐帧闪烁。
             let app3 = app2.clone();
             let on_frame = move |hiding: bool| {
-                if let Err(e) = app3.emit("scroll-capture-hud", serde_json::json!({ "hidden": hiding })) {
+                if let Err(e) = app3.emit(
+                    "scroll-capture-hud",
+                    serde_json::json!({ "hidden": hiding }),
+                ) {
                     tracing::warn!("emit scroll-capture-hud 失败: {e}");
                 }
             };
@@ -3694,10 +3582,7 @@ pub fn finish_scroll_capture(
                     let _ = main.unminimize();
                     let _ = main.set_focus();
                 }
-                let _ = app.emit(
-                    "open-image",
-                    serde_json::json!({ "path": saved_path }),
-                );
+                let _ = app.emit("open-image", serde_json::json!({ "path": saved_path }));
             }
         }
         "clipboard" => {
@@ -3743,14 +3628,14 @@ pub fn scroll_capture_running(state: tauri::State<'_, ScrollCaptureSession>) -> 
 // 单元测试（无需真实屏幕：只测与 Win32 无关的纯逻辑）
 // ============================================================
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use image::Rgba;
 
     #[test]
-    fn rect_inset_and_center() {        let r = RectPx {
+    fn rect_inset_and_center() {
+        let r = RectPx {
             x: 100,
             y: 200,
             w: 400,
@@ -3803,6 +3688,16 @@ mod tests {
     }
 
     #[test]
+    fn exact_shift_match_reports_unbounded_improvement() {
+        let estimate = ShiftEstimate {
+            shift: 10,
+            err: 0.0,
+            err_at_zero: 12.0,
+        };
+        assert!(estimate.improvement().is_infinite());
+    }
+
+    #[test]
     fn frame_diff_detects_change() {
         let a = RgbaImage::from_pixel(64, 64, image::Rgba([10, 10, 10, 255]));
         let mut b = a.clone();
@@ -3815,6 +3710,13 @@ mod tests {
         }
         let r = frame_diff_ratio(&a, &b);
         assert!((r - 0.5).abs() < 0.05, "差异占比应约 0.5，实际 {r}");
+
+        let different_size = RgbaImage::from_pixel(32, 64, image::Rgba([10, 10, 10, 255]));
+        assert_eq!(
+            frame_diff_ratio(&a, &different_size),
+            1.0,
+            "尺寸不一致必须拒绝比较"
+        );
     }
 
     // ---------- 拼接匹配 ----------
@@ -3837,7 +3739,11 @@ mod tests {
                 s ^= s >> 17;
                 s ^= s << 5;
                 let v = (s >> 8) as u8;
-                img.put_pixel(x, y, image::Rgba([v, v.wrapping_add(37), v.wrapping_mul(3), 255]));
+                img.put_pixel(
+                    x,
+                    y,
+                    image::Rgba([v, v.wrapping_add(37), v.wrapping_mul(3), 255]),
+                );
             }
         }
         img
@@ -3851,7 +3757,13 @@ mod tests {
     }
 
     /// 生成一对「内容整体上移 s、带 40 行吸顶、带 30 行吸底」的帧
-    fn make_pair(w: u32, h: u32, s: u32, sticky_top: u32, fixed_bottom: u32) -> (RgbaImage, RgbaImage) {
+    fn make_pair(
+        w: u32,
+        h: u32,
+        s: u32,
+        sticky_top: u32,
+        fixed_bottom: u32,
+    ) -> (RgbaImage, RgbaImage) {
         let header = noise(w, sticky_top.max(1), 11);
         let footer = noise(w, fixed_bottom.max(1), 22);
         let content = noise(w, h + s + 8, 33);
@@ -3989,8 +3901,7 @@ mod tests {
         };
         let prev = build(0);
         let cur = build(shift / row_h); // 内容上移 3 行
-        let m = match_frames(&prev, &cur, &MatchParams::for_height(h), None)
-            .expect("应匹配成功");
+        let m = match_frames(&prev, &cur, &MatchParams::for_height(h), None).expect("应匹配成功");
         assert_eq!(m.shift, shift, "把 3 行认成了别的行数: {m:?}");
     }
 
@@ -4067,7 +3978,11 @@ mod tests {
         let mut canvas_h = 0u32;
         let f0 = frame(0);
         append_band(&mut canvas, W, &mut canvas_h, &f0, HEADER, FOOTER, 0).unwrap();
-        assert_eq!(canvas_h, H - FOOTER, "起始帧应是 页头+正文（吸底栏收尾再贴）");
+        assert_eq!(
+            canvas_h,
+            H - FOOTER,
+            "起始帧应是 页头+正文（吸底栏收尾再贴）"
+        );
         let mut last = f0.clone();
         for i in 1..=steps {
             let cur = frame(i * step);
@@ -4127,11 +4042,35 @@ mod tests {
         assert!(trim_initial_footer(&mut canvas, W, &mut canvas_h, FOOTER));
         assert_eq!(canvas_h, H - FOOTER);
 
-        append_band(&mut canvas, W, &mut canvas_h, &second, HEADER, FOOTER, SHIFT).unwrap();
+        append_band(
+            &mut canvas,
+            W,
+            &mut canvas_h,
+            &second,
+            HEADER,
+            FOOTER,
+            SHIFT,
+        )
+        .unwrap();
         assert_eq!(
             canvas_h,
             H - FOOTER + SHIFT,
             "剔除首帧页脚后，每帧净增应恰好等于位移"
         );
+    }
+
+    #[test]
+    fn stitching_rejects_incompatible_frames_without_corrupting_canvas() {
+        let frame = RgbaImage::from_pixel(12, 20, Rgba([1, 2, 3, 255]));
+        let mut canvas = vec![9; 12 * 4 * 3];
+        let original = canvas.clone();
+        let mut canvas_h = 3;
+
+        let error = append_band(&mut canvas, 11, &mut canvas_h, &frame, 0, 0, 0)
+            .expect_err("不同宽度的帧不能拼接");
+        assert!(error.contains("不一致"));
+        assert_eq!(canvas, original, "失败不能改写已有画布");
+        assert_eq!(canvas_h, 3, "失败不能改变高度账本");
+        assert!(!trim_initial_footer(&mut canvas, 12, &mut canvas_h, 4));
     }
 }

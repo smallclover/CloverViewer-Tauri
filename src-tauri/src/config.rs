@@ -156,7 +156,11 @@ fn get_config_path() -> PathBuf {
 }
 
 fn save_config_internal(path: &std::path::Path, config: &Config) -> bool {
-    fs::write(path, serde_json::to_string_pretty(config).unwrap_or_default()).is_ok()
+    fs::write(
+        path,
+        serde_json::to_string_pretty(config).unwrap_or_default(),
+    )
+    .is_ok()
 }
 
 pub fn load_config() -> Config {

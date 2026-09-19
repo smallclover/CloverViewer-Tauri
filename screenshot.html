@@ -413,6 +413,9 @@
       }
       #scroll-hud {
         width: min(280px, calc(100vw - 20px));
+        /* 结果缩略图加载后会把 HUD 撑高；限制在当前屏幕内，避免底部操作区落出视口。 */
+        max-height: calc(100vh - 20px);
+        overflow-y: auto;
         /* body 默认是框选十字；结果缩略图只是预览，不应继承该鼠标样式。 */
         cursor: default;
       }
@@ -424,6 +427,65 @@
          抓完立刻恢复 —— 每帧只隐藏 ~120ms。 */
       #scroll-hud.hud-hidden {
         visibility: hidden;
+      }
+      /* 自动滚动时的选区聚焦光晕：对齐 Computer Use 的聚焦态——整圈柔和地泛绿，
+         不画描边/灯带。光晕基准面与捕获边缘重合，内外两侧都会自然散开。 */
+      #scroll-selection-glow {
+        position: absolute;
+        display: none;
+        box-sizing: border-box;
+        pointer-events: none;
+      }
+      #scroll-selection-glow::before,
+      #scroll-selection-glow::after {
+        position: absolute;
+        box-sizing: border-box;
+        content: "";
+        border-radius: 14px;
+        background: transparent;
+      }
+      /* 主光层无描边，靠大面积外扩与内扩阴影形成柔和的聚焦面。 */
+      #scroll-selection-glow::before {
+        /* 容器本身向四周扩了 50px，因此这里正好回到实际捕获边缘。 */
+        inset: 50px;
+        box-shadow:
+          0 0 16px 4px rgba(117, 255, 165, 0.29),
+          0 0 46px 14px rgba(64, 230, 121, 0.19),
+          0 0 84px 25px rgba(42, 183, 92, 0.09),
+          inset 0 0 30px 8px rgba(117, 255, 165, 0.31),
+          inset 0 0 76px 20px rgba(64, 230, 121, 0.13);
+        filter: blur(3px);
+        opacity: 0.8;
+        animation: scroll-focus-breathe 4.8s ease-in-out infinite;
+      }
+      /* 辅光从内侧缓慢浮动，增加“被聚焦”的空间感，而不是沿边追逐。 */
+      #scroll-selection-glow::after {
+        inset: 50px;
+        box-shadow:
+          -12px -4px 38px 8px rgba(155, 255, 190, 0.13),
+          17px 10px 50px 11px rgba(58, 224, 116, 0.14),
+          0 18px 64px 14px rgba(86, 243, 141, 0.08),
+          inset -10px -5px 52px 14px rgba(155, 255, 190, 0.17),
+          inset 12px 10px 66px 18px rgba(58, 224, 116, 0.13);
+        filter: blur(9px);
+        opacity: 0.62;
+        animation: scroll-focus-drift 7.4s ease-in-out infinite alternate;
+      }
+      #scroll-selection-glow.on { display: block; }
+      /* 不支持系统级捕获排除时，后端仅在 BitBlt 的瞬间挂上这个类。 */
+      #scroll-selection-glow.capture-hidden { visibility: hidden; }
+      @keyframes scroll-focus-breathe {
+        0%, 100% { opacity: 0.42; transform: scale(0.985); }
+        46% { opacity: 0.9; transform: scale(1.01); }
+        58% { opacity: 0.62; transform: scale(0.997); }
+      }
+      @keyframes scroll-focus-drift {
+        0% { opacity: 0.3; transform: translate(-4px, 2px) scale(0.99); }
+        100% { opacity: 0.7; transform: translate(5px, -3px) scale(1.02); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #scroll-selection-glow::before,
+        #scroll-selection-glow::after { animation: none; }
       }
       .sh-title {
         font-weight: 600;
@@ -512,7 +574,11 @@
         gap: 6px;
         flex-wrap: wrap;
       }
-      .sh-actions.result { padding-top: 2px; }
+      .sh-actions.result {
+        padding-top: 2px;
+        /* 结果态优先露出复制/保存/打开；缩略图再长也不能把主要操作挤到屏幕外。 */
+        order: 1;
+      }
       .sh-actions.result .sh-btn.primary { order: -1; }
       .sh-btn {
         display: inline-flex;
@@ -543,7 +609,8 @@
       .sh-preview {
         display: none;
         width: 120px;
-        max-height: 220px;
+        /* 给标题、尺寸和三个结果按钮保留空间；小屏下缩略图可缩短，操作仍始终可见。 */
+        max-height: min(220px, max(48px, calc(100vh - 210px)));
         object-fit: contain;
         align-self: flex-start;
         border: 1px solid var(--s-toolbar-border);
@@ -554,6 +621,7 @@
       .sh-preview.on {
         display: block;
       }
+      #scroll-hud .sh-preview { order: 2; }
       /* 开始面板里的「从页面顶部开始」勾选项 */
       /* REC 手感：捕获中标题前一个呼吸红点，扫一眼就知道「正在录」 */
       .sh-rec {

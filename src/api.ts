@@ -174,6 +174,8 @@ export interface ScrollCaptureRequest {
   focus_target?: boolean;
   /** true 表示 HUD 与捕获区重叠；后端优先排除覆盖窗，失败才整段隐藏 HUD。 */
   hide_hud_during_capture?: boolean;
+  /** 自动滚动的内扩聚焦光晕；后端优先排除覆盖窗，失败时逐帧短暂隐藏光晕。 */
+  hide_glow_during_capture?: boolean;
 }
 
 export interface ScrollCaptureProgress {

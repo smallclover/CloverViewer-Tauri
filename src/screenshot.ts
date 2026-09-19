@@ -1777,6 +1777,12 @@ scrollPanel.append(
 );
 uiLayer.appendChild(scrollPanel);
 
+// 自动滚动时，选区外缘显示 Computer Use 风格的绿色聚焦光晕。
+// 伪元素保持透明，只让 box-shadow 向外扩散；位置函数会留出内侧安全距离。
+const scrollSelectionGlow = document.createElement("div");
+scrollSelectionGlow.id = "scroll-selection-glow";
+uiLayer.appendChild(scrollSelectionGlow);
+
 // ---------- 进度 / 结果 HUD ----------
 const scrollHud = document.createElement("div");
 scrollHud.id = "scroll-hud";
@@ -1840,6 +1846,23 @@ scrollHud.append(
 );
 uiLayer.appendChild(scrollHud);
 
+// 结果缩略图是异步加载的 data URL。首次切到完成态时它还没有自然尺寸，若只在
+// `syncScrollUi` 里落位一次，图片加载后 HUD 会向下变高、把按钮推到屏幕外。
+// 观察实际尺寸而非猜预览高度，也能覆盖字体缩放、翻译文案和错误详情导致的尺寸变化。
+let scrollHudLayoutPending = false;
+function scheduleScrollHudLayout() {
+  if (scrollHudLayoutPending) return;
+  scrollHudLayoutPending = true;
+  window.requestAnimationFrame(() => {
+    scrollHudLayoutPending = false;
+    if (scrollHud.classList.contains("open")) positionScrollUi();
+  });
+}
+const scrollHudResizeObserver = new ResizeObserver(scheduleScrollHudLayout);
+scrollHudResizeObserver.observe(scrollHud);
+shPreview.addEventListener("load", scheduleScrollHudLayout);
+shPreview.addEventListener("error", scheduleScrollHudLayout);
+
 // 一次性提示条（成功 / 失败）。放在最后 = 叠在面板与 HUD 之上。
 const scrollNotice = document.createElement("div");
 scrollNotice.id = "scroll-notice";
@@ -1886,6 +1909,7 @@ function exitScrollMode() {
   hudHiddenForSession = false;
   scrollStopping = false;
   scrollManualMode = false;
+  scrollSelectionGlow.classList.remove("capture-hidden");
   syncScrollUi();
   void closeScreenshot();
 }
@@ -1909,6 +1933,7 @@ async function beginScrollCapture() {
   hudHiddenForSession = false;
   scrollStopping = false;
   scrollManualMode = shManual.checked;
+  scrollSelectionGlow.classList.remove("capture-hidden");
   syncScrollUi();
   render();
   // HUD 已按当前选区完成落位。重叠时优先由 Windows 将整个覆盖窗排除
@@ -1926,12 +1951,15 @@ async function beginScrollCapture() {
       mode: scrollManualMode ? "manual" : "auto",
       // 默认 false：从当前可见位置往下截；勾了才先滚到页面顶部
       auto_scroll_top: !scrollManualMode && shFromTop.checked,
-      // 与请求一起交给后端：重叠时先尝试 WDA_EXCLUDEFROMCAPTURE，失败才回退隐藏 HUD。
+      // 自动滚动的光晕会向选区内扩散：优先排除整个覆盖窗；老系统回退为逐帧隐藏光晕。
+      // HUD 真正重叠时仍沿用原有的整段隐藏兜底。
       hide_hud_during_capture: hudOverlapReported,
+      hide_glow_during_capture: !scrollManualMode,
     });
   } catch (e) {
     hudHiddenForSession = false;
     scrollHud.classList.remove("hud-hidden");
+    scrollSelectionGlow.classList.remove("capture-hidden");
     scrollError = String(e);
     scrollPhase = "armed";
     syncScrollUi();
@@ -2076,10 +2104,17 @@ function syncScrollUi() {
   scrollPanel.classList.toggle("open", scrollPhase === "armed" && !!selection);
   scrollHud.classList.toggle("open", scrollActive());
   scrollHud.classList.toggle("clickthrough", scrollPassthrough());
+  scrollSelectionGlow.classList.toggle(
+    "on",
+    scrollPhase === "capturing" && !scrollManualMode && scrollProg?.method !== "manual",
+  );
   // 采帧让位是**瞬时**状态（后端每帧 emit 一次 hidden=true/false）。一旦离开捕获态
   // 就必须清掉，否则「最后一帧的 hidden=true 比 done 事件晚到」或「会话异常结束」时，
   // 这个类会一直留在 HUD 上 —— 现象是长图缩略预览与结果按钮全都不显示（visibility:hidden）。
-  if (scrollPhase !== "capturing") scrollHud.classList.remove("hud-hidden");
+  if (scrollPhase !== "capturing") {
+    scrollHud.classList.remove("hud-hidden");
+    scrollSelectionGlow.classList.remove("capture-hidden");
+  }
   // 选好区域后才显示面板；选区不合要求时「开始」不可点，并且**直接说明原因**
   // （选区太矮 = 没有重叠区，拼不了）——而不是把按钮置灰让用户猜。
   shStartBtn.disabled = !scrollSelectionOk();
@@ -2252,6 +2287,14 @@ function placeScrollUi(
   el.style.top = `${point.y}px`;
 }
 
+/** 将自动滚动的聚焦光晕严格放在捕获区外侧，避免任何发光像素进入截图源。 */
+function positionScrollSelectionGlow(region: CssBox) {
+  if (!scrollSelectionGlow.classList.contains("on")) return;
+  // 伪元素最小 inset 为 19px，外层 shadow 只向外投射；内侧仍保留 19px 空隙。
+  const outerGap = 50;
+  scrollSelectionGlow.style.cssText = `left:${region.x - outerGap}px;top:${region.y - outerGap}px;width:${region.w + outerGap * 2}px;height:${region.h + outerGap * 2}px`;
+}
+
 /** 依据当前捕获区摆放开始面板与进度 / 结果 HUD */
 function positionScrollUi() {
   // 以「实际捕获区」为准（它可能比用户选区高）
@@ -2259,6 +2302,7 @@ function positionScrollUi() {
   if (!box) return;
   const region = toCssBox(box);
   const monitor = monitorBoxCss(box);
+  positionScrollSelectionGlow(region);
   // 开始面板：贴着选区下沿（在选区外，不会被截进长图）
   if (scrollPanel.classList.contains("open")) {
     placeScrollUi(scrollPanel, region, monitor, "panel");
@@ -2621,13 +2665,16 @@ async function main() {
     render();
   });
 
-  // 后端仅在 HUD 确实压入捕获区时通知隐藏。重叠会话保持隐藏到结束，
-  // 而不是随每一帧恢复，避免最大化窗口滚动时产生视觉闪烁。
-  await listen<{ hidden: boolean }>("scroll-capture-hud", (e) => {
+  // 捕获排除不受支持时：HUD 的重叠兜底会保持隐藏到结束；内扩光晕只在 BitBlt 前后瞬时隐藏。
+  await listen<{ hidden: boolean; hud?: boolean; glow?: boolean }>("scroll-capture-hud", (e) => {
     const hidden = !!e.payload?.hidden;
-    if (hidden) hudHiddenForSession = true;
-    if (!hidden && hudHiddenForSession && scrollPhase === "capturing") return;
-    scrollHud.classList.toggle("hud-hidden", hidden);
+    const hidesHud = e.payload?.hud !== false;
+    if (hidesHud) {
+      if (hidden) hudHiddenForSession = true;
+      if (!hidden && hudHiddenForSession && scrollPhase === "capturing") return;
+      scrollHud.classList.toggle("hud-hidden", hidden);
+    }
+    if (e.payload?.glow) scrollSelectionGlow.classList.toggle("capture-hidden", hidden);
   });
 
   // 滚动截图：结束事件（成功 → 结果态；失败 → 回 armed 态并显示原因）
@@ -2636,6 +2683,7 @@ async function main() {
     scrollStopping = false;
     hudHiddenForSession = false;
     scrollHud.classList.remove("hud-hidden");
+    scrollSelectionGlow.classList.remove("capture-hidden");
     // 结果事件与最后一条进度事件跨线程投递，顺序不能假设。无论后端最后一条
     // 进度是否已标记终态，结果 HUD 都必须重新接收鼠标点击。
     if (scrollProg) scrollProg = { ...scrollProg, input_passthrough: false };

@@ -106,6 +106,36 @@ impl RectPx {
     }
 }
 
+/// 最大化窗口被一键框选时，选区会包含右侧的窗口滚动条。滚动条的滑块会随每帧移动，
+/// 若照常拼接就会在长图里留下多段滑块。仅对完整窗口选区预留该窄条：普通自定义选区
+/// 不裁，且正文不会在帧间混入滚动条像素。
+fn exclude_full_window_scrollbar(rect: RectPx, window: RectPx, gutter: u32) -> Option<RectPx> {
+    // `pick_window_at` 使用 DWM 可见边界，而 GetWindowRect 还可能包含 8px 左右的
+    // 不可见 resize border；允许少量差异，避免最大化窗口因这点误差漏掉优化。
+    const EDGE_TOLERANCE: i32 = 12;
+    let is_full_window = (rect.x - window.x).abs() <= EDGE_TOLERANCE
+        && (rect.y - window.y).abs() <= EDGE_TOLERANCE
+        && (rect.right() - window.right()).abs() <= EDGE_TOLERANCE
+        && (rect.bottom() - window.bottom()).abs() <= EDGE_TOLERANCE;
+    if !is_full_window || gutter >= rect.w.saturating_sub(32) {
+        return None;
+    }
+    Some(RectPx {
+        w: rect.w - gutter,
+        ..rect
+    })
+}
+
+/// 让完整窗口截图避开右侧的系统滚动条。`SM_CXVSCROLL` 随 Windows 的主题/缩放变化，
+/// 再加上下限与上限，兼容覆层滚动条和异常的系统度量值。
+fn capture_rect_without_full_window_scrollbar(rect: RectPx, root: isize) -> RectPx {
+    let gutter = unsafe { GetSystemMetrics(SM_CXVSCROLL) }.clamp(12, 32) as u32;
+    let Some(window) = window_rect(root) else {
+        return rect;
+    };
+    exclude_full_window_scrollbar(rect, window, gutter).unwrap_or(rect)
+}
+
 /// 滚动注入方式（P0 逐一验证兼容性，P1 会按验证结果自动降级）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollMethod {
@@ -228,9 +258,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetDesktopWindow, GetForegroundWindow, GetScrollInfo, GetSystemMetrics, GetWindowRect,
     GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW,
     SetCursorPos, SetForegroundWindow, ShowWindow, WindowFromPoint, CWP_SKIPINVISIBLE, GA_ROOT,
-    SB_LINEDOWN, SB_VERT, SCROLLINFO, SIF_ALL, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE, SW_RESTORE, WM_KEYDOWN, WM_KEYUP,
-    WM_MOUSEWHEEL, WM_VSCROLL,
+    SB_LINEDOWN, SB_VERT, SCROLLINFO, SIF_ALL, SM_CXVIRTUALSCREEN, SM_CXVSCROLL,
+    SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE, SW_RESTORE, WM_KEYDOWN,
+    WM_KEYUP, WM_MOUSEWHEEL, WM_VSCROLL,
 };
 
 /// 把裸指针封装的 HWND 在跨函数传递时用 isize 表示（HWND 不是 Send）。
@@ -1517,6 +1547,10 @@ pub struct ScrollCaptureRequest {
     /// 排除不可用时才在整个会话中隐藏 HUD。
     #[serde(default)]
     pub hide_hud_during_capture: bool,
+    /// 自动滚动的聚焦光晕会伸进捕获区。优先把整个覆盖窗从 Windows 捕获结果排除；
+    /// 排除不可用时，每次 BitBlt 前后只短暂隐藏光晕。
+    #[serde(default)]
+    pub hide_glow_during_capture: bool,
 }
 
 impl ScrollCaptureRequest {
@@ -1536,6 +1570,7 @@ impl ScrollCaptureRequest {
             max_frames: None,
             focus_target: None,
             hide_hud_during_capture: false,
+            hide_glow_during_capture: false,
         }
     }
 
@@ -1770,7 +1805,7 @@ pub struct FrameHideGate {
     hiding: bool,
     /// 宿主当前是否处于「已隐藏」态（Drop 时兜底恢复）
     hidden: bool,
-    /// 是否启用（前端没报「HUD 压在捕获区上」时全程不触发，零开销）
+    /// 是否启用（HUD 重叠或内扩光晕需要采帧让开时才触发）
     enabled: bool,
     /// 重叠时，HUD 从首帧前隐藏到整个会话结束。恢复只发生一次，避免逐帧闪烁。
     keep_hidden: bool,
@@ -1790,6 +1825,11 @@ impl FrameHideGate {
     pub fn set_keep_hidden(&mut self, on: bool) {
         self.enabled = on;
         self.keep_hidden = on;
+    }
+
+    /// 光晕只需逐帧让开：不沿用 HUD 的整段隐藏策略。
+    pub fn set_hide_each_frame(&mut self, on: bool) {
+        self.enabled |= on;
     }
 
     pub fn enabled(&self) -> bool {
@@ -1813,7 +1853,12 @@ impl FrameHideGate {
                 cb(true);
             }
             self.hidden = true;
-            std::thread::sleep(Duration::from_millis(120));
+            // HUD 会话隐藏沿用保守等待；只有光晕时等两个合成帧，兼顾干净捕获和滚动速度。
+            std::thread::sleep(Duration::from_millis(if self.keep_hidden {
+                120
+            } else {
+                40
+            }));
         }
     }
 
@@ -1958,20 +2003,28 @@ pub fn run_session_ext(
         );
     }
 
-    // 仅当 HUD 真正压进捕获区时才隐藏。小选区的 HUD 全程保持可见；整窗/全屏
-    // 则在首帧前隐藏一次，并保持到会话结束，既防止被烤进长图，也不产生逐帧闪烁。
-    // 前端将最终判定随启动请求携带，避免独立异步上报与首帧竞争。
+    // HUD 重叠才整段隐藏；自动滚动光晕则仅在每次 BitBlt 前后让开。
+    // 两个状态都随启动请求携带，避免独立异步上报与首帧竞争。
     let hide_hud_for_session = req.hide_hud_during_capture;
+    let hide_glow_each_frame = req.hide_glow_during_capture;
     let frame_gate = Rc::new(RefCell::new(FrameHideGate::new(on_frame_capture)));
     frame_gate
         .borrow_mut()
         .set_keep_hidden(hide_hud_for_session);
+    frame_gate
+        .borrow_mut()
+        .set_hide_each_frame(hide_glow_each_frame);
     tracing::info!(
-        "滚动截图: HUD {}",
+        "滚动截图: HUD{}，内扩光晕{}",
         if hide_hud_for_session {
-            "采集期间保持隐藏（与捕获区重叠）"
+            "采集期间隐藏"
         } else {
-            "保持可见（位于捕获区外）"
+            "保持可见"
+        },
+        if hide_glow_each_frame {
+            "逐帧让开"
+        } else {
+            "未启用"
         },
     );
 
@@ -2004,13 +2057,21 @@ pub fn run_session_ext(
             MIN_SELECTION_H, rect.h
         ));
     }
-    // 不再补足：捕获区 = 选区，
-    // 于是边框永远画在捕获区之外，也就不可能被截进长图。
-    let cap = rect;
+    // 不再补足高度；仅在点选完整窗口时预留右侧滚动条，避免移动的滑块被逐帧拼成多段。
+    // 普通自定义选区保持原样，用户可以精确控制裁切范围。
+    let cap = capture_rect_without_full_window_scrollbar(rect, root);
     let mut dlog = SessionLog::open(&format!(
         "run_session rect={},{},{}x{}",
         rect.x, rect.y, rect.w, rect.h
     ));
+    if cap != rect {
+        dlog.log(&format!(
+            "完整窗口选区：右侧预留 {}px 滚动条，capture={}x{}",
+            rect.w - cap.w,
+            cap.w,
+            cap.h
+        ));
+    }
     let wheel_like = |m: ScrollMethod| {
         matches!(
             m,
@@ -2728,13 +2789,17 @@ pub fn run_manual_session_ext(
     let deepest =
         deepest_child_at(cx, cy).ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
     let root = root_window(deepest);
-    let cap = rect;
+    // 与自动模式一致：完整窗口框选时不捕获会移动的右侧滚动条滑块。
+    let cap = capture_rect_without_full_window_scrollbar(rect, root);
     let params = MatchParams::for_height(cap.h);
     let canvas_w = cap.w;
     let frame_gate = Rc::new(RefCell::new(FrameHideGate::new(on_frame_capture)));
     frame_gate
         .borrow_mut()
         .set_keep_hidden(req.hide_hud_during_capture);
+    frame_gate
+        .borrow_mut()
+        .set_hide_each_frame(req.hide_glow_during_capture);
 
     // 鼠标事件必须穿透透明覆盖窗；键盘焦点则留给目标窗口以支持 PageDown 等手动滚动。
     host.focus_target_for_manual(root);
@@ -3194,6 +3259,39 @@ impl TauriHost {
         self.app.get_webview_window("screenshot")
     }
 
+    /// 滚动结束后把结果 HUD 确实带回最前面。
+    ///
+    /// 捕获开始时会把目标窗口提到前台；若该窗口本身也是置顶窗口（某些浏览器的
+    /// 画中画、远程桌面等），截图覆盖窗虽仍带有 `always_on_top`，却可能在同一
+    /// 置顶层级里排到它下面。结果是 HUD 只露出一部分，按钮的点击也会落到目标
+    /// 窗口。切换一次置顶状态会把覆盖窗重新排到该层最前，再聚焦以保证按钮可点。
+    fn raise_for_result(&self) {
+        let Some(window) = self.screenshot_window() else {
+            return;
+        };
+
+        // 即使最后一次 WheelInput 进度事件晚到，也先恢复原生窗口的命中测试。
+        if let Err(e) = window.set_ignore_cursor_events(false) {
+            tracing::warn!("滚动截图: 恢复结果 HUD 鼠标命中失败: {e}");
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // `set_always_on_top(true)` 在已经置顶时不一定改变 Z 序；先降后升才会
+            // 确保覆盖窗压过刚刚成为前台的置顶目标窗口。
+            if let Err(e) = window.set_always_on_top(false) {
+                tracing::warn!("滚动截图: 降下结果 HUD 层级失败: {e}");
+            }
+            if let Err(e) = window.set_always_on_top(true) {
+                tracing::warn!("滚动截图: 提升结果 HUD 层级失败: {e}");
+            }
+        }
+
+        if let Err(e) = window.set_focus() {
+            tracing::warn!("滚动截图: 聚焦结果 HUD 失败: {e}");
+        }
+    }
+
     /// 任务栏进度条：给「正在滚动截图」一个**永远在捕获区之外**的可见指示。
     /// 整窗/全屏选区时覆盖窗内没有任何空地可以放 HUD（放进去就会被截进长图），
     /// 任务栏就成了唯一可靠的反馈通道 —— 像录屏的 REC 红点一样，一眼能看到在跑。
@@ -3424,12 +3522,14 @@ pub fn start_scroll_capture(
             capture_exclusion_enabled: std::sync::atomic::AtomicBool::new(false),
         };
         let result = {
-            // 只有 HUD 没有安全落点时才需要排除覆盖窗。若 API 可用，HUD 始终可见；
-            // 调用失败则保持原有的整段隐藏策略，不把兼容性风险交给用户。
-            let capture_excluded = req.hide_hud_during_capture && host.set_capture_exclusion(true);
+            // HUD 重叠或内扩光晕任一存在时，都优先把整个覆盖窗排除在捕获结果外。
+            // 若 API 不可用，HUD 沿用整段隐藏，光晕则逐帧隐藏。
+            let capture_excluded = (req.hide_hud_during_capture || req.hide_glow_during_capture)
+                && host.set_capture_exclusion(true);
             let mut effective_req = req;
             if capture_excluded {
                 effective_req.hide_hud_during_capture = false;
+                effective_req.hide_glow_during_capture = false;
             }
             let mut emit = |p: ScrollCaptureProgress| {
                 if let Some(state) = app2.try_state::<ScrollCaptureSession>() {
@@ -3439,12 +3539,14 @@ pub fn start_scroll_capture(
                     tracing::warn!("emit scroll-capture-progress 失败: {e}");
                 }
             };
-            // 重叠会话开始时让 HUD 隐藏；会话结束时再统一恢复，避免逐帧闪烁。
+            let hides_hud = effective_req.hide_hud_during_capture;
+            let hides_glow = effective_req.hide_glow_during_capture;
+            // 重叠 HUD 整段隐藏；不支持捕获排除时，光晕只在每帧采集前后让开。
             let app3 = app2.clone();
             let on_frame = move |hiding: bool| {
                 if let Err(e) = app3.emit(
                     "scroll-capture-hud",
-                    serde_json::json!({ "hidden": hiding }),
+                    serde_json::json!({ "hidden": hiding, "hud": hides_hud, "glow": hides_glow }),
                 ) {
                     tracing::warn!("emit scroll-capture-hud 失败: {e}");
                 }
@@ -3478,6 +3580,9 @@ pub fn start_scroll_capture(
         if let Some(store) = app2.try_state::<crate::screenshot::ScreenshotStore>() {
             store.end_capture();
         }
+        // 必须在发出 done 事件前完成。前端收到事件后立即显示「复制/保存/打开」按钮，
+        // 此时若覆盖窗仍在目标最大化/置顶窗口后面，用户看到的会是半截且无法点击的 HUD。
+        host.raise_for_result();
 
         match result {
             Ok(res) => {
@@ -3649,6 +3754,39 @@ mod tests {
         // 内缩超过一半时不能出现 0/负尺寸
         let j = r.inset(1000);
         assert!(j.w >= 1 && j.h >= 1);
+    }
+
+    #[test]
+    fn full_window_capture_excludes_only_the_scrollbar_gutter() {
+        let window = RectPx {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1040,
+        };
+        let cropped =
+            exclude_full_window_scrollbar(window, window, 18).expect("完整窗口选区应预留滚动条");
+        assert_eq!(cropped, RectPx { w: 1902, ..window });
+
+        // DWM 可见边界和 GetWindowRect 有少量差异时仍应识别为同一个最大化窗口。
+        let visible = RectPx {
+            x: 8,
+            y: 8,
+            w: 1904,
+            h: 1024,
+        };
+        assert_eq!(
+            exclude_full_window_scrollbar(visible, window, 18),
+            Some(RectPx { w: 1886, ..visible })
+        );
+
+        let custom = RectPx {
+            x: 24,
+            y: 24,
+            w: 1800,
+            h: 960,
+        };
+        assert_eq!(exclude_full_window_scrollbar(custom, window, 18), None);
     }
 
     #[test]

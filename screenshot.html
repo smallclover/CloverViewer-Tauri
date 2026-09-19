@@ -542,6 +542,82 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      /* 开始面板采用“先选模式、再看选区、最后开始”的层级；HUD 继续沿用原有 metrics。 */
+      #scroll-panel {
+        gap: 9px;
+        padding: 13px;
+      }
+      .sh-mode-switch {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 2px;
+        padding: 3px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--s-panel-bg) 82%, #000 18%);
+      }
+      .sh-mode-btn {
+        min-width: 0;
+        padding: 5px 6px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--s-fg-dim);
+        font: inherit;
+        font-size: 11px;
+        line-height: 1.35;
+        cursor: pointer;
+      }
+      .sh-mode-btn.active {
+        background: var(--s-panel-bg);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+        color: var(--s-accent);
+      }
+      .sh-selection-card {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 8px 9px;
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 7px;
+        background: color-mix(in srgb, var(--s-panel-bg) 84%, #000 16%);
+      }
+      .sh-selection-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .sh-selection-card-label,
+      .sh-selection-card-state {
+        overflow: hidden;
+        color: var(--s-fg-dim);
+        font-size: 10px;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sh-selection-card-state.ok { color: var(--s-accent); }
+      .sh-selection-card-state.warn { color: #d8a13a; }
+      .sh-selection-card-value {
+        color: var(--s-panel-title);
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .sh-option-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        color: var(--s-fg-dim);
+        cursor: pointer;
+        user-select: none;
+      }
+      #scroll-panel .sh-actions {
+        flex-wrap: nowrap;
+        margin-top: 1px;
+      }
+      #scroll-panel .sh-actions .sh-btn.primary { flex: 1; justify-content: center; }
       .sh-status {
         color: var(--s-fg-dim);
       }
@@ -574,12 +650,6 @@
         gap: 6px;
         flex-wrap: wrap;
       }
-      .sh-actions.result {
-        padding-top: 2px;
-        /* 结果态优先露出复制/保存/打开；缩略图再长也不能把主要操作挤到屏幕外。 */
-        order: 1;
-      }
-      .sh-actions.result .sh-btn.primary { order: -1; }
       .sh-btn {
         display: inline-flex;
         align-items: center;
@@ -596,33 +666,107 @@
       }
       .sh-btn:hover:not(:disabled) {
         background: var(--s-btn-hover-bg);
+        color: var(--s-btn-hover-fg);
       }
       .sh-btn.primary {
         background: var(--s-accent);
         border-color: transparent;
         color: #fff;
       }
+      /* 主按钮不能继承通用 hover 的灰色遮罩，否则浅色主题里会变成灰底白字、对比不足。 */
+      .sh-btn.primary:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--s-accent) 84%, #000 16%);
+        border-color: transparent;
+        box-shadow: 0 3px 9px var(--s-accent-shadow);
+        color: #fff;
+      }
       .sh-btn:disabled {
         opacity: 0.45;
         cursor: default;
       }
+      /* 结果缩略图永远在固定视口内等比缩放；图片加载或比例变化都不能撑开 HUD。 */
+      .sh-result-summary {
+        display: none;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .sh-result-metric {
+        min-width: 0;
+        padding: 7px 6px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--s-panel-bg) 86%, var(--s-fg) 14%);
+      }
+      .sh-result-metric-label {
+        display: block;
+        color: var(--s-fg-dim);
+        font-size: 10px;
+      }
+      .sh-result-metric strong {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--s-fg);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sh-result-body {
+        display: none;
+        grid-template-columns: 104px minmax(0, 1fr);
+        align-items: start;
+        gap: 10px;
+      }
+      .sh-result-body.without-preview { grid-template-columns: minmax(0, 1fr); }
+      .sh-result-side {
+        display: flex;
+        min-width: 0;
+        min-height: 160px;
+        flex-direction: column;
+      }
+      .sh-result-context {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--s-toolbar-border);
+        color: var(--s-fg-dim);
+        font-size: 11px;
+      }
+      .sh-preview-slot {
+        display: grid;
+        place-items: center;
+        width: 104px;
+        height: 160px;
+        overflow: hidden;
+        border: 1px solid var(--s-toolbar-border);
+        border-radius: 6px;
+        background: #000;
+      }
       .sh-preview {
         display: none;
-        width: 120px;
-        /* 给标题、尺寸和三个结果按钮保留空间；小屏下缩略图可缩短，操作仍始终可见。 */
-        max-height: min(220px, max(48px, calc(100vh - 210px)));
+        width: 100%;
+        height: 100%;
+        max-height: none;
         object-fit: contain;
-        align-self: flex-start;
-        border: 1px solid var(--s-toolbar-border);
-        border-radius: 4px;
-        background: #000;
         image-rendering: auto;
       }
       .sh-preview.on {
         display: block;
       }
-      #scroll-hud .sh-preview { order: 2; }
-      /* 开始面板里的「从页面顶部开始」勾选项 */
+      .sh-result-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: auto;
+      }
+      .sh-result-actions .sh-btn {
+        justify-content: center;
+        width: 100%;
+        padding: 5px 6px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .sh-result-actions .sh-btn.primary { grid-column: 1 / -1; }
+      #scroll-hud.result { width: min(330px, calc(100vw - 24px)); }
+      /* HUD 捕获中的呼吸红点 */
       /* REC 手感：捕获中标题前一个呼吸红点，扫一眼就知道「正在录」 */
       .sh-rec {
         display: inline-block;
@@ -638,14 +782,6 @@
       @keyframes sh-rec-pulse {
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.35; transform: scale(0.82); }
-      }
-      .sh-check {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--s-fg-dim);
-        cursor: pointer;
-        user-select: none;
       }
       .sh-esc-stop {
         display: none;

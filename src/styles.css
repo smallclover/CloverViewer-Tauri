@@ -1145,6 +1145,68 @@ body {
 }
 #toast.show { transform: translate(-50%, 0) scale(1); }
 
+/* 更新提示使用应用内弹窗：更新日志可滚动查看，并让用户明确选择立即或稍后更新。 */
+#update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-normal) ease;
+}
+#update-overlay.is-visible { opacity: 1; pointer-events: auto; }
+#update-panel {
+  width: min(560px, 100%);
+  max-height: min(620px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: 0 22px 60px var(--shadow);
+  transform: translateY(12px) scale(.98);
+  opacity: 0;
+  transition: transform var(--motion-normal) var(--motion-ease), opacity var(--motion-fast) ease;
+}
+#update-overlay.is-visible #update-panel { transform: translateY(0) scale(1); opacity: 1; }
+.update-header { padding: 20px 22px 15px; border-bottom: 1px solid var(--border); }
+.update-header h2 { margin: 0 0 7px; font-size: 18px; font-weight: 600; }
+.update-header p { margin: 0; color: var(--fg-dim); font-size: 13px; }
+.update-header strong { color: var(--fg); }
+.update-body { min-height: 0; padding: 16px 22px; }
+.update-body h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.update-notes {
+  max-height: 300px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.update-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px 20px; }
+.update-primary-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.update-primary-btn:hover { filter: brightness(1.08); }
+.update-primary-btn:focus-visible, .update-actions .mini-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* 设置分类、行项目和图标按钮都获得一致而克制的状态反馈。 */
 .settings-nav button,
 .setting-row,

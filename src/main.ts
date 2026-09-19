@@ -857,6 +857,11 @@ const setMagnifier = $<HTMLInputElement>("set-magnifier");
 const setMinimize = $<HTMLInputElement>("set-minimize");
 const setAutostart = $<HTMLInputElement>("set-autostart");
 const checkUpdateButton = $<HTMLButtonElement>("check-update");
+const updateOverlay = $("update-overlay");
+const updateVersion = $("update-version");
+const updateNotes = $("update-notes");
+const updateNowButton = $<HTMLButtonElement>("update-now");
+const updateLaterButton = $<HTMLButtonElement>("update-later");
 const settingsTabs = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"),
 );
@@ -926,6 +931,10 @@ settingsOverlay.addEventListener("mousedown", (e) => {
 });
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if (!updateOverlay.classList.contains("hidden")) {
+    dismissUpdateDialog(false);
+    return;
+  }
   // 关于页在最上层，优先关闭；两个都关着时 Esc 交给查看器（退出单图视图）
   if (!aboutOverlay.classList.contains("hidden")) {
     closeAbout();
@@ -939,6 +948,9 @@ setLanguage.addEventListener("change", () => {
   saveSettings({ language: lang });
   setLang(lang);
   applyI18n(document);
+  if (!updateOverlay.classList.contains("hidden") && !updateNotes.dataset.hasNotes) {
+    updateNotes.textContent = t("update.noReleaseNotes");
+  }
   refreshGridMenu();
   refreshStatus();
   // 属性面板字段名随语言变化
@@ -974,6 +986,32 @@ setAutostart.addEventListener("change", () => {
 });
 
 let checkingForUpdate = false;
+let updateDialogResolver: ((install: boolean) => void) | undefined;
+
+function dismissUpdateDialog(install: boolean) {
+  const resolve = updateDialogResolver;
+  if (!resolve) return;
+  updateDialogResolver = undefined;
+  setAnimatedVisibility(updateOverlay, false, 180);
+  resolve(install);
+}
+
+function showUpdateDialog(version: string, notes?: string): Promise<boolean> {
+  updateVersion.textContent = `v${version}`;
+  updateNotes.dataset.hasNotes = notes ? "true" : "";
+  updateNotes.textContent = notes || t("update.noReleaseNotes");
+  setAnimatedVisibility(updateOverlay, true, 180);
+  window.requestAnimationFrame(() => updateNowButton.focus());
+  return new Promise((resolve) => {
+    updateDialogResolver = resolve;
+  });
+}
+
+updateNowButton.addEventListener("click", () => dismissUpdateDialog(true));
+updateLaterButton.addEventListener("click", () => dismissUpdateDialog(false));
+updateOverlay.addEventListener("mousedown", (event) => {
+  if (event.target === updateOverlay) dismissUpdateDialog(false);
+});
 
 /**
  * 检查并安装 Tauri 已签名的更新包。
@@ -994,11 +1032,7 @@ async function checkForUpdate(manual: boolean) {
       return;
     }
 
-    const notes = update.body?.trim();
-    const message = notes
-      ? t("update.availableWithNotes", { version: update.version, notes })
-      : t("update.available", { version: update.version });
-    if (!window.confirm(message)) return;
+    if (!(await showUpdateDialog(update.version, update.body?.trim()))) return;
 
     let downloaded = 0;
     let contentLength = 0;

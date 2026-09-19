@@ -1680,6 +1680,9 @@ let scrollError = "";
  *  由 HUD 渲染 —— 单独一个字段，避免和面板上的会话错误互相覆盖。 */
 let scrollActionError = "";
 let scrollStopping = false;
+/** 从后端真正开始采集到收到结果事件的耗时；恢复中的旧会话没有可靠起点，因此保留为空。 */
+let scrollCaptureStartedAt: number | null = null;
+let scrollCaptureElapsedMs: number | null = null;
 /** 本次会话的模式在启动时锁定，避免捕获过程中切换面板控件造成前后端语义不一致。 */
 let scrollManualMode = false;
 /** 最近一次上报给后端的「HUD 压在捕获区上」状态（只在变化时发命令；每次进入捕获态复位）。
@@ -1696,6 +1699,12 @@ function scrollActive(): boolean {
   return scrollPhase === "capturing" || scrollPhase === "done";
 }
 
+function formatScrollElapsed(elapsedMs: number): string {
+  const seconds = Math.max(0, elapsedMs) / 1000;
+  const display = seconds < 10 ? seconds.toFixed(1) : String(Math.round(seconds));
+  return t("shot.scrollElapsedSeconds", { seconds: display });
+}
+
 // ---------- 开始面板 ----------
 const scrollPanel = document.createElement("div");
 scrollPanel.id = "scroll-panel";
@@ -1707,8 +1716,15 @@ shPanelHead.className = "sh-head";
 const shPanelBadge = document.createElement("span");
 shPanelBadge.className = "sh-badge";
 shPanelHead.append(shPanelTitle, shPanelBadge);
-const shPanelMetrics = document.createElement("div");
-shPanelMetrics.className = "sh-metrics";
+const shModeSwitch = document.createElement("div");
+shModeSwitch.className = "sh-mode-switch";
+const shAutoModeBtn = document.createElement("button");
+shAutoModeBtn.type = "button";
+shAutoModeBtn.className = "sh-mode-btn";
+const shManualModeBtn = document.createElement("button");
+shManualModeBtn.type = "button";
+shManualModeBtn.className = "sh-mode-btn";
+shModeSwitch.append(shAutoModeBtn, shManualModeBtn);
 function makeShMetric() {
   const root = document.createElement("div");
   root.className = "sh-metric";
@@ -1719,9 +1735,18 @@ function makeShMetric() {
   root.append(label, value);
   return { root, label, value };
 }
-const shPanelSelectionMetric = makeShMetric();
-const shPanelRecommendationMetric = makeShMetric();
-shPanelMetrics.append(shPanelSelectionMetric.root, shPanelRecommendationMetric.root);
+const shPanelSelectionCard = document.createElement("div");
+shPanelSelectionCard.className = "sh-selection-card";
+const shPanelSelectionCardHead = document.createElement("div");
+shPanelSelectionCardHead.className = "sh-selection-card-head";
+const shPanelSelectionLabel = document.createElement("span");
+shPanelSelectionLabel.className = "sh-selection-card-label";
+const shPanelSelectionState = document.createElement("span");
+shPanelSelectionState.className = "sh-selection-card-state";
+shPanelSelectionCardHead.append(shPanelSelectionLabel, shPanelSelectionState);
+const shPanelSelectionValue = document.createElement("div");
+shPanelSelectionValue.className = "sh-selection-card-value";
+shPanelSelectionCard.append(shPanelSelectionCardHead, shPanelSelectionValue);
 const shPanelHint = document.createElement("div");
 shPanelHint.className = "sh-status";
 const shPanelActions = document.createElement("div");
@@ -1743,42 +1768,44 @@ const shFromTop = document.createElement("input");
 shFromTop.type = "checkbox";
 shFromTop.id = "sh-from-top";
 const shFromTopLabel = document.createElement("label");
-shFromTopLabel.className = "sh-check";
+shFromTopLabel.className = "sh-option-row";
 shFromTopLabel.htmlFor = "sh-from-top";
-// ⚠ `data-i18n` 只能挂在这个 span 上，**绝不能挂在 label 上**：`applyI18n` 是
-// `el.textContent = ...`，挂在 label 上会把里面的 checkbox 和 span 一起抹掉，
-// 于是 `shFromTop.checked` 永远是 false、「从页面顶部开始」这个开关彻底失效（且没有任何报错）。
+// ⚠ `data-i18n` 只能挂在这个 span 上，**绝不能挂在 label 上**：`applyI18n` 会用
+// `textContent` 覆盖节点，挂在 label 上会把里面的 checkbox 一起抹掉。
 shFromTopLabel.append(shFromTop);
 const shFromTopText = document.createElement("span");
-shFromTopText.dataset.i18n = "shot.scrollFromTop";
+shFromTopText.dataset.i18n = "shot.scrollFromTopShort";
 shFromTopLabel.append(shFromTopText);
 
-// 手动模式不注入滚动：用户可以使用滚轮、触控板、滚动条或 PageDown，后端只观察画面变化。
+// 模式切换保留原 checkbox 作为唯一数据源，避免启动请求与面板状态脱节。
 const shManual = document.createElement("input");
 shManual.type = "checkbox";
 shManual.id = "sh-manual";
-const shManualLabel = document.createElement("label");
-shManualLabel.className = "sh-check";
-shManualLabel.htmlFor = "sh-manual";
-shManualLabel.append(shManual);
-const shManualText = document.createElement("span");
-shManualText.dataset.i18n = "shot.scrollManualMode";
-shManualLabel.append(shManualText);
 shManual.addEventListener("change", () => syncScrollUi());
+shAutoModeBtn.addEventListener("click", () => {
+  if (!shManual.checked) return;
+  shManual.checked = false;
+  syncScrollUi();
+});
+shManualModeBtn.addEventListener("click", () => {
+  if (shManual.checked) return;
+  shManual.checked = true;
+  syncScrollUi();
+});
 
 shPanelActions.append(shStartBtn, shQuitBtn);
 scrollPanel.append(
   shPanelHead,
-  shPanelMetrics,
+  shModeSwitch,
+  shPanelSelectionCard,
   shPanelHint,
-  shManualLabel,
   shFromTopLabel,
   shPanelActions,
 );
 uiLayer.appendChild(scrollPanel);
 
-// 自动滚动时，选区外缘显示 Computer Use 风格的绿色聚焦光晕。
-// 伪元素保持透明，只让 box-shadow 向外扩散；位置函数会留出内侧安全距离。
+// 自动滚动时，选区边缘显示 Computer Use 风格的绿色聚焦光晕。
+// 支持捕获排除时光晕可内外扩散；兼容路径会在每次采帧前后让它短暂隐藏。
 const scrollSelectionGlow = document.createElement("div");
 scrollSelectionGlow.id = "scroll-selection-glow";
 uiLayer.appendChild(scrollSelectionGlow);
@@ -1811,8 +1838,34 @@ const shHudDetail = document.createElement("div");
 shHudDetail.className = "sh-detail";
 const shPreview = document.createElement("img");
 shPreview.className = "sh-preview";
+const shResultSummary = document.createElement("div");
+shResultSummary.className = "sh-result-summary";
+const shResultSizeMetric = document.createElement("div");
+shResultSizeMetric.className = "sh-result-metric";
+const shResultSizeLabel = document.createElement("span");
+shResultSizeLabel.className = "sh-result-metric-label";
+const shResultSize = document.createElement("strong");
+shResultSizeMetric.append(shResultSizeLabel, shResultSize);
+const shResultFramesMetric = document.createElement("div");
+shResultFramesMetric.className = "sh-result-metric";
+const shResultFramesLabel = document.createElement("span");
+shResultFramesLabel.className = "sh-result-metric-label";
+const shResultFrames = document.createElement("strong");
+shResultFramesMetric.append(shResultFramesLabel, shResultFrames);
+shResultSummary.append(shResultSizeMetric, shResultFramesMetric);
+const shResultElapsed = document.createElement("div");
+shResultElapsed.className = "sh-result-context";
+const shPreviewSlot = document.createElement("div");
+shPreviewSlot.className = "sh-preview-slot";
+shPreviewSlot.appendChild(shPreview);
 const shHudActions = document.createElement("div");
 shHudActions.className = "sh-actions";
+const shResultActions = document.createElement("div");
+shResultActions.className = "sh-result-actions";
+const shResultBody = document.createElement("div");
+shResultBody.className = "sh-result-body";
+const shResultSide = document.createElement("div");
+shResultSide.className = "sh-result-side";
 
 function makeShBtn(onClick: () => void): HTMLButtonElement {
   const b = document.createElement("button");
@@ -1834,15 +1887,18 @@ const shSaveBtn = makeShBtn(() => void finishScrollAction("save"));
 const shOpenBtn = makeShBtn(() => void finishScrollAction("open"));
 const shEscStop = document.createElement("div");
 shEscStop.className = "sh-esc-stop";
-shHudActions.append(shStopBtn, shCopyBtn, shSaveBtn, shOpenBtn);
+shHudActions.append(shStopBtn);
+shResultActions.append(shCopyBtn, shSaveBtn, shOpenBtn);
+shResultSide.append(shResultSummary, shResultElapsed, shResultActions);
+shResultBody.append(shPreviewSlot, shResultSide);
 scrollHud.append(
   shHudHead,
   shHudMetrics,
   shHudStatus,
   shHudDetail,
   shEscStop,
-  shPreview,
   shHudActions,
+  shResultBody,
 );
 uiLayer.appendChild(scrollHud);
 
@@ -1877,6 +1933,8 @@ function enterScrollArm() {
   scrollResult = null;
   scrollError = "";
   scrollActionError = "";
+  scrollCaptureStartedAt = null;
+  scrollCaptureElapsedMs = null;
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
@@ -1905,6 +1963,8 @@ function exitScrollMode() {
   scrollResult = null;
   scrollError = "";
   scrollActionError = "";
+  scrollCaptureStartedAt = null;
+  scrollCaptureElapsedMs = null;
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
@@ -1929,6 +1989,8 @@ async function beginScrollCapture() {
   scrollResult = null;
   scrollError = "";
   scrollActionError = "";
+  scrollCaptureStartedAt = null;
+  scrollCaptureElapsedMs = null;
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
@@ -1942,6 +2004,7 @@ async function beginScrollCapture() {
   // 否则后端抓第一帧时还能看到残留 UI，会被烤进长图顶部（用户实测踩到过）。
   await new Promise((r) => setTimeout(r, 180));
   try {
+    scrollCaptureStartedAt = performance.now();
     // 选区坐标是「截图窗内」的物理像素，后端要的是虚拟桌面物理像素 → 加回 minX/minY
     await startScrollCapture({
       x: Math.round(sel.x + minX),
@@ -1961,6 +2024,8 @@ async function beginScrollCapture() {
     scrollHud.classList.remove("hud-hidden");
     scrollSelectionGlow.classList.remove("capture-hidden");
     scrollError = String(e);
+    scrollCaptureStartedAt = null;
+    scrollCaptureElapsedMs = null;
     scrollPhase = "armed";
     syncScrollUi();
     render();
@@ -2120,7 +2185,7 @@ function syncScrollUi() {
   shStartBtn.disabled = !scrollSelectionOk();
   // 手动模式不允许「从顶部开始」：它不应在用户不知情时移动目标内容。
   shFromTop.disabled = shManual.checked;
-  shFromTopLabel.style.opacity = shManual.checked ? "0.5" : "";
+  shFromTopLabel.style.display = shManual.checked ? "none" : "flex";
   const selTooShort = !!selection && selection.h < MIN_SCROLL_SEL_H;
   const selShortCaution =
     !!selection && selection.h >= MIN_SCROLL_SEL_H && selection.h < RECOMMENDED_SCROLL_SEL_H;
@@ -2128,16 +2193,32 @@ function syncScrollUi() {
   shPanelTitle.textContent = t("shot.scroll");
   shPanelBadge.textContent = t("shot.scrollReady");
   shPanelBadge.className = "sh-badge ok";
-  shPanelMetrics.style.display = selection ? "grid" : "none";
-  shPanelSelectionMetric.label.textContent = t("shot.scrollSelectionLabel");
-  shPanelSelectionMetric.value.textContent = selection
+  shAutoModeBtn.textContent = t("shot.scrollAutoMode");
+  shManualModeBtn.textContent = t("shot.scrollManualModeShort");
+  shAutoModeBtn.classList.toggle("active", !shManual.checked);
+  shManualModeBtn.classList.toggle("active", shManual.checked);
+  shAutoModeBtn.setAttribute("aria-pressed", String(!shManual.checked));
+  shManualModeBtn.setAttribute("aria-pressed", String(shManual.checked));
+  shPanelSelectionCard.style.display = selection ? "flex" : "none";
+  shPanelSelectionLabel.textContent = t("shot.scrollSelectionLabel");
+  shPanelSelectionValue.textContent = selection
     ? `${Math.round(selection.w)} × ${Math.round(selection.h)} px`
     : "—";
-  shPanelRecommendationMetric.label.textContent = t("shot.scrollRecommended");
-  shPanelRecommendationMetric.value.textContent = `≥ ${RECOMMENDED_SCROLL_SEL_H}px`;
+  shPanelSelectionState.textContent = selTooShort
+    ? `≥ ${MIN_SCROLL_SEL_H}px`
+    : selection && selection.h >= RECOMMENDED_SCROLL_SEL_H
+      ? t("shot.scrollHeightReady")
+      : `≥ ${RECOMMENDED_SCROLL_SEL_H}px`;
+  shPanelSelectionState.className = `sh-selection-card-state${
+    selection && selection.h >= RECOMMENDED_SCROLL_SEL_H ? " ok" : " warn"
+  }`;
   shPanelHint.textContent = scrollError
     ? t("shot.scrollFailed", { msg: scrollError })
-    : scrollSelectionHint();
+    : selTooShort || selShortCaution
+      ? scrollSelectionHint()
+      : shManual.checked
+        ? t("shot.scrollManualHint")
+        : t("shot.scrollAutoHint");
   shPanelHint.className = `sh-status${scrollError || selTooShort ? " err" : selShortCaution ? " warn" : ""}`;
   shStartBtn.textContent = shManual.checked ? t("shot.scrollManualStart") : t("shot.scrollStart");
   shQuitBtn.textContent = t("shot.scrollCancel");
@@ -2146,6 +2227,10 @@ function syncScrollUi() {
   const p = scrollProg;
   const res = scrollResult;
   if (scrollPhase === "capturing") {
+    scrollHud.classList.remove("result");
+    shResultSummary.style.display = "none";
+    shResultBody.style.display = "none";
+    shHudActions.style.display = "flex";
     const manual = scrollManualMode || p?.method === "manual";
     // REC 手感：呼吸红点 + 标题（扫一眼就知道在录；边框颜色/任务栏进度是补充通道）
     shRecDot.style.display = "";
@@ -2176,9 +2261,11 @@ function syncScrollUi() {
     shStopBtn.textContent = t(manual ? "shot.scrollManualFinish" : "shot.scrollStop");
     shEscStop.textContent = t(manual ? "shot.scrollManualEscFinish" : "shot.scrollEscStop");
     shEscStop.classList.toggle("on", scrollPassthrough());
-    shHudActions.classList.remove("result");
-    for (const b of [shCopyBtn, shSaveBtn, shOpenBtn]) b.style.display = "none";
   } else if (scrollPhase === "done" && res) {
+    scrollHud.classList.add("result");
+    shHudActions.style.display = "none";
+    shResultSummary.style.display = "grid";
+    shResultBody.style.display = "grid";
     shRecDot.style.display = "none";
     shHudTitleText.textContent = t("shot.scrollDone");
     const conf =
@@ -2189,29 +2276,33 @@ function syncScrollUi() {
           : t("shot.scrollConfLow");
     shHudBadge.textContent = conf;
     shHudBadge.className = `sh-badge${res.confidence === "high" ? " ok" : " warn"}`;
-    shHudMetrics.style.display = "grid";
-    shHudPrimaryMetric.label.textContent = t("shot.scrollResult");
-    shHudPrimaryMetric.value.textContent = t("shot.scrollSize", {
+    shHudMetrics.style.display = "none";
+    shResultSizeLabel.textContent = t("shot.scrollDimensions");
+    shResultSize.textContent = t("shot.scrollSize", {
       w: res.width ?? 0,
       h: res.height ?? 0,
     });
-    shHudSecondaryMetric.label.textContent = t("shot.scrollFrameCount");
-    shHudSecondaryMetric.value.textContent = String(res.frames ?? 0);
+    shResultFramesLabel.textContent = t("shot.scrollFrameCount");
+    shResultFrames.textContent = t("shot.scrollFrames", { count: res.frames ?? 0 });
+    shResultElapsed.style.display = scrollCaptureElapsedMs === null ? "none" : "";
+    shResultElapsed.textContent =
+      scrollCaptureElapsedMs === null
+        ? ""
+        : t("shot.scrollElapsed", { time: formatScrollElapsed(scrollCaptureElapsedMs) });
     shHudStatus.textContent = scrollActionError;
     shHudStatus.className = `sh-status${scrollActionError ? " err" : ""}`;
     // 落地失败时把原因顶到最前面：`res.message` 是拼接阶段的信息，此刻更重要的是「为什么没存下来」
     shHudDetail.textContent = scrollActionError || res.message || "";
     shHudDetail.className = `sh-detail${scrollActionError || res.message ? " on" : ""}${res.confidence === "high" && !scrollActionError ? "" : " warn"}`;
     shEscStop.classList.remove("on");
-    shPreview.classList.toggle("on", !!scrollProg?.preview);
+    const hasPreview = !!scrollProg?.preview;
+    shPreview.classList.toggle("on", hasPreview);
+    shPreviewSlot.style.display = hasPreview ? "grid" : "none";
+    shResultBody.classList.toggle("without-preview", !hasPreview);
     if (scrollProg?.preview) shPreview.src = scrollProg.preview;
-    shStopBtn.style.display = "none";
-    shCopyBtn.style.display = "";
-    shSaveBtn.style.display = "";
-    shOpenBtn.style.display = "";
-    shHudActions.classList.add("result");
-    shCopyBtn.classList.add("primary");
-    for (const b of [shSaveBtn, shOpenBtn]) b.classList.remove("primary");
+    shCopyBtn.classList.remove("primary");
+    shSaveBtn.classList.remove("primary");
+    shOpenBtn.classList.add("primary");
     shCopyBtn.textContent = t("shot.scrollCopy");
     shSaveBtn.textContent = t("shot.scrollSave");
     shOpenBtn.textContent = t("shot.scrollOpen");
@@ -2465,6 +2556,8 @@ async function loadScreenshot() {
   scrollResult = null;
   scrollError = "";
   scrollActionError = "";
+  scrollCaptureStartedAt = null;
+  scrollCaptureElapsedMs = null;
   hudOverlapReported = false;
   hudHiddenForSession = false;
   scrollStopping = false;
@@ -2565,6 +2658,9 @@ async function restoreRunningScrollSession() {
     if (!(await scrollCaptureRunning())) return;
     scrollPhase = "capturing";
     scrollStopping = false;
+    // 重连的旧会话没有可信的起始时间，避免展示一段错误的“耗时”。
+    scrollCaptureStartedAt = null;
+    scrollCaptureElapsedMs = null;
     scrollProg = await scrollCaptureProgress();
     const cap = scrollProg?.capture;
     scrollCaptureRect = cap ? { x: cap[0] - minX, y: cap[1] - minY, w: cap[2], h: cap[3] } : null;
@@ -2643,6 +2739,8 @@ async function main() {
     scrollResult = null;
     scrollError = "";
     scrollActionError = "";
+    scrollCaptureStartedAt = null;
+    scrollCaptureElapsedMs = null;
     hudOverlapReported = false;
     hudHiddenForSession = false;
     scrollStopping = false;
@@ -2680,6 +2778,9 @@ async function main() {
   // 滚动截图：结束事件（成功 → 结果态；失败 → 回 armed 态并显示原因）
   await listen<ScrollCaptureDone>("scroll-capture-done", (e) => {
     const p = e.payload;
+    const startedAt = scrollCaptureStartedAt;
+    scrollCaptureStartedAt = null;
+    scrollCaptureElapsedMs = p.ok && startedAt !== null ? performance.now() - startedAt : null;
     scrollStopping = false;
     hudHiddenForSession = false;
     scrollHud.classList.remove("hud-hidden");

@@ -88,6 +88,23 @@
       <div id="drop-overlay" class="hidden" data-i18n="drop.open">松开以打开</div>
       <div id="toast" class="hidden"></div>
 
+      <div id="update-overlay" class="hidden">
+        <section id="update-panel" role="dialog" aria-modal="true" aria-labelledby="update-title">
+          <header class="update-header">
+            <h2 id="update-title" data-i18n="update.title">发现新版本</h2>
+            <p><span data-i18n="update.versionAvailable">可更新至</span> <strong id="update-version"></strong></p>
+          </header>
+          <div class="update-body">
+            <h3 data-i18n="update.releaseNotes">更新日志</h3>
+            <div id="update-notes" class="update-notes"></div>
+          </div>
+          <footer class="update-actions">
+            <button id="update-later" class="mini-btn" type="button" data-i18n="update.later">稍后更新</button>
+            <button id="update-now" class="update-primary-btn" type="button" data-i18n="update.updateNow">立即更新</button>
+          </footer>
+        </section>
+      </div>
+
       <div id="settings-overlay" class="hidden">
         <div id="settings-panel" role="dialog" aria-modal="true">
           <nav class="settings-nav" aria-label="设置分类">

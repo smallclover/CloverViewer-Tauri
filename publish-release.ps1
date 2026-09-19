@@ -55,7 +55,10 @@ try {
 
   # ---- 2. 三处清单版本必须一致，且与标签匹配 ----
   $pkgVersion = (Get-Content -Raw -Encoding UTF8 package.json | ConvertFrom-Json).version
-  $confVersion = (Get-Content -Raw -Encoding UTF8 src-tauri/tauri.conf.json | ConvertFrom-Json).version
+  $confVersionRaw = (Get-Content -Raw -Encoding UTF8 src-tauri/tauri.conf.json | ConvertFrom-Json).version
+  # Tauri 支持从 package.json 读取版本号；此时清单中的路径与包版本等价，
+  # 不应被误判为版本不一致。
+  $confVersion = if ($confVersionRaw -eq '../package.json') { $pkgVersion } else { $confVersionRaw }
   $cargoLine = Select-String -Path src-tauri/Cargo.toml -Pattern '^\s*version\s*=\s*"([^"]+)"' |
     Select-Object -First 1
   if (-not $cargoLine) { Fail 'src-tauri/Cargo.toml 里找不到 [package] 的 version。' }
@@ -65,7 +68,7 @@ try {
     Fail @"
 版本号不一致，先统一再发布：
   package.json              = $pkgVersion
-  src-tauri/tauri.conf.json = $confVersion
+  src-tauri/tauri.conf.json = $confVersionRaw
   src-tauri/Cargo.toml      = $cargoVersion
 "@
   }

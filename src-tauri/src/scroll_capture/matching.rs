@@ -4,6 +4,158 @@ use super::{frame_shift, grayscale, ShiftEstimate};
 
 pub(crate) const MIN_SHIFT: u32 = 4;
 
+/// Find fixed bands attached to the left and right edges of a capture.
+///
+/// Full-window captures commonly include app chrome beside the scroll view
+/// (for example, VS Code's activity bar and side panel).  That chrome must not
+/// be repeated down the exported long image.  Registration remains independent
+/// from this helper; callers use it only after a normal vertical match succeeds.
+pub fn fixed_horizontal_margins(prev: &RgbaImage, cur: &RgbaImage) -> (u32, u32) {
+    if prev.dimensions() != cur.dimensions() {
+        return (0, 0);
+    }
+    let (w, h) = cur.dimensions();
+    if w < 64 || h < 32 {
+        return (0, 0);
+    }
+
+    // Roughly 32px per stripe isolates narrow activity bars while retaining
+    // enough samples to distinguish a scrolling text column from static UI.
+    let stripes = (w / 32).clamp(6, 32);
+    let stripe_w = (w / stripes).max(1);
+    let is_static = |x0: u32, x1: u32| {
+        let a = prev.as_raw();
+        let b = cur.as_raw();
+        let mut same = 0u32;
+        let mut total = 0u32;
+        let mut y = 0;
+        while y < h {
+            let mut x = x0;
+            while x < x1 {
+                let i = ((y * w + x) * 4) as usize;
+                let delta = (a[i] as i16 - b[i] as i16).unsigned_abs()
+                    + (a[i + 1] as i16 - b[i + 1] as i16).unsigned_abs()
+                    + (a[i + 2] as i16 - b[i + 2] as i16).unsigned_abs();
+                if delta <= 12 {
+                    same += 1;
+                }
+                total += 1;
+                x += 4;
+            }
+            y += 2;
+        }
+        total > 0 && same as f32 / total as f32 >= 0.90
+    };
+
+    let mut left = 0;
+    for stripe in 0..stripes {
+        let x0 = stripe * stripe_w;
+        let x1 = if stripe + 1 == stripes {
+            w
+        } else {
+            ((stripe + 1) * stripe_w).min(w)
+        };
+        if is_static(x0, x1) {
+            left = x1;
+        } else {
+            break;
+        }
+    }
+    let mut right = 0;
+    for stripe in (0..stripes).rev() {
+        let x0 = stripe * stripe_w;
+        let x1 = if stripe + 1 == stripes {
+            w
+        } else {
+            ((stripe + 1) * stripe_w).min(w)
+        };
+        if is_static(x0, x1) {
+            right = w - x0;
+        } else {
+            break;
+        }
+    }
+
+    // Avoid cropping a narrow, valid scrolling pane just because both outer
+    // regions happened not to change between this pair of frames.
+    if left.saturating_add(right) >= w / 2 {
+        (0, 0)
+    } else {
+        (left, right)
+    }
+}
+
+/// Locate narrow, moving scrollbar tracks inside a multi-pane application.
+///
+/// Unlike a browser scrollbar, an IDE scrollbar can sit between the editor and
+/// a fixed sidebar.  Its track is nearly unchanged, while its thumb changes
+/// position on every captured frame.  We deliberately require a wide fully
+/// static pane beside the candidate, which prevents ordinary text columns from
+/// being mistaken for a scrollbar.
+pub fn internal_vertical_scrollbar_bands(prev: &RgbaImage, cur: &RgbaImage) -> Vec<(u32, u32)> {
+    if prev.dimensions() != cur.dimensions() {
+        return Vec::new();
+    }
+    let (w, h) = cur.dimensions();
+    if w < 96 || h < 64 {
+        return Vec::new();
+    }
+    let a = prev.as_raw();
+    let b = cur.as_raw();
+    let mut same_ratio = Vec::with_capacity(w as usize);
+    for x in 0..w {
+        let mut same = 0u32;
+        let mut total = 0u32;
+        let mut y = 0;
+        while y < h {
+            let i = ((y * w + x) * 4) as usize;
+            let delta = (a[i] as i16 - b[i] as i16).unsigned_abs()
+                + (a[i + 1] as i16 - b[i + 1] as i16).unsigned_abs()
+                + (a[i + 2] as i16 - b[i + 2] as i16).unsigned_abs();
+            if delta <= 12 {
+                same += 1;
+            }
+            total += 1;
+            y += 2;
+        }
+        same_ratio.push(if total == 0 {
+            1.0
+        } else {
+            same as f32 / total as f32
+        });
+    }
+
+    // A scrollbar thumb normally covers only a few percent of the track.
+    // Fully static columns are dividers/sidebar background, not the track.
+    let is_track = |x: usize| (0.65..0.995).contains(&same_ratio[x]);
+    let is_static = |x: usize| same_ratio[x] >= 0.995;
+    let has_static_pane_next_to = |start: usize, end: usize| {
+        let check =
+            |from: usize, to: usize| to.saturating_sub(from) >= 24 && (from..to).all(is_static);
+        let left_from = start.saturating_sub(28);
+        let right_to = (end + 28).min(w as usize);
+        check(left_from, start) || check(end, right_to)
+    };
+
+    let mut bands = Vec::new();
+    let mut x = 8usize;
+    while x + 8 < w as usize {
+        if !is_track(x) {
+            x += 1;
+            continue;
+        }
+        let start = x;
+        while x < w as usize - 8 && is_track(x) {
+            x += 1;
+        }
+        let end = x;
+        if (3..=24).contains(&(end - start)) && has_static_pane_next_to(start, end) {
+            bands.push((start as u32, (end - start) as u32));
+        }
+    }
+    bands
+}
+
 // ---------- 纵向位移估计（P0 的粗糙版，P1 会被行指纹匹配取代） ----------
 
 /// SAD 核心：在给定的灰度行图上找最佳位移

@@ -12,11 +12,13 @@ use super::session::{
     est_err_ok, FrameHideGate, ScrollCaptureProgress, ScrollCaptureRequest, ScrollCaptureResult,
     SessionHost, SessionOptions, MAX_CANVAS_BYTES, PREVIEW_MAX_H, PREVIEW_WIDTH,
 };
-use super::stitching::{append_band, attach_footer, trim_initial_footer};
+use super::stitching::{append_band, remove_vertical_bands, trim_initial_footer};
 use super::{
-    capture_rect, deepest_child_at, match_frames, root_window, settle_capture, tolerant_shift,
-    MatchParams,
+    capture_rect, deepest_child_at, fixed_horizontal_margins, internal_vertical_scrollbar_bands,
+    match_frames, root_window, settle_capture, tolerant_shift, MatchParams,
 };
+
+const BOTTOM_CHROME_GUARD: u32 = 32;
 
 /// 用户手动滚动的会话。
 ///
@@ -116,7 +118,10 @@ pub fn run_manual_session_ext(
     let mut prev = first.image;
     let mut frames = 1u32;
     let mut last_shift: Option<u32> = None;
-    let mut last_bottom_fixed = 0u32;
+    let mut last_bottom_fixed = BOTTOM_CHROME_GUARD;
+    let mut fixed_left = 0u32;
+    let mut fixed_right = 0u32;
+    let mut internal_scrollbars: Vec<(u32, u32)> = Vec::new();
     let mut initial_footer_pending = true;
     let mut low_conf = false;
     let mut stop_reason: Option<String> = None;
@@ -197,8 +202,19 @@ pub fn run_manual_session_ext(
         let mut appended = false;
         match match_frames(&prev, &cur, &params, last_shift) {
             Some(m) if m.shift >= MIN_SHIFT => {
+                let (left, right) = fixed_horizontal_margins(&prev, &cur);
+                fixed_left = fixed_left.max(left);
+                fixed_right = fixed_right.max(right);
+                let bars = internal_vertical_scrollbar_bands(&prev, &cur);
+                if !bars.is_empty() {
+                    internal_scrollbars = bars;
+                }
+                let footer_h = m
+                    .bottom_fixed
+                    .max(BOTTOM_CHROME_GUARD)
+                    .min(cur.height().saturating_sub(1));
                 if initial_footer_pending {
-                    if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, m.bottom_fixed) {
+                    if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, footer_h) {
                         if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
                         {
                             preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
@@ -210,11 +226,11 @@ pub fn run_manual_session_ext(
                 let body_h = cur
                     .height()
                     .saturating_sub(m.top_fixed)
-                    .saturating_sub(m.bottom_fixed);
+                    .saturating_sub(footer_h);
                 let append_from = body_h.saturating_sub(m.shift) + m.top_fixed;
                 let net = cur
                     .height()
-                    .saturating_sub(m.bottom_fixed)
+                    .saturating_sub(footer_h)
                     .saturating_sub(append_from);
                 let new_h = canvas_h + net;
                 let weak = m.ambiguous
@@ -231,7 +247,7 @@ pub fn run_manual_session_ext(
                         &mut canvas_h,
                         &cur,
                         m.top_fixed,
-                        m.bottom_fixed,
+                        footer_h,
                         m.shift,
                     )?;
                     let strip =
@@ -239,7 +255,7 @@ pub fn run_manual_session_ext(
                     preview.append_strip(&strip, canvas_h - net);
                     frames += 1;
                     last_shift = Some(m.shift);
-                    last_bottom_fixed = m.bottom_fixed;
+                    last_bottom_fixed = footer_h;
                     low_conf |= weak;
                     appended = true;
                 }
@@ -253,7 +269,20 @@ pub fn run_manual_session_ext(
                 if let Some((shift, ratio)) = tolerant_shift(&prev, &cur)
                     .filter(|(_, ratio)| *ratio < 0.8 && est_err_ok(&prev, &cur))
                 {
-                    let footer_h = last_bottom_fixed.min(cur.height().saturating_sub(1));
+                    let footer_h = last_bottom_fixed
+                        .max(BOTTOM_CHROME_GUARD)
+                        .min(cur.height().saturating_sub(1));
+                    if initial_footer_pending {
+                        if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, footer_h) {
+                            if let Some(body) =
+                                RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
+                            {
+                                preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
+                                preview.append_strip(&body, 0);
+                            }
+                        }
+                        initial_footer_pending = false;
+                    }
                     let shift = shift.min(cur.height().saturating_sub(footer_h).saturating_sub(1));
                     if shift >= MIN_SHIFT {
                         let append_from =
@@ -279,6 +308,7 @@ pub fn run_manual_session_ext(
                         }
                         frames += 1;
                         last_shift = Some(shift);
+                        last_bottom_fixed = footer_h;
                         low_conf = true;
                         appended = true;
                         tracing::debug!(
@@ -317,18 +347,37 @@ pub fn run_manual_session_ext(
 
     host.set_progress(false, 0.0);
     frame_gate.borrow_mut().restore();
-    attach_footer(
-        &mut canvas,
-        canvas_w,
-        &mut canvas_h,
-        &prev,
-        last_bottom_fixed,
-    );
+    // See the automatic path: the fixed bottom guard intentionally stays out
+    // of the result so an IDE's horizontal scrollbar cannot survive at the end.
     if canvas_h <= cap.h.saturating_sub(last_bottom_fixed) {
         return Err("没有捕获到可拼接的内容（请先向下滚动至少一段，再按 Esc 完成）".to_string());
     }
     let img = RgbaImage::from_raw(canvas_w, canvas_h, canvas)
         .ok_or_else(|| "拼接缓冲区尺寸不一致".to_string())?;
+    let (output_left, output_w) = if fixed_left.saturating_add(fixed_right) < canvas_w / 2 {
+        (
+            fixed_left,
+            canvas_w
+                .saturating_sub(fixed_left)
+                .saturating_sub(fixed_right),
+        )
+    } else {
+        (0, canvas_w)
+    };
+    let img = if output_left > 0 || output_w < canvas_w {
+        image::imageops::crop_imm(&img, output_left, 0, output_w, canvas_h).to_image()
+    } else {
+        img
+    };
+    let visible_scrollbars: Vec<(u32, u32)> = internal_scrollbars
+        .iter()
+        .filter_map(|(x, width)| {
+            let start = (*x).max(output_left);
+            let end = x.saturating_add(*width).min(output_left + output_w);
+            (start < end).then_some((start - output_left, end - start))
+        })
+        .collect();
+    let img = remove_vertical_bands(img, &visible_scrollbars);
     let png = encode_png(&img, false)?;
     let confidence = if stop_reason.is_some() {
         "partial"
@@ -338,8 +387,8 @@ pub fn run_manual_session_ext(
         "high"
     };
     let result = ScrollCaptureResult {
-        width: canvas_w,
-        height: canvas_h,
+        width: img.width(),
+        height: img.height(),
         frames,
         confidence: confidence.to_string(),
         message: stop_reason,

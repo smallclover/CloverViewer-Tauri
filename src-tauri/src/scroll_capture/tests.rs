@@ -1,4 +1,6 @@
-use super::stitching::{append_band, attach_footer, duplicate_ratio, trim_initial_footer};
+use super::stitching::{
+    append_band, attach_footer, duplicate_ratio, remove_vertical_bands, trim_initial_footer,
+};
 use super::*;
 use image::{Rgba, RgbaImage};
 
@@ -310,6 +312,88 @@ fn match_tolerates_static_sidebar() {
     let m = match_frames(&prev, &cur, &MatchParams::for_height(h), None)
         .expect("带固定侧栏的帧也应该能匹配");
     assert_eq!(m.shift, shift, "位移识别错误: {m:?}");
+}
+
+#[test]
+fn fixed_horizontal_margins_remove_static_app_chrome_but_keep_scrolling_pane() {
+    let (w, h, shift) = (960u32, 500u32, 87u32);
+    let (left_w, right_w) = (160u32, 192u32);
+    let content = noise(w, h + shift + 8, 71);
+    let left = noise(left_w, h, 72);
+    let right = noise(right_w, h, 73);
+    let mut prev = RgbaImage::new(w, h);
+    let mut cur = RgbaImage::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let before = if x < left_w {
+                *left.get_pixel(x, y)
+            } else if x >= w - right_w {
+                *right.get_pixel(x - (w - right_w), y)
+            } else {
+                *content.get_pixel(x, y)
+            };
+            let after = if x < left_w {
+                *left.get_pixel(x, y)
+            } else if x >= w - right_w {
+                *right.get_pixel(x - (w - right_w), y)
+            } else {
+                *content.get_pixel(x, y + shift)
+            };
+            prev.put_pixel(x, y, before);
+            cur.put_pixel(x, y, after);
+        }
+    }
+
+    assert_eq!(fixed_horizontal_margins(&prev, &cur), (left_w, right_w));
+}
+
+#[test]
+fn internal_scrollbar_between_editor_and_sidebar_is_removed_from_export() {
+    let (w, h, shift) = (500u32, 400u32, 80u32);
+    let (bar_x, bar_w) = (300u32, 8u32);
+    let content = noise(w, h + shift + 8, 81);
+    let sidebar = noise(w - bar_x - bar_w, h, 82);
+    let mut prev = RgbaImage::new(w, h);
+    let mut cur = RgbaImage::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let before = if x < bar_x {
+                *content.get_pixel(x, y)
+            } else if x < bar_x + bar_w {
+                // Same dark track; the short light thumb moves down.
+                if (80..104).contains(&y) {
+                    Rgba([220, 220, 220, 255])
+                } else {
+                    Rgba([40, 40, 40, 255])
+                }
+            } else {
+                *sidebar.get_pixel(x - bar_x - bar_w, y)
+            };
+            let after = if x < bar_x {
+                *content.get_pixel(x, y + shift)
+            } else if x < bar_x + bar_w {
+                if (160..184).contains(&y) {
+                    Rgba([220, 220, 220, 255])
+                } else {
+                    Rgba([40, 40, 40, 255])
+                }
+            } else {
+                *sidebar.get_pixel(x - bar_x - bar_w, y)
+            };
+            prev.put_pixel(x, y, before);
+            cur.put_pixel(x, y, after);
+        }
+    }
+
+    assert_eq!(
+        internal_vertical_scrollbar_bands(&prev, &cur),
+        vec![(bar_x, bar_w)]
+    );
+    let joined = RgbaImage::from_pixel(w, h * 2, Rgba([9, 9, 9, 255]));
+    assert_eq!(
+        remove_vertical_bands(joined, &[(bar_x, bar_w)]).width(),
+        w - bar_w
+    );
 }
 
 #[test]

@@ -15,6 +15,7 @@
     "src/screenshot/history.ts",
     "src/screenshot/annotation-renderer.ts",
     "src/screenshot/mosaic.ts",
+    "src/screenshot/magnifier.ts",
     "src/screenshot/overlay-layout.ts",
     "src/screenshot/resize.ts",
     "src/screenshot/screen-compositor.ts"

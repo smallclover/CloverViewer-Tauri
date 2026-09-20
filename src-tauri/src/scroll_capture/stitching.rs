@@ -2,6 +2,66 @@
 
 use image::RgbaImage;
 
+/// Remove narrow vertical strips from the final image without resampling it.
+/// This is used for IDE-style internal scrollbar tracks, whose moving thumb
+/// would otherwise appear once per appended frame.
+pub(super) fn remove_vertical_bands(image: RgbaImage, bands: &[(u32, u32)]) -> RgbaImage {
+    if bands.is_empty() {
+        return image;
+    }
+    let (width, height) = image.dimensions();
+    let mut ranges: Vec<(u32, u32)> = bands
+        .iter()
+        .filter_map(|(x, w)| {
+            let end = x.saturating_add(*w).min(width);
+            (*x < end).then_some((*x, end))
+        })
+        .collect();
+    ranges.sort_unstable();
+    let mut merged: Vec<(u32, u32)> = Vec::new();
+    for (start, end) in ranges {
+        if let Some((_, previous_end)) = merged.last_mut() {
+            if start <= *previous_end {
+                *previous_end = (*previous_end).max(end);
+                continue;
+            }
+        }
+        merged.push((start, end));
+    }
+    let removed: u32 = merged.iter().map(|(start, end)| end - start).sum();
+    if removed == 0 || removed >= width {
+        return image;
+    }
+
+    let output_width = width - removed;
+    let mut output = RgbaImage::new(output_width, height);
+    let input = image.as_raw();
+    let output_raw = output.as_mut();
+    let source_row = width as usize * 4;
+    let output_row = output_width as usize * 4;
+    for y in 0..height as usize {
+        let mut source_x = 0u32;
+        let mut target_x = 0u32;
+        for (start, end) in &merged {
+            if *start > source_x {
+                let bytes = (*start - source_x) as usize * 4;
+                let source = y * source_row + source_x as usize * 4;
+                let target = y * output_row + target_x as usize * 4;
+                output_raw[target..target + bytes].copy_from_slice(&input[source..source + bytes]);
+                target_x += *start - source_x;
+            }
+            source_x = *end;
+        }
+        if source_x < width {
+            let bytes = (width - source_x) as usize * 4;
+            let source = y * source_row + source_x as usize * 4;
+            let target = y * output_row + target_x as usize * 4;
+            output_raw[target..target + bytes].copy_from_slice(&input[source..source + bytes]);
+        }
+    }
+    output
+}
+
 /// 单行指纹（整行采样 + 量化哈希），用于追加内容的重复度诊断。
 fn row_hash(raw: &[u8], row_index: usize, width: u32, step: u32) -> u64 {
     let base = row_index * width as usize * 4;

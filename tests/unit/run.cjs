@@ -3,6 +3,7 @@ require("./image-source.test.cjs");
 require("./screenshot-geometry.test.cjs");
 require("./screenshot-history.test.cjs");
 require("./screenshot-mosaic.test.cjs");
+require("./screenshot-magnifier.test.cjs");
 require("./screenshot-overlay-layout.test.cjs");
 require("./screenshot-renderer.test.cjs");
 require("./screenshot-resize.test.cjs");

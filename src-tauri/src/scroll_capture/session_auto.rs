@@ -15,15 +15,19 @@ use super::session::{
     ScrollCaptureRequest, ScrollCaptureResult, SessionCleanup, SessionHost, SessionLog,
     SessionOptions, MAX_CANVAS_BYTES, PREVIEW_MAX_H, PREVIEW_WIDTH,
 };
-use super::stitching::{append_band, attach_footer, duplicate_ratio, trim_initial_footer};
+use super::stitching::{append_band, duplicate_ratio, remove_vertical_bands, trim_initial_footer};
 use super::{
-    deepest_child_at, frame_diff_ratio, inject_scroll, match_frames, root_window, scroll_state,
-    scroll_to_top, settle_capture, tolerant_shift, MatchParams, ScrollMethod,
+    deepest_child_at, fixed_horizontal_margins, frame_diff_ratio, inject_scroll,
+    internal_vertical_scrollbar_bands, match_frames, root_window, scroll_state, scroll_to_top,
+    settle_capture, tolerant_shift, MatchParams, ScrollMethod,
 };
 
 const SAME_FRAME_RATIO: f32 = 0.0005;
 const SCROLLED_DIFF_RATIO: f32 = 0.002;
 const MAX_MATCH_FAILURES: u32 = 3;
+// IDEs often draw a horizontal scrollbar in the last few rows of the editor,
+// but it is not consistently reported as a fixed footer by frame matching.
+const BOTTOM_CHROME_GUARD: u32 = 32;
 
 /// 跑完整个滚动截图会话（探测 → 逐帧捕获拼接 → 返回长图 PNG）。
 ///
@@ -274,7 +278,12 @@ pub fn run_session_ext(
     let mut frames = 1u32;
     // 还不知道「一格滚多少像素」（方式也是主循环里才定），所以第一步不设先验位移
     let mut last_shift: Option<u32> = None;
-    let mut last_bottom_fixed = 0u32;
+    let mut last_bottom_fixed = BOTTOM_CHROME_GUARD;
+    // Detected from successfully registered frame pairs and applied only when
+    // exporting, so sidebar chrome cannot repeat down the long image.
+    let mut fixed_left = 0u32;
+    let mut fixed_right = 0u32;
+    let mut internal_scrollbars: Vec<(u32, u32)> = Vec::new();
     // 起始帧入画时还没有固定栏信息；首次成功注册后再把它的吸底栏剔除。
     let mut initial_footer_pending = true;
     let mut failures = 0u32;
@@ -520,6 +529,17 @@ pub fn run_session_ext(
             cur = again;
         }
 
+        // Some virtualized editors bounce the final scroll operation slightly
+        // backwards at the bottom.  A reverse match is real evidence that this
+        // is old content, so never let a fallback path append it at the tail.
+        if match_frames(&cur, &prev, &params, last_shift)
+            .filter(|m| m.shift >= MIN_SHIFT)
+            .is_some()
+        {
+            dlog.log("  检测到末尾向上回滚，忽略该帧并保留最后已确认参考帧");
+            continue;
+        }
+
         let matched = match_frames(&prev, &cur, &params, last_shift);
         tracing::info!(
             "滚动截图: 帧{} diff={:.4} 匹配={:?}",
@@ -543,10 +563,22 @@ pub fn run_session_ext(
             params.min_overlap,
             last_shift
         ));
+        let mut accepted = false;
         match matched {
             Some(m) if m.shift >= MIN_SHIFT => {
+                let (left, right) = fixed_horizontal_margins(&prev, &cur);
+                fixed_left = fixed_left.max(left);
+                fixed_right = fixed_right.max(right);
+                let bars = internal_vertical_scrollbar_bands(&prev, &cur);
+                if !bars.is_empty() {
+                    internal_scrollbars = bars;
+                }
+                let footer_h = m
+                    .bottom_fixed
+                    .max(BOTTOM_CHROME_GUARD)
+                    .min(cur.height().saturating_sub(1));
                 if initial_footer_pending {
-                    if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, m.bottom_fixed) {
+                    if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, footer_h) {
                         // 预览也必须和画布保持同一不变量，否则结果虽正确、缩略图却仍会在
                         // 中间显示一次首帧页脚。
                         if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
@@ -565,11 +597,11 @@ pub fn run_session_ext(
                 let body_h = cur
                     .height()
                     .saturating_sub(m.top_fixed)
-                    .saturating_sub(m.bottom_fixed);
+                    .saturating_sub(footer_h);
                 let append_from = body_h.saturating_sub(m.shift) + m.top_fixed;
                 let net = cur
                     .height()
-                    .saturating_sub(m.bottom_fixed)
+                    .saturating_sub(footer_h)
                     .saturating_sub(append_from);
                 let new_h = canvas_h + net;
                 // 内容重复率仅用于诊断：白底、段落留白、表格行等都会让它很高，不能再
@@ -580,11 +612,11 @@ pub fn run_session_ext(
                     canvas_h,
                     &cur,
                     append_from,
-                    cur.height().saturating_sub(m.bottom_fixed),
+                    cur.height().saturating_sub(footer_h),
                 );
                 dlog.log(&format!(
                     "  append? shift={} header={} footer={} append_from={append_from} net={net} new_h={new_h} duplicate_diagnostic={dup:.3} support={:.3} error={:.2} gap={:.3} canvas_h={canvas_h}",
-                    m.shift, m.top_fixed, m.bottom_fixed, m.block_inlier_ratio, m.mean_block_error, m.runner_up_gap
+                    m.shift, m.top_fixed, footer_h, m.block_inlier_ratio, m.mean_block_error, m.runner_up_gap
                 ));
                 let overlap = cur.height().saturating_sub(m.shift);
                 let weak = m.ambiguous
@@ -611,7 +643,7 @@ pub fn run_session_ext(
                         &mut canvas_h,
                         &cur,
                         m.top_fixed,
-                        m.bottom_fixed,
+                        footer_h,
                         m.shift,
                     )?;
                     let strip =
@@ -619,8 +651,9 @@ pub fn run_session_ext(
                     preview.append_strip(&strip, canvas_h - net);
                     frames += 1;
                     last_shift = Some(m.shift);
-                    last_bottom_fixed = m.bottom_fixed;
+                    last_bottom_fixed = footer_h;
                     failures = 0;
+                    accepted = true;
                     if weak {
                         low_conf = true;
                     }
@@ -676,7 +709,25 @@ pub fn run_session_ext(
                     // 所以追加区结束于 `h - last_bottom_fixed`，起点是 `h - last_bottom_fixed - shift`。
                     // ⚠ 早期这里写成 `h - shift`（把吸底栏也算进新内容），于是预览条带比画布实际
                     // 追加的内容**偏移了一个页脚高度**（缩略图与长图对不上）。
-                    let footer_h = last_bottom_fixed.min(cur.height().saturating_sub(1));
+                    let footer_h = last_bottom_fixed
+                        .max(BOTTOM_CHROME_GUARD)
+                        .min(cur.height().saturating_sub(1));
+                    // The first frame was captured before we knew whether the
+                    // strict or tolerant matcher would be used.  Give the
+                    // tolerant path the same bottom-chrome invariant as the
+                    // strict path, otherwise its first appended tail can keep
+                    // an IDE horizontal scrollbar.
+                    if initial_footer_pending {
+                        if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, footer_h) {
+                            if let Some(body) =
+                                RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
+                            {
+                                preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
+                                preview.append_strip(&body, 0);
+                            }
+                        }
+                        initial_footer_pending = false;
+                    }
                     let shift = shift.min(cur.height().saturating_sub(footer_h).saturating_sub(1));
                     let append_from = cur.height().saturating_sub(footer_h).saturating_sub(shift);
                     let net = cur.height().saturating_sub(footer_h) - append_from;
@@ -696,24 +747,13 @@ pub fn run_session_ext(
                     }
                     frames += 1;
                     last_shift = Some(shift);
+                    last_bottom_fixed = footer_h;
                     failures = 0;
                     low_conf = true;
+                    accepted = true;
                 } else {
                     failures += 1;
                     low_conf = true;
-                    if let Some(guess) = last_shift.filter(|g| *g >= MIN_SHIFT && *g < cur.height())
-                    {
-                        let _ = append_band(
-                            &mut canvas,
-                            canvas_w,
-                            &mut canvas_h,
-                            &cur,
-                            0,
-                            last_bottom_fixed,
-                            guess,
-                        );
-                        frames += 1;
-                    }
                     if failures >= MAX_MATCH_FAILURES {
                         stop_reason = Some(
                             "连续多帧无法匹配（内容可能有动画或大面积重复），已保留当前结果"
@@ -724,7 +764,11 @@ pub fn run_session_ext(
             }
         }
 
-        prev = cur;
+        // Never move the registration anchor to an untrusted frame.  Doing so
+        // was what made a final bounce look like a fresh, appendable section.
+        if accepted {
+            prev = cur;
+        }
 
         // 进度事件（含缩略预览）。本帧没追加成功时不要报「匹配成功」，
         // 否则前端会看到一串「帧数不变」的进度、以为卡住了。
@@ -763,13 +807,8 @@ pub fn run_session_ext(
     // ---- 5. 收尾 ----
     // 画布只存「页头 + 累积正文」（见 append_band 的约定），这里把最后一帧的吸底栏贴上，
     // 于是它整张长图只出现一次。
-    attach_footer(
-        &mut canvas,
-        canvas_w,
-        &mut canvas_h,
-        &prev,
-        last_bottom_fixed,
-    );
+    // The accumulated body excludes a small fixed bottom guard.  Do not attach
+    // it back: this reliably removes IDE horizontal scrollbars and status bars.
     if canvas_h <= cap.h.saturating_sub(last_bottom_fixed) {
         // 只截到一帧：说明根本没滚动起来（画布只含 页头+正文，所以拿「一帧的正文高」比）
         dlog.log(&format!(
@@ -781,6 +820,30 @@ pub fn run_session_ext(
     }
     let img = RgbaImage::from_raw(canvas_w, canvas_h, canvas)
         .ok_or_else(|| "拼接缓冲区尺寸不一致".to_string())?;
+    let (output_left, output_w) = if fixed_left.saturating_add(fixed_right) < canvas_w / 2 {
+        (
+            fixed_left,
+            canvas_w
+                .saturating_sub(fixed_left)
+                .saturating_sub(fixed_right),
+        )
+    } else {
+        (0, canvas_w)
+    };
+    let img = if output_left > 0 || output_w < canvas_w {
+        image::imageops::crop_imm(&img, output_left, 0, output_w, canvas_h).to_image()
+    } else {
+        img
+    };
+    let visible_scrollbars: Vec<(u32, u32)> = internal_scrollbars
+        .iter()
+        .filter_map(|(x, width)| {
+            let start = (*x).max(output_left);
+            let end = x.saturating_add(*width).min(output_left + output_w);
+            (start < end).then_some((start - output_left, end - start))
+        })
+        .collect();
+    let img = remove_vertical_bands(img, &visible_scrollbars);
     let png = encode_png(&img, false)?;
 
     let confidence = if stop_reason.is_some() {
@@ -792,8 +855,8 @@ pub fn run_session_ext(
     };
 
     let result = ScrollCaptureResult {
-        width: canvas_w,
-        height: canvas_h,
+        width: img.width(),
+        height: img.height(),
         frames,
         confidence: confidence.to_string(),
         message: stop_reason.clone(),

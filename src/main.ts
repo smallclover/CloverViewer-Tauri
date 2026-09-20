@@ -1016,19 +1016,19 @@ updateOverlay.addEventListener("mousedown", (event) => {
 /**
  * 检查并安装 Tauri 已签名的更新包。
  *
- * 自动检查仅在有新版本时才打扰用户；手动检查会明确反馈“已是最新”。
+ * 仅在用户手动点击“检查更新”后执行，并明确反馈检查结果。
  * 下载与安装均由 Tauri updater 完成，安装前会校验发布时生成的 .sig 签名。
  */
-async function checkForUpdate(manual: boolean) {
+async function checkForUpdate() {
   if (checkingForUpdate) return;
   checkingForUpdate = true;
   checkUpdateButton.disabled = true;
-  if (manual) toast(t("update.checking"), "info");
+  toast(t("update.checking"), "info");
 
   try {
     const update = await check();
     if (!update) {
-      if (manual) toast(t("update.latest"), "success");
+      toast(t("update.latest"), "success");
       return;
     }
 
@@ -1057,14 +1057,14 @@ async function checkForUpdate(manual: boolean) {
   } catch (error) {
     // 开发环境、离线状态或尚未配置首个 Release 都不应影响正常使用。
     console.warn("检查更新失败", error);
-    if (manual) toast(t("update.failed", { msg: String(error) }), "error");
+    toast(t("update.failed", { msg: String(error) }), "error");
   } finally {
     checkingForUpdate = false;
     checkUpdateButton.disabled = false;
   }
 }
 
-checkUpdateButton.addEventListener("click", () => void checkForUpdate(true));
+checkUpdateButton.addEventListener("click", () => void checkForUpdate());
 $("set-hotkey-apply").addEventListener("click", () => {
   const value = setHotkey.value.trim();
   if (!value) {
@@ -1237,7 +1237,5 @@ async function showStartupNotices() {
   refreshStatus();
   void initScrollCaptureBridge();
   void showStartupNotices();
-  // 延后启动检查，避免与首屏渲染、配置加载竞争；没有更新或网络异常时保持安静。
-  window.setTimeout(() => void checkForUpdate(false), 5_000);
   // 记住上次的语言仅作展示；无目录状态由用户操作进入
 })();

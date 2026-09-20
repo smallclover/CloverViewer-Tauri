@@ -7,3 +7,4 @@ require("./screenshot-overlay-layout.test.cjs");
 require("./screenshot-renderer.test.cjs");
 require("./screenshot-resize.test.cjs");
 require("./screenshot-screen-compositor.test.cjs");
+require("./update-flow.test.cjs");

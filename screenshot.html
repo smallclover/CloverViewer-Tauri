@@ -398,7 +398,6 @@
         flex-direction: column;
         gap: 7px;
         box-sizing: border-box;
-        width: min(320px, calc(100vw - 20px));
         padding: 11px 12px;
         background: var(--s-panel-bg);
         backdrop-filter: blur(16px) saturate(160%);
@@ -412,7 +411,10 @@
         line-height: 1.5;
       }
       #scroll-hud {
-        width: min(280px, calc(100vw - 20px));
+        width: min(460px, calc(100vw - 20px));
+        padding: 0;
+        gap: 0;
+        overflow: hidden auto;
         /* 结果缩略图加载后会把 HUD 撑高；限制在当前屏幕内，避免底部操作区落出视口。 */
         max-height: calc(100vh - 20px);
         overflow-y: auto;
@@ -544,8 +546,20 @@
       }
       /* 开始面板采用“先选模式、再看选区、最后开始”的层级；HUD 继续沿用原有 metrics。 */
       #scroll-panel {
-        gap: 9px;
-        padding: 13px;
+        width: min(340px, calc(100vw - 20px));
+        gap: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      .sh-panel-head {
+        padding: 12px 13px;
+        border-bottom: 1px solid var(--s-toolbar-border);
+      }
+      .sh-panel-body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 13px 13px;
       }
       .sh-mode-switch {
         display: grid;
@@ -555,6 +569,7 @@
         border-radius: 8px;
         background: color-mix(in srgb, var(--s-panel-bg) 82%, #000 18%);
       }
+      .sh-mode-switch.manual-only { display: none; }
       .sh-mode-btn {
         min-width: 0;
         padding: 5px 6px;
@@ -615,7 +630,7 @@
       }
       #scroll-panel .sh-actions {
         flex-wrap: nowrap;
-        margin-top: 1px;
+        margin-top: 0;
       }
       #scroll-panel .sh-actions .sh-btn.primary { flex: 1; justify-content: center; }
       .sh-status {
@@ -684,6 +699,56 @@
         opacity: 0.45;
         cursor: default;
       }
+      /* 采集中：左边展示实际画面，右边按“状态 / 信息 / 消息 / 操作”分区。
+         蓝色半透明层代表已经验证并写入长图的内容；下方小窗保留此刻候选帧，
+         绿色边框表示可继续匹配，黄色则明确表示该帧尚未采用。 */
+      .sh-capture-body {
+        display: grid;
+        grid-template-columns: minmax(210px, 1.35fr) minmax(180px, 1fr);
+        overflow: hidden;
+        background: color-mix(in srgb, var(--s-panel-bg) 88%, #000 12%);
+      }
+      .sh-capture-side {
+        display: flex;
+        min-width: 0;
+        min-height: 260px;
+        flex-direction: column;
+        padding: 0 11px 10px;
+      }
+      .sh-capture-module {
+        min-width: 0;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--s-toolbar-border);
+      }
+      .sh-capture-module-label {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--s-fg-dim);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .03em;
+        line-height: 1.2;
+      }
+      .sh-capture-side .sh-head { align-items: center; }
+      .sh-capture-side .sh-title { font-size: 12px; }
+      .sh-capture-side .sh-status { margin-top: 4px; font-size: 11px; }
+      .sh-capture-side .sh-detail { min-height: 31px; }
+      .sh-capture-side .sh-actions {
+        margin-top: auto;
+        padding-top: 10px;
+      }
+      .sh-capture-side .sh-actions .sh-btn {
+        width: 100%;
+        justify-content: center;
+        background: var(--s-accent);
+        border-color: transparent;
+        color: #fff;
+      }
+      .sh-capture-side .sh-actions .sh-btn:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--s-accent) 84%, #000 16%);
+        box-shadow: 0 3px 9px var(--s-accent-shadow);
+        color: #fff;
+      }
       /* 结果缩略图永远在固定视口内等比缩放；图片加载或比例变化都不能撑开 HUD。 */
       .sh-result-summary {
         display: none;
@@ -715,6 +780,7 @@
         grid-template-columns: 104px minmax(0, 1fr);
         align-items: start;
         gap: 10px;
+        padding: 12px;
       }
       .sh-result-body.without-preview { grid-template-columns: minmax(0, 1fr); }
       .sh-result-side {
@@ -740,6 +806,66 @@
         border-radius: 6px;
         background: #000;
       }
+      /* 左侧是清晰的逐帧检查视图，而不是压缩过的整张长图缩略图。 */
+      .sh-live-preview-slot {
+        position: relative;
+        display: none;
+        width: 100%;
+        min-height: 260px;
+        overflow: hidden;
+        background: #101318;
+      }
+      .sh-live-preview-slot::after {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        content: "";
+        background: rgba(50, 126, 255, .22);
+        pointer-events: none;
+      }
+      .sh-live-preview-slot[data-state="matched"] {
+        box-shadow: inset 0 -3px 0 #42c977;
+      }
+      .sh-live-preview-slot[data-state="waiting"] {
+        box-shadow: inset 0 -3px 0 #d8a13a;
+      }
+      .sh-live-preview-label,
+      .sh-candidate-preview-label {
+        position: absolute;
+        z-index: 3;
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, .64);
+        color: #dce9ff;
+        font-size: 10px;
+        line-height: 1.25;
+        pointer-events: none;
+      }
+      .sh-live-preview-label {
+        top: 7px;
+        left: 7px;
+      }
+      .sh-candidate-preview-slot {
+        position: absolute;
+        z-index: 2;
+        right: 8px;
+        bottom: 8px;
+        left: 8px;
+        height: 35%;
+        overflow: hidden;
+        border: 2px solid #42c977;
+        border-radius: 5px;
+        background: #000;
+      }
+      .sh-candidate-preview-slot[data-state="waiting"] { border-color: #d8a13a; }
+      .sh-candidate-preview-label {
+        right: 4px;
+        bottom: 4px;
+        color: #a4f5bd;
+      }
+      .sh-candidate-preview-slot[data-state="waiting"] .sh-candidate-preview-label {
+        color: #f3c66b;
+      }
       .sh-preview {
         display: none;
         width: 100%;
@@ -747,6 +873,15 @@
         max-height: none;
         object-fit: contain;
         image-rendering: auto;
+      }
+      .sh-live-preview {
+        position: absolute;
+        inset: 0;
+        object-fit: contain;
+      }
+      .sh-candidate-preview {
+        object-fit: cover;
+        object-position: center bottom;
       }
       .sh-preview.on {
         display: block;
@@ -765,7 +900,26 @@
         white-space: nowrap;
       }
       .sh-result-actions .sh-btn.primary { grid-column: 1 / -1; }
-      #scroll-hud.result { width: min(330px, calc(100vw - 24px)); }
+      .sh-result-header {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px;
+        border-bottom: 1px solid var(--s-toolbar-border);
+      }
+      .sh-result-title {
+        color: var(--s-panel-title);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      #scroll-hud.result { width: min(360px, calc(100vw - 20px)); }
+      @media (max-width: 480px) {
+        #scroll-hud { width: min(330px, calc(100vw - 20px)); }
+        .sh-capture-body { grid-template-columns: minmax(0, 1fr); }
+        .sh-live-preview-slot { min-height: 190px; }
+        .sh-capture-side { min-height: 0; }
+      }
       /* HUD 捕获中的呼吸红点 */
       /* REC 手感：捕获中标题前一个呼吸红点，扫一眼就知道「正在录」 */
       .sh-rec {

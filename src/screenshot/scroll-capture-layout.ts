@@ -24,13 +24,11 @@ interface ScrollCapturePositionerOptions {
 
 /** Positions every scroll-capture overlay in CSS pixels, outside the capture region where possible. */
 export function createScrollCapturePositioner(options: ScrollCapturePositionerOptions) {
-  const place = (element: HTMLElement, region: CssBox, monitor: CssBox, kind: "panel" | "hud") => {
-    const point = placeScrollOverlay(
-      region,
-      monitor,
-      { w: element.offsetWidth || 280, h: element.offsetHeight || 100 },
-      kind,
-    );
+  const place = (element: HTMLElement, region: CssBox, monitor: CssBox) => {
+    const point = placeScrollOverlay(region, monitor, {
+      w: element.offsetWidth || 280,
+      h: element.offsetHeight || 100,
+    });
     element.style.left = `${point.x}px`;
     element.style.top = `${point.y}px`;
   };
@@ -65,9 +63,9 @@ export function createScrollCapturePositioner(options: ScrollCapturePositionerOp
       const gap = 50;
       options.glow.style.cssText = `left:${region.x - gap}px;top:${region.y - gap}px;width:${region.w + gap * 2}px;height:${region.h + gap * 2}px`;
     }
-    if (options.panel.classList.contains("open")) place(options.panel, region, monitor, "panel");
+    if (options.panel.classList.contains("open")) place(options.panel, region, monitor);
     if (options.hud.classList.contains("open")) {
-      place(options.hud, region, monitor, "hud");
+      place(options.hud, region, monitor);
       const width = options.hud.offsetWidth || 280;
       const height = options.hud.offsetHeight || 100;
       const x = Number.parseFloat(options.hud.style.left) || 0;

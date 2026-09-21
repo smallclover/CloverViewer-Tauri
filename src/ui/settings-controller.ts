@@ -39,6 +39,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const colorHotkey = element<HTMLInputElement>("set-color-hotkey");
   const scrollHotkey = element<HTMLInputElement>("set-scroll-hotkey");
   const magnifier = element<HTMLInputElement>("set-magnifier");
+  const experimentalAutoScroll = element<HTMLInputElement>("set-experimental-auto-scroll");
   const minimize = element<HTMLInputElement>("set-minimize");
   const autostart = element<HTMLInputElement>("set-autostart");
   const checkUpdateButton = element<HTMLButtonElement>("check-update");
@@ -92,6 +93,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     colorHotkey.value = config.hotkeys.copy_color;
     scrollHotkey.value = config.hotkeys.scroll_capture || "Alt+Shift+S";
     magnifier.checked = config.magnifier_enabled;
+    experimentalAutoScroll.checked = config.experimental_auto_scroll;
     minimize.checked = config.minimize_on_close;
     autostart.checked = config.launch_on_startup;
     selectTab("general");
@@ -188,6 +190,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
   });
   zoom.addEventListener("change", () => save({ zoom_sensitivity: Number(zoom.value) }));
   magnifier.addEventListener("change", () => save({ magnifier_enabled: magnifier.checked }));
+  experimentalAutoScroll.addEventListener("change", () =>
+    save({ experimental_auto_scroll: experimentalAutoScroll.checked }),
+  );
   minimize.addEventListener("change", () => save({ minimize_on_close: minimize.checked }));
   autostart.addEventListener("change", () => {
     save({ launch_on_startup: autostart.checked }, true);

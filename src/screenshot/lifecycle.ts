@@ -8,6 +8,7 @@ import {
 
 interface ScreenshotConfigTargets {
   setMagnifierEnabled: (enabled: boolean) => void;
+  setExperimentalAutoScrollEnabled: (enabled: boolean) => void;
   setLanguage: (language: "Zh" | "En" | "Ja") => void;
   setCopyColorHotkey: (hotkey: string) => void;
   applyTheme: (theme: "dark" | "light" | "system") => void;
@@ -20,6 +21,7 @@ export async function refreshScreenshotConfig(targets: ScreenshotConfigTargets):
   try {
     const config = await getConfig();
     targets.setMagnifierEnabled(config.magnifier_enabled);
+    targets.setExperimentalAutoScrollEnabled(!!config.experimental_auto_scroll);
     targets.setLanguage(config.language);
     if (config.hotkeys?.copy_color) targets.setCopyColorHotkey(config.hotkeys.copy_color);
     targets.applyTheme(config.theme);

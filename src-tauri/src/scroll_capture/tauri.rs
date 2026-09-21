@@ -279,6 +279,10 @@ impl SessionHost for TauriHost {
         self.set_taskbar_progress(running, ratio);
     }
 
+    fn prepare_result(&self) {
+        self.raise_for_result();
+    }
+
     fn focus_target_for_manual(&self, hwnd: isize) {
         // 手动模式下用户可能用 PageDown / 方向键滚动，焦点必须留在目标窗口。
         if !focus_window(hwnd) {
@@ -403,7 +407,9 @@ pub fn start_scroll_capture(
             escape_registered: std::sync::atomic::AtomicBool::new(false),
             capture_exclusion_enabled: std::sync::atomic::AtomicBool::new(false),
         };
-        let result = {
+        // 工作线程不得因图像处理的意外 panic 而绕过下面的状态清理与 done 事件；否则
+        // 截图互斥会永久占用，前端则一直停在“捕获中”。正常错误仍走 Result 原样上报。
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // HUD 重叠或内扩光晕任一存在时，都优先把整个覆盖窗排除在捕获结果外。
             // 若 API 不可用，HUD 沿用整段隐藏，光晕则逐帧隐藏。
             let capture_excluded = (req.hide_hud_during_capture || req.hide_glow_during_capture)
@@ -453,7 +459,11 @@ pub fn start_scroll_capture(
                     &mut emit,
                 )
             }
-        };
+        }))
+        .unwrap_or_else(|_| {
+            tracing::error!("滚动截图工作线程发生未预期异常，已安全结束会话");
+            Err("滚动截图内部异常，已安全停止；请重试或改用手动模式".to_string())
+        });
 
         // 收尾：无论如何都要把覆盖窗的 click-through / 全局 Esc / 截图互斥恢复
         host.set_passthrough(false);

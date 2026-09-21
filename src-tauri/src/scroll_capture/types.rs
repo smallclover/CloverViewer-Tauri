@@ -39,30 +39,6 @@ impl RectPx {
     }
 }
 
-/// 最大化窗口被一键框选时，选区会包含右侧的窗口滚动条。滚动条的滑块会随每帧移动，
-/// 若照常拼接就会在长图里留下多段滑块。仅对完整窗口选区预留该窄条：普通自定义选区
-/// 不裁，且正文不会在帧间混入滚动条像素。
-pub(crate) fn exclude_full_window_scrollbar(
-    rect: RectPx,
-    window: RectPx,
-    gutter: u32,
-) -> Option<RectPx> {
-    // `pick_window_at` 使用 DWM 可见边界，而 GetWindowRect 还可能包含 8px 左右的
-    // 不可见 resize border；允许少量差异，避免最大化窗口因这点误差漏掉优化。
-    const EDGE_TOLERANCE: i32 = 12;
-    let is_full_window = (rect.x - window.x).abs() <= EDGE_TOLERANCE
-        && (rect.y - window.y).abs() <= EDGE_TOLERANCE
-        && (rect.right() - window.right()).abs() <= EDGE_TOLERANCE
-        && (rect.bottom() - window.bottom()).abs() <= EDGE_TOLERANCE;
-    if !is_full_window || gutter >= rect.w.saturating_sub(32) {
-        return None;
-    }
-    Some(RectPx {
-        w: rect.w - gutter,
-        ..rect
-    })
-}
-
 /// 滚动注入方式（P0 逐一验证兼容性，P1 会按验证结果自动降级）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollMethod {
@@ -143,9 +119,13 @@ pub struct ScrollState {
 }
 
 impl ScrollState {
-    /// 是否已到底（ShareX 的判据）
+    /// 是否已到底。
+    ///
+    /// `nTrackPos` 只有用户拖动滑块时才可靠；普通滚轮滚动时它可能仍是 0，
+    /// 所以自动截图的结束判定必须以 `nPos` 为准。`nMax` 是包含端点的范围，
+    /// 因此最后一页的起始位置为 `nMax - nPage + 1`。
     pub fn at_bottom(&self) -> bool {
-        self.page > 0 && self.track_pos + self.page > self.max
+        self.page > 0 && self.pos >= self.max.saturating_sub(self.page.saturating_sub(1))
     }
 }
 

@@ -78,6 +78,7 @@ const editorSession = createEditorSession({ color: DEFAULT_COLOR, strokeWidth: D
 
 // ---------- 放大镜 ----------
 let magnifierActive = true; // 读 config.magnifier_enabled，main() 里覆盖
+let experimentalAutoScrollEnabled = false;
 let copiedAt = 0; // 最近一次复制色值的时间戳
 
 // ---------- DOM ----------
@@ -461,6 +462,7 @@ scrollController = createScrollCaptureController({
   closePopups,
   getSelection: () => editorSession.selection,
   getBounds: () => ({ minX, minY }),
+  experimentalAutoScrollEnabled: () => experimentalAutoScrollEnabled,
   translate: t,
   render,
   position: () => scrollPositioner.position(),
@@ -719,6 +721,9 @@ async function refreshConfig() {
   await refreshScreenshotConfig({
     setMagnifierEnabled: (enabled) => {
       magnifierActive = enabled;
+    },
+    setExperimentalAutoScrollEnabled: (enabled) => {
+      experimentalAutoScrollEnabled = enabled;
     },
     setLanguage: setLang,
     setCopyColorHotkey: (hotkey) => {

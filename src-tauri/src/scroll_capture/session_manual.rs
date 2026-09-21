@@ -1,3 +1,5 @@
+//! Manual driver for the shared V2 capture engine.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -5,406 +7,271 @@ use std::time::Duration;
 
 use image::RgbaImage;
 
-use super::matching::MIN_SHIFT;
-use super::platform::capture_rect_without_full_window_scrollbar;
-use super::preview::{encode_png, PreviewBuilder};
+use super::engine::{CaptureEngine, EngineEvent};
+use super::preview::{encode_png, frame_data_url};
 use super::session::{
-    est_err_ok, FrameHideGate, ScrollCaptureProgress, ScrollCaptureRequest, ScrollCaptureResult,
-    SessionHost, SessionOptions, MAX_CANVAS_BYTES, PREVIEW_MAX_H, PREVIEW_WIDTH,
+    FrameHideGate, ScrollCaptureProgress, ScrollCaptureRequest, ScrollCaptureResult,
+    SessionCleanup, SessionHost, SessionOptions, MAX_CANVAS_BYTES,
 };
-use super::stitching::{append_band, remove_vertical_bands, trim_initial_footer};
-use super::{
-    capture_rect, deepest_child_at, fixed_horizontal_margins, internal_vertical_scrollbar_bands,
-    match_frames, root_window, settle_capture, tolerant_shift, MatchParams,
-};
+use super::{capture_rect, deepest_child_at, frame_diff_ratio, root_window, settle_capture};
 
-const BOTTOM_CHROME_GUARD: u32 = 32;
+const MIN_SELECTION_HEIGHT: u32 = 280;
+/// A probe that differs by less than this is almost certainly an idle frame.
+/// Keeping this separate from registration lets us avoid doing a multi-second
+/// settle wait while the user is merely reading the page.
+const CHANGE_PROBE_THRESHOLD: f32 = 0.001;
 
-/// 用户手动滚动的会话。
-///
-/// 这里刻意不复用 `run_session_ext` 的循环：后者的每一次循环都必然会向目标注入滚动。
-/// 手动模式高频轮询捕获区的屏幕像素；用户可以连续滚动，程序会在滚动途中按实际位移
-/// 收帧，而不是要求用户每一段都停下来留重叠。
-/// 取消请求不是立即丢弃，而是先稳定采一次最后画面，因此用户停在的位置不会因按 Esc
-/// 恰好早于下一轮轮询而漏进结果。
 pub fn run_manual_session_ext(
     req: &ScrollCaptureRequest,
-    o: &SessionOptions,
+    options: &SessionOptions,
     host: &dyn SessionHost,
     cancel: &AtomicBool,
     on_frame_capture: Option<Box<dyn FnMut(bool) + Send>>,
     on_progress: &mut dyn FnMut(ScrollCaptureProgress),
 ) -> Result<ScrollCaptureResult, String> {
-    let rect = req.rect();
-    if rect.w < 32 || rect.h < 64 {
-        return Err("选区太小：滚动截图至少需要 32×64 像素".to_string());
-    }
-    const MIN_SELECTION_H: u32 = 280;
-    if rect.h < MIN_SELECTION_H {
+    let cap = req.rect();
+    if cap.w < 32 || cap.h < MIN_SELECTION_HEIGHT {
         return Err(format!(
-            "选区太矮：至少需要 {}px 高（当前 {}px）。请拉高选区后重试。",
-            MIN_SELECTION_H, rect.h
+            "选区至少需要 32×{MIN_SELECTION_HEIGHT} 像素；请只框选可滚动正文。"
         ));
     }
-
-    let (cx, cy) = rect.center();
-    let deepest =
-        deepest_child_at(cx, cy).ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
+    let deepest = deepest_child_at(cap.center().0, cap.center().1)
+        .ok_or_else(|| "选区内没有可操作的目标窗口".to_string())?;
     let root = root_window(deepest);
-    // 与自动模式一致：完整窗口框选时不捕获会移动的右侧滚动条滑块。
-    let cap = capture_rect_without_full_window_scrollbar(rect, root);
-    let params = MatchParams::for_height(cap.h);
-    let canvas_w = cap.w;
-    let frame_gate = Rc::new(RefCell::new(FrameHideGate::new(on_frame_capture)));
-    frame_gate
-        .borrow_mut()
+    let gate = Rc::new(RefCell::new(FrameHideGate::new(on_frame_capture)));
+    gate.borrow_mut()
         .set_keep_hidden(req.hide_hud_during_capture);
-    frame_gate
-        .borrow_mut()
+    gate.borrow_mut()
         .set_hide_each_frame(req.hide_glow_during_capture);
-
-    // 鼠标事件必须穿透透明覆盖窗；键盘焦点则留给目标窗口以支持 PageDown 等手动滚动。
+    let _cleanup = SessionCleanup {
+        host,
+        gate: gate.clone(),
+    };
     host.focus_target_for_manual(root);
     host.set_passthrough(true);
     host.set_escape_hook(true);
+    host.set_progress(true, 0.0);
 
-    let mut emit_progress = |stage: &str,
-                             frames: u32,
-                             height: u32,
-                             preview: Option<String>,
-                             message: Option<String>,
-                             low_conf: bool| {
-        // `done` / `partial` 是终态：即使此前低置信，也必须恢复 HUD 的鼠标命中，
-        // 否则前端会沿用最后一帧的 click-through，结果面板上的复制/保存按钮无法点击。
-        let terminal = matches!(stage, "done" | "partial");
-        let mut p = ScrollCaptureProgress::bare(
-            if terminal {
-                stage
-            } else if low_conf {
-                "low_confidence"
-            } else {
-                stage
-            },
-            &cap,
-        );
-        p.frames = frames;
-        p.width = canvas_w;
-        p.height = height;
-        p.method = Some("manual".to_string());
-        p.message = message;
-        p.input_passthrough = !terminal;
-        p.preview = preview;
-        on_progress(p.with_capture(&cap));
-    };
-
-    emit_progress(
+    let first = capture_settled(&cap, options, &gate)?;
+    let mut engine = CaptureEngine::new(first);
+    emit(
+        on_progress,
         "capturing",
-        0,
-        0,
+        &cap,
+        &engine,
         None,
-        Some("请自由向下滚动；程序会实时拼接。按 Esc 完成并收取最后一帧。".to_string()),
+        Some("请向下缓慢滚动；程序只会追加已验证的内容。".into()),
         false,
     );
-
-    frame_gate.borrow_mut().begin_frame();
-    let first = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
-    frame_gate.borrow_mut().end_frame();
-    let first = first?;
-    let mut canvas = Vec::with_capacity(cap.w as usize * cap.h as usize * 4 * 4);
-    let mut canvas_h = 0u32;
-    append_band(&mut canvas, canvas_w, &mut canvas_h, &first.image, 0, 0, 0)?;
-    let mut preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
-    preview.append_strip(&first.image, 0);
-    let mut prev = first.image;
-    let mut frames = 1u32;
-    let mut last_shift: Option<u32> = None;
-    let mut last_bottom_fixed = BOTTOM_CHROME_GUARD;
-    let mut fixed_left = 0u32;
-    let mut fixed_right = 0u32;
-    let mut internal_scrollbars: Vec<(u32, u32)> = Vec::new();
-    let mut initial_footer_pending = true;
-    let mut low_conf = false;
-    let mut stop_reason: Option<String> = None;
-    // 手动模式要比自动模式的「等待稳定」更快地采样：目标是让相邻帧自然保留大量重叠，
-    // 用户无需刻意控制滚动距离。下限避免极小选区下无意义地占满 CPU。
-    let manual_poll_ms = o.poll_ms.clamp(20, 40);
-
-    emit_progress(
-        "capturing",
-        frames,
-        canvas_h,
-        preview.data_url(PREVIEW_MAX_H),
-        Some("请自由向下滚动；程序会实时按实际位移拼接。按 Esc 完成。".to_string()),
-        false,
-    );
-
-    let has_moved = |a: &RgbaImage, b: &RgbaImage| {
-        match_frames(a, b, &params, None)
-            .filter(|mm| mm.shift >= MIN_SHIFT)
-            .is_some()
-            || tolerant_shift(a, b)
-                .filter(|(_, ratio)| *ratio < 0.8 && est_err_ok(a, b))
-                .is_some()
-    };
-
-    loop {
-        if frames >= o.max_frames {
-            stop_reason = Some(format!("达到帧数上限 {}，已保留当前结果", o.max_frames));
-            break;
+    // Manual capture is an observer: it is deliberately not allowed to decide
+    // that the user is finished just because an animation, a popup, or a fast
+    // scroll produced several hard-to-register frames.  Only an explicit
+    // Finish/Esc or a documented resource limit closes the session.
+    let poll = options.poll_ms.clamp(20, 80);
+    let (reason, partial) = loop {
+        let safe_height = safe_height_limit(cap.w, options.max_height_px);
+        if engine.frames() >= options.max_frames || engine.height() >= safe_height {
+            break (Some("达到滚动截图上限，已保留已验证内容".into()), true);
         }
-        if canvas_h >= o.max_height_px {
-            stop_reason = Some(format!(
-                "达到高度上限 {}px，已保留当前结果",
-                o.max_height_px
-            ));
-            break;
-        }
-
-        // 实时采样：触控板惯性、拖动滚动条、键盘和鼠标滚轮都会自然覆盖，
-        // 而不用向用户目标窗口安装输入钩子。正常滚动绝不在这里等待稳定，
-        // 否则用户连续滚一大段时只会留下首末两帧、反而要求他控制距离。
         let finishing = cancel.load(Ordering::Relaxed);
-        let probe = capture_rect(&cap)?;
-        if !finishing && !has_moved(&prev, &probe) {
-            std::thread::sleep(Duration::from_millis(manual_poll_ms));
-            continue;
-        }
-
-        // 只有用户按完成时才等待稳定。这样保证最终位置准确，同时不拖慢连续滚动的采样。
-        let cur = if finishing {
-            frame_gate.borrow_mut().begin_frame();
-            let settled = settle_capture(&cap, o.settle_timeout_ms, o.poll_ms);
-            frame_gate.borrow_mut().end_frame();
-            settled?.image
+        // The first quick capture is only a change detector.  Once something
+        // moved we wait for it to settle, so a half-painted browser frame can
+        // never become a stitch anchor.  On Finish we always take this settled
+        // sample, but it still goes through `ingest` and is discarded when it
+        // contains no genuinely new rows.
+        let current = if finishing {
+            capture_settled(&cap, options, &gate)?
         } else {
-            probe
+            let probe = capture_once(&cap, &gate)?;
+            if frame_diff_ratio(engine.last_frame(), &probe) < CHANGE_PROBE_THRESHOLD {
+                host.set_progress(true, engine.height() as f32 / safe_height as f32);
+                std::thread::sleep(Duration::from_millis(poll));
+                continue;
+            }
+            capture_settled(&cap, options, &gate)?
         };
+        let candidate_preview = frame_data_url(&current);
+        let mut finish_note: Option<(String, bool)> = None;
+        match engine.ingest(current)? {
+            EngineEvent::Appended { shift, support, .. } => {
+                emit(
+                    on_progress,
+                    "matched",
+                    &cap,
+                    &engine,
+                    candidate_preview.clone(),
+                    Some(format!(
+                        "已验证位移 {shift}px（匹配 {:.0}%）",
+                        support * 100.0
+                    )),
+                    false,
+                );
+            }
+            EngineEvent::NoMotion => {
+                // This is the normal result of the final settle frame when
+                // the user stopped at the bottom.  In particular, do not add
+                // it unconditionally: that was the source of duplicate tails.
+                if finishing {
+                    finish_note = Some(("最后一帧没有新的正文，已跳过。".into(), false));
+                    emit(
+                        on_progress,
+                        "finishing",
+                        &cap,
+                        &engine,
+                        candidate_preview.clone(),
+                        finish_note.as_ref().map(|(message, _)| message.clone()),
+                        false,
+                    );
+                }
+            }
+            EngineEvent::Reverse => {
+                if finishing {
+                    finish_note = Some(("最后一帧是回滚画面，已保留此前验证的内容。".into(), true));
+                }
+                emit(
+                    on_progress,
+                    "waiting",
+                    &cap,
+                    &engine,
+                    candidate_preview.clone(),
+                    Some("检测到回滚；未追加。请回到最后一次绿色匹配的位置再继续。".into()),
+                    true,
+                );
+            }
+            EngineEvent::StaticRegion { percent } => {
+                // A fixed region is a selection-quality warning, not a reason
+                // to silently throw away a manual session.  The user can
+                // adjust their scrolling and finish with the verified part.
+                if finishing {
+                    finish_note = Some((
+                        "最后一帧包含大量固定区域，已保留此前验证的内容。".into(),
+                        true,
+                    ));
+                }
+                emit(
+                    on_progress,
+                    "waiting",
+                    &cap,
+                    &engine,
+                    candidate_preview.clone(),
+                    Some(format!(
+                        "选区约 {percent}% 似乎固定；本帧已跳过。建议只保留会移动的正文。"
+                    )),
+                    true,
+                );
+            }
+            EngineEvent::Uncertain { reason } => {
+                if finishing {
+                    finish_note = Some((
+                        format!("最后一帧无法可靠拼接（{reason}），已保留此前验证的内容。"),
+                        true,
+                    ));
+                }
+                emit(
+                    on_progress,
+                    "waiting",
+                    &cap,
+                    &engine,
+                    candidate_preview.clone(),
+                    Some(format!(
+                        "本帧未采用：{reason}。请慢一点继续滚动，或回到最后一次绿色匹配的位置。"
+                    )),
+                    true,
+                );
+            }
+        }
+        host.set_progress(true, engine.height() as f32 / safe_height as f32);
+        if finishing {
+            break match finish_note {
+                Some((message, partial)) => (Some(message), partial),
+                None => (Some("已完成并保留全部已验证内容".into()), false),
+            };
+        }
+        std::thread::sleep(Duration::from_millis(poll));
+    };
+    finish(engine, reason, partial)
+}
 
-        // 回滚不会被追加到尾部；保持当前最高位置为参考帧，之后重新向下滚动时仍能正确续接。
-        if match_frames(&cur, &prev, &params, last_shift)
-            .filter(|m| m.shift >= MIN_SHIFT)
-            .is_some()
-        {
-            emit_progress(
-                "capturing",
-                frames,
-                canvas_h,
-                preview.data_url(PREVIEW_MAX_H),
-                Some("检测到向上回滚：未重复拼接，请回到最靠下的位置后继续向下滚动。".to_string()),
-                low_conf,
-            );
-            if finishing {
-                break;
-            }
-            continue;
-        }
+fn safe_height_limit(width: u32, requested: u32) -> u32 {
+    // Reserve a little headroom for the current frame, the first frame and
+    // PNG encoding.  This turns a possible process-wide allocation failure
+    // into an explicit, recoverable capture limit.
+    let bytes_per_row = (width as u64).saturating_mul(4).max(1);
+    let memory_limited = (MAX_CANVAS_BYTES.saturating_mul(3) / 4 / bytes_per_row) as u32;
+    requested.min(memory_limited.max(MIN_SELECTION_HEIGHT))
+}
 
-        let mut appended = false;
-        match match_frames(&prev, &cur, &params, last_shift) {
-            Some(m) if m.shift >= MIN_SHIFT => {
-                let (left, right) = fixed_horizontal_margins(&prev, &cur);
-                fixed_left = fixed_left.max(left);
-                fixed_right = fixed_right.max(right);
-                let bars = internal_vertical_scrollbar_bands(&prev, &cur);
-                if !bars.is_empty() {
-                    internal_scrollbars = bars;
-                }
-                let footer_h = m
-                    .bottom_fixed
-                    .max(BOTTOM_CHROME_GUARD)
-                    .min(cur.height().saturating_sub(1));
-                if initial_footer_pending {
-                    if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, footer_h) {
-                        if let Some(body) = RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
-                        {
-                            preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
-                            preview.append_strip(&body, 0);
-                        }
-                    }
-                    initial_footer_pending = false;
-                }
-                let body_h = cur
-                    .height()
-                    .saturating_sub(m.top_fixed)
-                    .saturating_sub(footer_h);
-                let append_from = body_h.saturating_sub(m.shift) + m.top_fixed;
-                let net = cur
-                    .height()
-                    .saturating_sub(footer_h)
-                    .saturating_sub(append_from);
-                let new_h = canvas_h + net;
-                let weak = m.ambiguous
-                    || (m.run as u64) * 2 < cur.height().saturating_sub(m.shift) as u64
-                    || m.block_inlier_ratio < 0.75
-                    || m.mean_block_error > 12.0
-                    || (m.runner_up.is_some() && m.runner_up_gap < 0.08);
-                if new_h as u64 * canvas_w as u64 * 4 > MAX_CANVAS_BYTES {
-                    stop_reason = Some("结果过大（内存上限），已保留当前结果".to_string());
-                } else {
-                    append_band(
-                        &mut canvas,
-                        canvas_w,
-                        &mut canvas_h,
-                        &cur,
-                        m.top_fixed,
-                        footer_h,
-                        m.shift,
-                    )?;
-                    let strip =
-                        image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net).to_image();
-                    preview.append_strip(&strip, canvas_h - net);
-                    frames += 1;
-                    last_shift = Some(m.shift);
-                    last_bottom_fixed = footer_h;
-                    low_conf |= weak;
-                    appended = true;
-                }
-            }
-            Some(_) => {
-                // 高频采样时常会遇到 1~3px 的细微位移。不能把 prev 前移，否则这些
-                // 微小位移永远无法累积成可拼接的一段，用户慢慢滚会出现漏行。
-            }
-            None => {
-                // 动态内容或亚像素重绘：容差路径仍可安全接上时才追加，绝不猜位移。
-                if let Some((shift, ratio)) = tolerant_shift(&prev, &cur)
-                    .filter(|(_, ratio)| *ratio < 0.8 && est_err_ok(&prev, &cur))
-                {
-                    let footer_h = last_bottom_fixed
-                        .max(BOTTOM_CHROME_GUARD)
-                        .min(cur.height().saturating_sub(1));
-                    if initial_footer_pending {
-                        if trim_initial_footer(&mut canvas, canvas_w, &mut canvas_h, footer_h) {
-                            if let Some(body) =
-                                RgbaImage::from_raw(canvas_w, canvas_h, canvas.clone())
-                            {
-                                preview = PreviewBuilder::new(canvas_w, PREVIEW_WIDTH);
-                                preview.append_strip(&body, 0);
-                            }
-                        }
-                        initial_footer_pending = false;
-                    }
-                    let shift = shift.min(cur.height().saturating_sub(footer_h).saturating_sub(1));
-                    if shift >= MIN_SHIFT {
-                        let append_from =
-                            cur.height().saturating_sub(footer_h).saturating_sub(shift);
-                        let net = cur
-                            .height()
-                            .saturating_sub(footer_h)
-                            .saturating_sub(append_from);
-                        append_band(
-                            &mut canvas,
-                            canvas_w,
-                            &mut canvas_h,
-                            &cur,
-                            0,
-                            footer_h,
-                            shift,
-                        )?;
-                        if net > 0 {
-                            let strip =
-                                image::imageops::crop_imm(&cur, 0, append_from, canvas_w, net)
-                                    .to_image();
-                            preview.append_strip(&strip, canvas_h - net);
-                        }
-                        frames += 1;
-                        last_shift = Some(shift);
-                        last_bottom_fixed = footer_h;
-                        low_conf = true;
-                        appended = true;
-                        tracing::debug!(
-                            "手动滚动截图: 使用容差配准 shift={shift} ratio={ratio:.3}"
-                        );
-                    }
-                } else {
-                    low_conf = true;
-                }
-            }
-        }
+fn capture_once(
+    cap: &super::RectPx,
+    gate: &Rc<RefCell<FrameHideGate>>,
+) -> Result<RgbaImage, String> {
+    gate.borrow_mut().begin_frame();
+    let result = capture_rect(cap);
+    gate.borrow_mut().end_frame();
+    result
+}
 
-        if appended {
-            prev = cur;
-        }
-        emit_progress(
-            "capturing",
-            frames,
-            canvas_h,
-            preview.data_url(PREVIEW_MAX_H),
-            if low_conf && !appended {
-                Some("当前画面无法可靠配准（可能有动画或重复布局）；可继续滚动，或按 Esc 收取当前结果。".to_string())
-            } else if finishing {
-                Some("正在收取最后一帧…".to_string())
-            } else {
-                Some("正在实时拼接；可连续滚动，无需控制每次距离。".to_string())
-            },
-            low_conf,
-        );
-        host.set_progress(true, canvas_h as f32 / o.max_height_px.max(1) as f32);
-        if finishing || stop_reason.is_some() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(manual_poll_ms));
+fn capture_settled(
+    cap: &super::RectPx,
+    options: &SessionOptions,
+    gate: &Rc<RefCell<FrameHideGate>>,
+) -> Result<RgbaImage, String> {
+    gate.borrow_mut().begin_frame();
+    let result =
+        settle_capture(cap, options.settle_timeout_ms, options.poll_ms).map(|frame| frame.image);
+    gate.borrow_mut().end_frame();
+    result
+}
+
+fn emit(
+    sink: &mut dyn FnMut(ScrollCaptureProgress),
+    stage: &str,
+    cap: &super::RectPx,
+    engine: &CaptureEngine,
+    candidate_preview: Option<String>,
+    message: Option<String>,
+    low: bool,
+) {
+    // `waiting` is a deliberate recoverable state.  Do not collapse it into
+    // the older generic low-confidence label: the HUD must tell the user that
+    // they can keep scrolling and recover from the last green anchor.
+    let reported_stage = if low && stage != "waiting" {
+        "low_confidence"
+    } else {
+        stage
+    };
+    let mut progress = ScrollCaptureProgress::bare(reported_stage, cap).with_capture(cap);
+    progress.frames = engine.frames();
+    progress.width = engine.width();
+    progress.height = engine.height();
+    progress.method = Some("manual".into());
+    progress.message = message;
+    progress.input_passthrough = true;
+    progress.preview = engine.preview_data_url();
+    progress.verified_preview = engine.verified_preview_data_url();
+    progress.candidate_preview = candidate_preview.or_else(|| engine.verified_preview_data_url());
+    sink(progress);
+}
+
+fn finish(
+    engine: CaptureEngine,
+    reason: Option<String>,
+    partial: bool,
+) -> Result<ScrollCaptureResult, String> {
+    let frames = engine.frames();
+    if frames < 2 {
+        return Err("没有获得两帧可可靠拼接的内容；请缓慢向下滚动后再完成。".into());
     }
-
-    host.set_progress(false, 0.0);
-    frame_gate.borrow_mut().restore();
-    // See the automatic path: the fixed bottom guard intentionally stays out
-    // of the result so an IDE's horizontal scrollbar cannot survive at the end.
-    if canvas_h <= cap.h.saturating_sub(last_bottom_fixed) {
-        return Err("没有捕获到可拼接的内容（请先向下滚动至少一段，再按 Esc 完成）".to_string());
+    let image = engine.finish()?;
+    if image.width() as u64 * image.height() as u64 * 4 > MAX_CANVAS_BYTES {
+        return Err("长图超过内存安全上限，已停止；请缩小范围或分段截图。".into());
     }
-    let img = RgbaImage::from_raw(canvas_w, canvas_h, canvas)
-        .ok_or_else(|| "拼接缓冲区尺寸不一致".to_string())?;
-    let (output_left, output_w) = if fixed_left.saturating_add(fixed_right) < canvas_w / 2 {
-        (
-            fixed_left,
-            canvas_w
-                .saturating_sub(fixed_left)
-                .saturating_sub(fixed_right),
-        )
-    } else {
-        (0, canvas_w)
-    };
-    let img = if output_left > 0 || output_w < canvas_w {
-        image::imageops::crop_imm(&img, output_left, 0, output_w, canvas_h).to_image()
-    } else {
-        img
-    };
-    let visible_scrollbars: Vec<(u32, u32)> = internal_scrollbars
-        .iter()
-        .filter_map(|(x, width)| {
-            let start = (*x).max(output_left);
-            let end = x.saturating_add(*width).min(output_left + output_w);
-            (start < end).then_some((start - output_left, end - start))
-        })
-        .collect();
-    let img = remove_vertical_bands(img, &visible_scrollbars);
-    let png = encode_png(&img, false)?;
-    let confidence = if stop_reason.is_some() {
-        "partial"
-    } else if low_conf {
-        "low"
-    } else {
-        "high"
-    };
-    let result = ScrollCaptureResult {
-        width: img.width(),
-        height: img.height(),
+    Ok(ScrollCaptureResult {
+        width: image.width(),
+        height: image.height(),
         frames,
-        confidence: confidence.to_string(),
-        message: stop_reason,
-        png,
-    };
-    emit_progress(
-        if result.confidence == "partial" {
-            "partial"
-        } else {
-            "done"
-        },
-        result.frames,
-        result.height,
-        preview.data_url(PREVIEW_MAX_H),
-        result.message.clone(),
-        result.confidence == "low",
-    );
-    Ok(result)
+        confidence: if partial { "partial" } else { "high" }.into(),
+        message: reason,
+        png: encode_png(&image, false)?,
+    })
 }

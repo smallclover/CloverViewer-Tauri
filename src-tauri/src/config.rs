@@ -95,6 +95,10 @@ pub struct Config {
     pub minimize_on_close: bool,
     #[serde(default = "default_magnifier_enabled")]
     pub magnifier_enabled: bool,
+    /// 自动注入滚动在通用桌面应用中不可可靠地处理固定栏、弹窗和动态内容；默认关闭，
+    /// 仅由用户在设置中明确启用后才暴露入口。
+    #[serde(default)]
+    pub experimental_auto_scroll: bool,
     #[serde(default)]
     pub screenshot_hides_main_window: bool,
     #[serde(default = "default_launch_on_startup")]
@@ -128,6 +132,7 @@ impl Default for Config {
             hotkeys: HotkeysConfig::default(),
             minimize_on_close: default_minimize_on_close(),
             magnifier_enabled: default_magnifier_enabled(),
+            experimental_auto_scroll: false,
             screenshot_hides_main_window: false,
             launch_on_startup: default_launch_on_startup(),
             window_pos: None,

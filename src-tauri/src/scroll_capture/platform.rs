@@ -33,20 +33,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetDesktopWindow, GetForegroundWindow, GetScrollInfo, GetSystemMetrics, GetWindowRect,
     GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW,
     SetCursorPos, SetForegroundWindow, ShowWindow, WindowFromPoint, CWP_SKIPINVISIBLE, GA_ROOT,
-    SB_LINEDOWN, SB_VERT, SCROLLINFO, SIF_ALL, SM_CXVIRTUALSCREEN, SM_CXVSCROLL,
-    SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE, SW_RESTORE, WM_KEYDOWN,
-    WM_KEYUP, WM_MOUSEWHEEL, WM_VSCROLL,
+    SB_LINEDOWN, SB_VERT, SCROLLINFO, SIF_ALL, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SW_MAXIMIZE, SW_RESTORE, WM_KEYDOWN, WM_KEYUP,
+    WM_MOUSEWHEEL, WM_VSCROLL,
 };
-
-/// 让完整窗口截图避开右侧的系统滚动条。`SM_CXVSCROLL` 随 Windows 的主题/缩放变化，
-/// 再加上下限与上限，兼容覆层滚动条和异常的系统度量值。
-pub(super) fn capture_rect_without_full_window_scrollbar(rect: RectPx, root: isize) -> RectPx {
-    let gutter = unsafe { GetSystemMetrics(SM_CXVSCROLL) }.clamp(12, 32) as u32;
-    let Some(window) = window_rect(root) else {
-        return rect;
-    };
-    super::types::exclude_full_window_scrollbar(rect, window, gutter).unwrap_or(rect)
-}
 
 /// 把裸指针封装的 HWND 在跨函数传递时用 isize 表示（HWND 不是 Send）。
 pub(super) fn hwnd_from(raw: isize) -> HWND {

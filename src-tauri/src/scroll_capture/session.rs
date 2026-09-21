@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use windows::Win32::Foundation::POINT;
 use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, SetCursorPos};
 
-use super::{estimate_shift, virtual_screen, window_rect, RectPx, ScrollMethod};
+use super::{estimate_shift, virtual_screen, RectPx, ScrollMethod};
 
 // P1：会话
 // ============================================================
@@ -132,11 +132,12 @@ pub struct ScrollCaptureProgress {
     pub input_passthrough: bool,
     /// 累积长图的缩略预览（data URL，宽 ≤ PREVIEW_WIDTH）
     pub preview: Option<String>,
-    /// **实际捕获区**（虚拟桌面物理像素 x,y,w,h）。
-    ///
-    /// 前端必须按这个矩形去「挖空」覆盖窗，而不是按用户选区：矮选区会被自动向下补足
-    /// （见 `pad_capture_rect`），补出来的那部分如果没挖空，截到的就是我们自己的压暗遮罩 ——
-    /// 现象是长图「上方亮、下方暗、交界一条绿边」（用户实测报回）。
+    /// 最近一帧已通过验证的屏幕画面：HUD 以蓝色显示它，供用户检查接缝。
+    pub verified_preview: Option<String>,
+    /// 当前候选画面：HUD 以绿色（等待时黄色）框出；它不会在未匹配时写入结果。
+    pub candidate_preview: Option<String>,
+    /// 实际捕获区（虚拟桌面物理像素 x,y,w,h）。V2 始终等于用户确认的正文选区；
+    /// 前端按它挖空覆盖窗，避免将自己的遮罩写进屏幕帧。
     pub capture: Option<[i32; 4]>,
 }
 
@@ -151,11 +152,13 @@ impl ScrollCaptureProgress {
             message: None,
             input_passthrough: false,
             preview: None,
+            verified_preview: None,
+            candidate_preview: None,
             capture: None,
         }
     }
 
-    /// 带上「实际捕获区」（前端据此挖空覆盖窗）
+    /// 带上实际捕获区（前端据此挖空覆盖窗）
     pub(super) fn with_capture(mut self, cap: &RectPx) -> Self {
         self.capture = Some([cap.x, cap.y, cap.w as i32, cap.h as i32]);
         self
@@ -190,6 +193,11 @@ pub trait SessionHost {
     /// 捕获期间的任务栏进度指示（覆盖窗里没空地放 HUD 时的唯一可见反馈）。
     /// 默认空实现，命令行探针不需要。
     fn set_progress(&self, _running: bool, _ratio: f32) {}
+    /// 在最终图像编码前恢复并置顶结果 UI。
+    ///
+    /// 编码数万像素的 PNG 可能耗时明显；若等编码完成才恢复 HUD，用户会误以为
+    /// 自动截图卡死。默认空实现使探针和单元测试保持纯逻辑。
+    fn prepare_result(&self) {}
     /// 尝试把覆盖窗从 Windows 的捕获结果中排除。
     ///
     /// 返回 `true` 代表已成功启用；调用方可因此保持 HUD 可见。默认 `false`，
@@ -212,41 +220,6 @@ pub(super) fn est_err_ok(prev: &RgbaImage, cur: &RgbaImage) -> bool {
     estimate_shift(prev, cur)
         .map(|e| e.err < 12.0)
         .unwrap_or(false)
-}
-
-/// 给「太矮」的选区补一块更高的捕获区（**同宽、向下扩展**）。
-///
-/// ⚠ 目前**不使用**：上层的「选区高度下限 400px」已经挡掉了所有太矮的情况。
-/// 保留实现是因为将来若要支持「自动向上/向下扩展选区」会用到它；启用前请先解决它带来的
-/// 两个副作用：① 补出来的区域必须保持透明（否则遮罩被截进长图）→ 界面上会出现一条亮带；
-/// ② 用户选区的边框线会落进捕获区 → 被截进长图（绿线）。
-#[allow(dead_code)]
-fn pad_capture_rect(rect: &RectPx, target_root: isize, need_h: u32) -> (RectPx, bool) {
-    if rect.h >= need_h {
-        return (*rect, false);
-    }
-    let (_vx, _vy, _vw, vh) = virtual_screen();
-    // 向下扩展的上限：屏幕底边 与 目标窗口底边 取小（否则会把窗口外的桌面/别的窗口截进来）
-    let mut bottom_limit = rect.y.saturating_add(vh);
-    if let Some(wr) = window_rect(target_root) {
-        if wr.h > 0 {
-            bottom_limit = bottom_limit.min(wr.bottom());
-        }
-    }
-    let max_h = (bottom_limit - rect.y).max(0) as u32;
-    let h = need_h.min(max_h);
-    if h <= rect.h {
-        return (*rect, false);
-    }
-    (
-        RectPx {
-            x: rect.x,
-            y: rect.y,
-            w: rect.w,
-            h,
-        },
-        true,
-    )
 }
 
 /// 用一次注入把光标「放进选区 → 注入 → 移出选区」。
@@ -389,7 +362,7 @@ impl FrameHideGate {
 /// 显式 `return Err`、乃至 panic）都把宿主状态还原。
 ///
 /// 为什么必须是 `Drop` 而不是「在函数末尾手动收尾」：`run_session_ext` 里有很多 `?`
-/// （每次 `settle_capture`、`append_band`、`encode_png`…），手动收尾的写法每多一个
+/// （每次 `settle_capture`、`engine.ingest`、`encode_png`…），手动收尾的写法每多一个
 /// 提前返回就多一条泄漏路径。历史上就踩过：`settle_capture` 出错时直接 `?` 返回，
 /// 于是覆盖窗**永久停在 click-through**（后续用户点 HUD、点关闭都点不到），
 /// 而且临时注册的全局 Esc 也没注销 —— 现象是「用 Esc 关掉之后，整个应用像死了一样」。

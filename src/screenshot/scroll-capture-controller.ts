@@ -19,6 +19,7 @@ interface ScrollCaptureControllerOptions {
   closePopups: () => void;
   getSelection: () => Rect | null;
   getBounds: () => { minX: number; minY: number };
+  experimentalAutoScrollEnabled: () => boolean;
   translate: Translate;
   render: () => void;
   position: () => void;
@@ -68,11 +69,13 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
     panel.panel.classList.toggle("open", state.phase === "armed" && !!selection);
     hud.hud.classList.toggle("open", state.phase === "capturing" || state.phase === "done");
     hud.hud.classList.toggle("clickthrough", !!state.progress?.input_passthrough);
-    hud.selectionGlow.classList.toggle(
-      "on",
-      state.phase === "capturing" && !state.manualMode && state.progress?.method !== "manual",
-    );
-    if (state.phase !== "capturing") {
+    // 手动模式是默认路径，也需要可见的选区聚焦反馈；采帧时后端仍会按请求
+    // 暂时隐藏它，避免光晕本身进入截图。
+    hud.selectionGlow.classList.toggle("on", state.phase === "capturing");
+    // 捕获区与 HUD 重叠时，采帧阶段会整段隐藏 HUD，避免它被写进长图。
+    // 后端进入 `finishing` 后已经不再采帧、正在编码 PNG；此时必须立即恢复可见反馈，
+    // 否则用户会在数秒编码时间里误以为自动截图卡住。
+    if (state.phase !== "capturing" || state.stopping) {
       hud.hud.classList.remove("hud-hidden");
       hud.selectionGlow.classList.remove("capture-hidden");
     }
@@ -88,8 +91,12 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
     panel.panelTitle.textContent = t("shot.scroll");
     panel.panelBadge.textContent = t("shot.scrollReady");
     panel.panelBadge.className = "sh-badge ok";
+    const autoScrollEnabled = options.experimentalAutoScrollEnabled();
+    if (!autoScrollEnabled) panel.manual.checked = true;
     panel.autoModeButton.textContent = t("shot.scrollAutoMode");
     panel.manualModeButton.textContent = t("shot.scrollManualModeShort");
+    panel.autoModeButton.style.display = autoScrollEnabled ? "" : "none";
+    panel.modeSwitch.classList.toggle("manual-only", !autoScrollEnabled);
     panel.autoModeButton.classList.toggle("active", !panel.manual.checked);
     panel.manualModeButton.classList.toggle("active", panel.manual.checked);
     panel.autoModeButton.setAttribute("aria-pressed", String(!panel.manual.checked));
@@ -124,20 +131,30 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
     const result = state.result;
     if (state.phase === "capturing") {
       hud.hud.classList.remove("result");
+      hud.captureBody.style.display = "grid";
+      hud.resultHeader.style.display = "none";
       hud.resultSummary.style.display = "none";
       hud.resultBody.style.display = "none";
       hud.actions.style.display = "flex";
+      hud.statusLabel.textContent = t("shot.scrollStatusLabel");
+      hud.infoLabel.textContent = t("shot.scrollInfoLabel");
+      hud.messageLabel.textContent = t("shot.scrollMessageLabel");
       const manual = state.manualMode || progress?.method === "manual";
       hud.recDot.style.display = "";
       hud.titleText.textContent = manual
         ? t("shot.scrollManualCapturing")
         : t("shot.scrollCapturing");
       const stage = progress?.stage === "probing" ? t("shot.scrollProbing") : "";
-      const low = progress?.stage === "low_confidence" ? t("shot.scrollStageLow") : "";
+      const waiting = progress?.stage === "waiting";
+      const lowConfidence = progress?.stage === "low_confidence" || waiting;
       hud.badge.textContent = state.stopping
         ? t(manual ? "shot.scrollManualFinishing" : "shot.scrollStopping")
-        : stage || (manual ? t("shot.scrollManualBadge") : t("shot.scrollCapturing"));
-      hud.badge.className = `sh-badge${low ? " warn" : " recording"}`;
+        : waiting
+          ? t("shot.scrollPreviewWaiting")
+          : progress?.stage === "matched"
+            ? t("shot.scrollPreviewMatched")
+            : t("shot.scrollPreviewCapturing");
+      hud.badge.className = `sh-badge${lowConfidence ? " warn" : progress?.stage === "matched" ? " ok" : " recording"}`;
       hud.metrics.style.display = "grid";
       hud.primaryMetric.label.textContent = t("shot.scrollCaptured");
       hud.primaryMetric.value.textContent =
@@ -146,11 +163,32 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
       hud.secondaryMetric.value.textContent = progress ? String(progress.frames) : "—";
       hud.status.textContent = state.stopping
         ? t(manual ? "shot.scrollManualFinishing" : "shot.scrollStopping")
-        : "";
-      hud.status.className = `sh-status${low ? " warn" : ""}`;
-      const detail = low || stage || progress?.message || "";
+        : waiting
+          ? t("shot.scrollStatusWaiting")
+          : progress?.stage === "matched"
+            ? t("shot.scrollStatusMatched")
+            : t("shot.scrollStatusCapturing");
+      hud.status.className = `sh-status${lowConfidence ? " warn" : ""}`;
+      const detail =
+        progress?.message ||
+        (waiting ? t("shot.scrollStageWaiting") : stage || t("shot.scrollMessageCapturing"));
       hud.detail.textContent = detail;
-      hud.detail.className = `sh-detail${detail ? " on" : ""}${low ? " warn" : ""}`;
+      hud.detail.className = `sh-detail${detail ? " on" : ""}${lowConfidence ? " warn" : ""}`;
+      const verifiedPreview = progress?.verified_preview ?? progress?.preview;
+      const candidatePreview = progress?.candidate_preview ?? verifiedPreview;
+      const hasLivePreview = !!verifiedPreview;
+      hud.livePreviewSlot.style.display = hasLivePreview ? "grid" : "none";
+      hud.livePreview.classList.toggle("on", hasLivePreview);
+      hud.livePreviewSlot.dataset.state = waiting ? "waiting" : "matched";
+      hud.livePreviewLabel.textContent = t("shot.scrollPreviewVerified");
+      if (verifiedPreview) hud.livePreview.src = verifiedPreview;
+      hud.candidatePreviewSlot.style.display = candidatePreview ? "block" : "none";
+      hud.candidatePreview.classList.toggle("on", !!candidatePreview);
+      hud.candidatePreviewSlot.dataset.state = waiting ? "waiting" : "candidate";
+      hud.candidatePreviewLabel.textContent = t(
+        waiting ? "shot.scrollPreviewRejected" : "shot.scrollPreviewCandidate",
+      );
+      if (candidatePreview) hud.candidatePreview.src = candidatePreview;
       hud.preview.classList.remove("on");
       hud.stopButton.style.display = state.progress?.input_passthrough ? "none" : "";
       hud.stopButton.disabled = state.stopping;
@@ -159,6 +197,8 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
       hud.escStop.classList.toggle("on", !!state.progress?.input_passthrough);
     } else if (state.phase === "done" && result) {
       hud.hud.classList.add("result");
+      hud.captureBody.style.display = "none";
+      hud.resultHeader.style.display = "flex";
       hud.actions.style.display = "none";
       hud.resultSummary.style.display = "grid";
       hud.resultBody.style.display = "grid";
@@ -171,6 +211,14 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
             ? t("shot.scrollConfPartial")
             : t("shot.scrollConfLow");
       hud.badge.className = `sh-badge${result.confidence === "high" ? " ok" : " warn"}`;
+      hud.resultTitleText.textContent = t("shot.scrollDone");
+      hud.resultBadge.textContent =
+        result.confidence === "high"
+          ? t("shot.scrollConfHigh")
+          : result.confidence === "partial"
+            ? t("shot.scrollConfPartial")
+            : t("shot.scrollConfLow");
+      hud.resultBadge.className = `sh-badge${result.confidence === "high" ? " ok" : " warn"}`;
       hud.metrics.style.display = "none";
       hud.resultSizeLabel.textContent = t("shot.scrollDimensions");
       hud.resultSize.textContent = t("shot.scrollSize", {
@@ -193,6 +241,9 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
       hud.preview.classList.toggle("on", hasPreview);
       hud.previewSlot.style.display = hasPreview ? "grid" : "none";
       hud.resultBody.classList.toggle("without-preview", !hasPreview);
+      hud.livePreviewSlot.style.display = "none";
+      hud.livePreview.classList.remove("on");
+      hud.candidatePreview.classList.remove("on");
       if (state.progress?.preview) hud.preview.src = state.progress.preview;
       hud.copyButton.classList.remove("primary");
       hud.saveButton.classList.remove("primary");
@@ -227,7 +278,8 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
         mode: session.state.manualMode ? "manual" : "auto",
         auto_scroll_top: !session.state.manualMode && panel.fromTop.checked,
         hide_hud_during_capture: session.state.hudOverlap,
-        hide_glow_during_capture: !session.state.manualMode,
+        // 两种模式都显示聚焦光晕；每次真实取帧前临时收起，避免将绿色光晕写进长图。
+        hide_glow_during_capture: true,
       });
     } catch (error) {
       hud.hud.classList.remove("hud-hidden");

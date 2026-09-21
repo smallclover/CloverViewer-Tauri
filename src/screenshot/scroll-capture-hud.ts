@@ -11,11 +11,24 @@ export interface ScrollCaptureHud {
   titleText: HTMLSpanElement;
   badge: HTMLSpanElement;
   recDot: HTMLSpanElement;
+  captureBody: HTMLDivElement;
+  resultHeader: HTMLDivElement;
+  resultTitleText: HTMLSpanElement;
+  resultBadge: HTMLSpanElement;
+  statusLabel: HTMLSpanElement;
+  infoLabel: HTMLSpanElement;
+  messageLabel: HTMLSpanElement;
   metrics: HTMLDivElement;
   primaryMetric: ScrollCaptureMetric;
   secondaryMetric: ScrollCaptureMetric;
   status: HTMLDivElement;
   detail: HTMLDivElement;
+  livePreview: HTMLImageElement;
+  livePreviewSlot: HTMLDivElement;
+  livePreviewLabel: HTMLDivElement;
+  candidatePreview: HTMLImageElement;
+  candidatePreviewSlot: HTMLDivElement;
+  candidatePreviewLabel: HTMLDivElement;
   preview: HTMLImageElement;
   previewSlot: HTMLDivElement;
   resultSummary: HTMLDivElement;
@@ -106,6 +119,49 @@ export function createScrollCaptureHud({
   const detail = document.createElement("div");
   detail.className = "sh-detail";
 
+  const livePreview = document.createElement("img");
+  livePreview.className = "sh-preview sh-live-preview";
+  const livePreviewSlot = document.createElement("div");
+  livePreviewSlot.className = "sh-live-preview-slot";
+  const livePreviewLabel = document.createElement("div");
+  livePreviewLabel.className = "sh-live-preview-label";
+  const candidatePreview = document.createElement("img");
+  candidatePreview.className = "sh-preview sh-candidate-preview";
+  const candidatePreviewSlot = document.createElement("div");
+  candidatePreviewSlot.className = "sh-candidate-preview-slot";
+  const candidatePreviewLabel = document.createElement("div");
+  candidatePreviewLabel.className = "sh-candidate-preview-label";
+  candidatePreviewSlot.append(candidatePreview, candidatePreviewLabel);
+  livePreviewSlot.append(livePreview, livePreviewLabel, candidatePreviewSlot);
+
+  const captureBody = document.createElement("div");
+  captureBody.className = "sh-capture-body";
+  const captureSide = document.createElement("div");
+  captureSide.className = "sh-capture-side";
+  const statusModule = document.createElement("section");
+  statusModule.className = "sh-capture-module";
+  const statusLabel = document.createElement("span");
+  statusLabel.className = "sh-capture-module-label";
+  statusModule.append(statusLabel, head, status);
+  const infoModule = document.createElement("section");
+  infoModule.className = "sh-capture-module";
+  const infoLabel = document.createElement("span");
+  infoLabel.className = "sh-capture-module-label";
+  infoModule.append(infoLabel, metrics);
+  const messageModule = document.createElement("section");
+  messageModule.className = "sh-capture-module";
+  const messageLabel = document.createElement("span");
+  messageLabel.className = "sh-capture-module-label";
+  messageModule.append(messageLabel, detail);
+
+  const resultHeader = document.createElement("div");
+  resultHeader.className = "sh-result-header";
+  const resultTitleText = document.createElement("span");
+  resultTitleText.className = "sh-result-title";
+  const resultBadge = document.createElement("span");
+  resultBadge.className = "sh-badge";
+  resultHeader.append(resultTitleText, resultBadge);
+
   const preview = document.createElement("img");
   preview.className = "sh-preview";
   const resultSummary = document.createElement("div");
@@ -147,7 +203,9 @@ export function createScrollCaptureHud({
   resultActions.append(copyButton, saveButton, openButton);
   resultSide.append(resultSummary, resultElapsed, resultActions);
   resultBody.append(previewSlot, resultSide);
-  hud.append(head, metrics, status, detail, escStop, actions, resultBody);
+  captureSide.append(statusModule, infoModule, messageModule, escStop, actions);
+  captureBody.append(livePreviewSlot, captureSide);
+  hud.append(captureBody, resultHeader, resultBody);
   uiLayer.appendChild(hud);
 
   // 缩略图和翻译文案会在结果显示后改变 HUD 的实际尺寸，因此用 ResizeObserver 重新落位。
@@ -163,6 +221,10 @@ export function createScrollCaptureHud({
   new ResizeObserver(scheduleLayout).observe(hud);
   preview.addEventListener("load", scheduleLayout);
   preview.addEventListener("error", scheduleLayout);
+  livePreview.addEventListener("load", scheduleLayout);
+  livePreview.addEventListener("error", scheduleLayout);
+  candidatePreview.addEventListener("load", scheduleLayout);
+  candidatePreview.addEventListener("error", scheduleLayout);
 
   const notice = document.createElement("div");
   notice.id = "scroll-notice";
@@ -176,11 +238,24 @@ export function createScrollCaptureHud({
     titleText,
     badge,
     recDot,
+    captureBody,
+    resultHeader,
+    resultTitleText,
+    resultBadge,
+    statusLabel,
+    infoLabel,
+    messageLabel,
     metrics,
     primaryMetric,
     secondaryMetric,
     status,
     detail,
+    livePreview,
+    livePreviewSlot,
+    livePreviewLabel,
+    candidatePreview,
+    candidatePreviewSlot,
+    candidatePreviewLabel,
     preview,
     previewSlot,
     resultSummary,

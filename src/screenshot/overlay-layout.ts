@@ -10,8 +10,6 @@ export interface OverlayPoint {
   y: number;
 }
 
-export type ScrollOverlayKind = "panel" | "hud";
-
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.max(minimum, Math.min(maximum, value));
 
@@ -51,15 +49,14 @@ export function placeSelectionOverlay(
 }
 
 /**
- * Score overlay candidates around a capture region.  Avoiding the capture area
- * outweighs travel from the preferred anchor, so this remains stable on small
- * screens and when HUD content changes size.
+ * Score overlay candidates around a capture region. Every long-capture state
+ * shares the same right-side-first order so switching from setup to capture to
+ * result does not make the panel visibly jump around.
  */
 export function placeScrollOverlay(
   region: OverlayBox,
   monitor: OverlayBox,
   size: Pick<OverlayBox, "w" | "h">,
-  kind: ScrollOverlayKind,
 ): OverlayPoint {
   const gap = 10;
   const minimumX = monitor.x + gap;
@@ -70,24 +67,14 @@ export function placeScrollOverlay(
   const left = region.x - size.w - gap;
   const above = region.y - size.h - gap;
   const below = region.y + region.h + gap;
-  const candidates: OverlayPoint[] =
-    kind === "panel"
-      ? [
-          { x: region.x + region.w - size.w, y: below },
-          { x: region.x, y: below },
-          { x: region.x + region.w - size.w, y: above },
-          { x: region.x, y: above },
-          { x: right, y: region.y },
-          { x: left, y: region.y },
-        ]
-      : [
-          { x: right, y: region.y },
-          { x: left, y: region.y },
-          { x: region.x + region.w - size.w, y: above },
-          { x: region.x + region.w - size.w, y: below },
-          { x: region.x, y: above },
-          { x: region.x, y: below },
-        ];
+  const candidates: OverlayPoint[] = [
+    { x: right, y: region.y },
+    { x: left, y: region.y },
+    { x: region.x + region.w - size.w, y: above },
+    { x: region.x + region.w - size.w, y: below },
+    { x: region.x, y: above },
+    { x: region.x, y: below },
+  ];
 
   let best: { point: OverlayPoint; score: number } | null = null;
   for (const [index, candidate] of candidates.entries()) {

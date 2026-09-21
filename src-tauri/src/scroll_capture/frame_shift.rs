@@ -36,7 +36,11 @@ pub(super) fn from_grays(
     let x0 = margin;
     let x1 = width.saturating_sub(margin).max(x0 + 1);
     let height = height as usize;
-    let max_shift = (height / 2).max(1);
+    // PageDown and trackpad flings may move substantially more than half a
+    // viewport.  Keep only the minimum overlap required for registration
+    // instead of silently classifying those valid frames as "no motion".
+    let min_overlap = (height / 10).clamp(32, 240);
+    let max_shift = height.saturating_sub(min_overlap).max(1);
     let rows: Vec<usize> = (0..height).step_by(2).collect();
     let score = |shift: usize| {
         let mut sum = 0u64;

@@ -12,6 +12,7 @@ mod grayscale;
 #[path = "scroll_capture/stitching.rs"]
 mod stitching;
 
+mod engine;
 mod matching;
 mod platform;
 mod preview;
@@ -22,10 +23,7 @@ pub mod tauri;
 mod types;
 
 pub use frame_shift::ShiftEstimate;
-pub use matching::{
-    estimate_shift, fixed_horizontal_margins, internal_vertical_scrollbar_bands, match_frames,
-    tolerant_shift, MatchParams, MatchResult,
-};
+pub use matching::{estimate_shift, FrameRegistrar, Registration, RegistrationVerdict};
 pub use platform::{
     capture_rect, client_rect, deepest_child_at, ensure_dpi_aware, focus_window, foreground_window,
     frame_diff_ratio, inject_scroll, list_top_windows, maximize_window, resolve_window,
@@ -44,11 +42,6 @@ pub use tauri::{
     stop_scroll_capture, ScrollCaptureSession,
 };
 pub use types::{RectPx, ScrollMethod, ScrollState, SettleResult, WinInfo};
-
-#[cfg(test)]
-pub(crate) use platform::make_lparam;
-#[cfg(test)]
-pub(crate) use types::exclude_full_window_scrollbar;
 
 #[cfg(test)]
 mod tests;

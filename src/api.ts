@@ -25,6 +25,8 @@ export interface AppConfig {
   hotkeys: HotkeysConfig;
   minimize_on_close: boolean;
   magnifier_enabled: boolean;
+  /** 默认关闭；开启后滚动截图面板才显示“自动滚动（试验）”。 */
+  experimental_auto_scroll: boolean;
   screenshot_hides_main_window: boolean;
   launch_on_startup: boolean;
   window_pos: [number, number] | null;
@@ -159,7 +161,7 @@ export interface ScrollCaptureRequest {
   y: number;
   w: number;
   h: number;
-  /** auto = 程序注入滚动；manual = 用户自己滚动，程序仅在画面稳定后采帧。 */
+  /** manual（默认 UI）= 用户自己滚动并由程序在稳定后采帧；auto = 实验性注入滚动。 */
   mode?: "auto" | "manual";
   /** "auto"（默认，后端探针自动选注入方式）或 wheel_post / wheel_post_root / wheel_input /
    *  pagedown / vscroll */
@@ -200,8 +202,12 @@ export interface ScrollCaptureProgress {
   input_passthrough: boolean;
   /** 累积长图的缩略预览（data URL） */
   preview: string | null;
-  /** **实际捕获区**（虚拟桌面物理像素 x,y,w,h）：可能比用户选区更高（矮选区自动补足）。
-   *  前端必须按它挖空覆盖窗，否则补出来的部分会截到我们自己的压暗遮罩。 */
+  /** 最近一帧已验证的清晰画面，HUD 使用蓝色表示可信内容。 */
+  verified_preview: string | null;
+  /** 当前候选画面；等待匹配时它不会写入结果。 */
+  candidate_preview: string | null;
+  /** 实际捕获区（虚拟桌面物理像素 x,y,w,h）；V2 与用户确认的正文选区一致。
+   *  前端按它挖空覆盖窗，避免把自身遮罩写进屏幕帧。 */
   capture: [number, number, number, number] | null;
 }
 

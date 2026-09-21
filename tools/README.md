@@ -16,16 +16,13 @@
 可先启动 `winforms-target.ps1`，再用 `scroll_probe` 对标题
 `cloverprobe-winforms-target` 进行探测，以复现标准控件的滚动注入验证。
 
-## 离线复刻：不接屏幕也能跑的两个校验
+## 离线校验
 
 ```powershell
-node tools/stitch-overlap-trace.cjs        # 拼接算式：每步净增 = shift、页头页脚各一次
 node tools/scroll-ui-geometry-check.cjs    # 浮层落位：面板/HUD 会不会压住捕获区、会不会漂到另一块屏
 ```
 
-*   `stitch-overlap-trace.cjs` 用「每行唯一编号」的合成页面复刻
-    `src-tauri/src/scroll_capture.rs` 的 `append_band` / `attach_footer` 算式。
-    **改拼接算式时先改这里**，能立刻看到是否破坏了核心不变量。
+*   滚动拼接的离线校验已迁入 Rust 单元测试（`scroll_capture::tests`）：它用合成帧验证位移、固定首尾栏、固定侧栏拒绝和重复帧拒绝。运行 `cargo test --lib`。
 *   `scroll-ui-geometry-check.cjs` 复刻 `src/screenshot.ts` 的浮层落位逻辑，
     喂的是真实的多屏参数（主屏 2560×1440 + 竖屏副屏 1440×2560，虚拟桌面 4000×2560）。
     ⚠ 它是**独立实现**（不是 import 前端代码），所以前端落位逻辑改了以后要同步改它，

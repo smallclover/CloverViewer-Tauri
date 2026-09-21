@@ -1,5 +1,6 @@
 export interface ScrollCaptureStartPanel {
   panel: HTMLDivElement;
+  modeSwitch: HTMLDivElement;
   autoModeButton: HTMLButtonElement;
   manualModeButton: HTMLButtonElement;
   panelTitle: HTMLDivElement;
@@ -42,7 +43,7 @@ export function createScrollCaptureStartPanel({
   const panelTitle = document.createElement("div");
   panelTitle.className = "sh-title";
   const panelHead = document.createElement("div");
-  panelHead.className = "sh-head";
+  panelHead.className = "sh-head sh-panel-head";
   const panelBadge = document.createElement("span");
   panelBadge.className = "sh-badge";
   panelHead.append(panelTitle, panelBadge);
@@ -106,6 +107,9 @@ export function createScrollCaptureStartPanel({
   const manual = document.createElement("input");
   manual.type = "checkbox";
   manual.id = "sh-manual";
+  // Long capture is user-guided by default. Automatic injection is an
+  // explicitly selected experimental convenience path.
+  manual.checked = true;
   manual.addEventListener("change", onModeChange);
   autoModeButton.addEventListener("click", () => {
     if (!manual.checked) return;
@@ -118,11 +122,15 @@ export function createScrollCaptureStartPanel({
     onModeChange();
   });
 
-  panel.append(panelHead, modeSwitch, selectionCard, hint, fromTopLabel, actions);
+  const panelBody = document.createElement("div");
+  panelBody.className = "sh-panel-body";
+  panelBody.append(modeSwitch, selectionCard, hint, fromTopLabel, actions);
+  panel.append(panelHead, panelBody);
   uiLayer.appendChild(panel);
 
   return {
     panel,
+    modeSwitch,
     autoModeButton,
     manualModeButton,
     panelTitle,

@@ -1,6 +1,28 @@
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 
+const INSPECTION_WIDTH: u32 = 320;
+const INSPECTION_MAX_HEIGHT: u32 = 260;
+
+/// A sharp, bounded preview of one screen frame for the live stitch inspector.
+/// Unlike the overview thumbnail, this deliberately preserves local detail so
+/// the user can judge whether the blue trusted image and the next candidate
+/// belong together.
+pub(super) fn frame_data_url(frame: &RgbaImage) -> Option<String> {
+    let width = INSPECTION_WIDTH.min(frame.width()).max(1);
+    let proportional_height = ((frame.height() as u64 * width as u64)
+        .saturating_add(frame.width().max(1) as u64 - 1)
+        / frame.width().max(1) as u64) as u32;
+    let height = proportional_height.min(INSPECTION_MAX_HEIGHT).max(1);
+    let preview =
+        image::imageops::resize(frame, width, height, image::imageops::FilterType::Lanczos3);
+    let png = encode_png(&preview, true).ok()?;
+    Some(format!(
+        "data:image/png;base64,{}",
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, png)
+    ))
+}
+
 // P1：实时预览（缩略图）
 // ============================================================
 

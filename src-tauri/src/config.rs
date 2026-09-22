@@ -107,6 +107,12 @@ pub struct Config {
     /// 0 表示关闭启动时的自动清理；旧配置缺字段时默认保留 7 天。
     #[serde(default = "default_cache_cleanup_after_hours")]
     pub cache_cleanup_after_hours: u32,
+    /// 局域网临时分享的默认有效期（秒）。
+    #[serde(default = "default_lan_share_duration_seconds")]
+    pub lan_share_duration_seconds: u32,
+    /// 0 = 在有效期内不限次数；1 = 首次下载请求后立即失效。
+    #[serde(default)]
+    pub lan_share_download_limit: u32,
 
     #[serde(default)]
     pub window_pos: Option<(f32, f32)>,
@@ -129,6 +135,9 @@ fn default_launch_on_startup() -> bool {
 fn default_cache_cleanup_after_hours() -> u32 {
     24 * 7
 }
+fn default_lan_share_duration_seconds() -> u32 {
+    10 * 60
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -143,6 +152,8 @@ impl Default for Config {
             screenshot_hides_main_window: false,
             launch_on_startup: default_launch_on_startup(),
             cache_cleanup_after_hours: default_cache_cleanup_after_hours(),
+            lan_share_duration_seconds: default_lan_share_duration_seconds(),
+            lan_share_download_limit: 0,
             window_pos: None,
             window_size: None,
         }

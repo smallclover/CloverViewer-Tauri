@@ -11,6 +11,7 @@ mod commands;
 mod config;
 mod image_info;
 mod image_scan;
+mod lan_share;
 pub mod mcp;
 mod ocr;
 mod screenshot;
@@ -112,6 +113,7 @@ pub fn run() {
         .manage(ConfigStore::new(config))
         .manage(thumbnails::ThumbnailStore::new(512))
         .manage(screenshot::ScreenshotStore::new())
+        .manage(lan_share::LanShareStore::new())
         .manage(scroll_capture::ScrollCaptureSession::new())
         .manage(StartupNotices::default())
         .invoke_handler(tauri::generate_handler![
@@ -136,6 +138,9 @@ pub fn run() {
             screenshot::copy_image_file,
             screenshot::pick_window_at,
             screenshot::screenshot_ui_ready,
+            lan_share::start_lan_share,
+            lan_share::start_image_lan_share,
+            lan_share::stop_lan_share,
             ocr::ocr_image,
             scroll_capture::tauri::start_scroll_capture,
             scroll_capture::tauri::stop_scroll_capture,

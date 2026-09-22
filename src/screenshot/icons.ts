@@ -31,6 +31,11 @@ const ICONS: Record<string, string> = {
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
     '<path d="M7 10l5 5 5-5"/>' +
     '<path d="M12 15V3"/>',
+  share:
+    '<circle cx="18" cy="5" r="2.5"/>' +
+    '<circle cx="6" cy="12" r="2.5"/>' +
+    '<circle cx="18" cy="19" r="2.5"/>' +
+    '<path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"/>',
   // OCR / 文字识别：扫描框（四角）+ 三行文字（lucide scan-text 风格），
   // 一眼即“扫描识别文字”，比原先的“方块+几条线”更贴切。
   ocr:

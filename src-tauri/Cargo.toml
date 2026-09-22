@@ -1,6 +1,6 @@
 [package]
 name = "cloverviewer-tauri"
-version = "0.1.10"
+version = "0.1.11"
 description = "CloverViewer 的 Tauri 2 重实现（Rust 后端 + Web 前端）"
 edition = "2021"
 
@@ -40,6 +40,8 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 rmcp = { version = "1.7", features = ["server", "transport-io", "transport-streamable-http-server"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 axum = "0.8"
+qrcodegen = "1.8"
+rand = "0.9"
 single-instance = "0.3"
 
 # Windows UWP OCR（Phase 3），与 xcap 已在依赖树中的 windows 0.62 统一

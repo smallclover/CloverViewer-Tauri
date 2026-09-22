@@ -1,4 +1,4 @@
-import { finishScreenshot, ocrImage } from "../api";
+import { finishScreenshot, ocrImage, startLanShare, type LanShareInfo } from "../api";
 import type { Rect, Shape } from "./geometry";
 import { selectionToPngBase64 } from "./selection-image";
 import type { ScreenImage } from "./screen-compositor";
@@ -10,6 +10,8 @@ interface ScreenshotActionControllerOptions {
   drawShape: (context: CanvasRenderingContext2D, shape: Shape) => void;
   translate: (key: string, params?: Record<string, string | number>) => string;
   showOcr: (text: string, isError?: boolean) => void;
+  showLanShare: (info: LanShareInfo) => void;
+  showError: (message: string) => void;
 }
 
 /** Runs normal screenshot export and OCR without owning editor state or presentation layout. */
@@ -53,5 +55,22 @@ export function createScreenshotActionController(options: ScreenshotActionContro
     }
   };
 
-  return { exportImage, runOcr };
+  const shareImage = async () => {
+    const selection = validSelection();
+    if (!selection) return;
+    try {
+      const png = await selectionToPngBase64({
+        selection,
+        screens: options.getScreens(),
+        drawAnnotations: (context) => {
+          for (const shape of options.getShapes()) options.drawShape(context, shape);
+        },
+      });
+      options.showLanShare(await startLanShare(png));
+    } catch (error) {
+      options.showError(options.translate("shot.shareFailed", { msg: String(error) }));
+    }
+  };
+
+  return { exportImage, runOcr, shareImage };
 }

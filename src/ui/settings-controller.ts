@@ -51,6 +51,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const minimize = element<HTMLInputElement>("set-minimize");
   const autostart = element<HTMLInputElement>("set-autostart");
   const cacheRetention = element<HTMLSelectElement>("set-cache-retention");
+  const lanShareDuration = element<HTMLSelectElement>("set-lan-share-duration");
+  const lanShareDownloadLimit = element<HTMLSelectElement>("set-lan-share-download-limit");
   const cacheClearAge = element<HTMLSelectElement>("set-cache-clear-age");
   const cacheSummary = element("cache-summary");
   const clearCacheButton = element<HTMLButtonElement>("clear-cache");
@@ -171,6 +173,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
     minimize.checked = config.minimize_on_close;
     autostart.checked = config.launch_on_startup;
     cacheRetention.value = String(config.cache_cleanup_after_hours ?? 168);
+    lanShareDuration.value = String(config.lan_share_duration_seconds ?? 600);
+    lanShareDownloadLimit.value = String(config.lan_share_download_limit ?? 0);
     void refreshCacheSummary();
     // 每次打开都回到干净状态：无搜索词、停在「常规」。
     search.value = "";
@@ -299,6 +303,12 @@ export function createSettingsController(options: SettingsControllerOptions) {
   });
   cacheRetention.addEventListener("change", () =>
     save({ cache_cleanup_after_hours: Number(cacheRetention.value) }),
+  );
+  lanShareDuration.addEventListener("change", () =>
+    save({ lan_share_duration_seconds: Number(lanShareDuration.value) }),
+  );
+  lanShareDownloadLimit.addEventListener("change", () =>
+    save({ lan_share_download_limit: Number(lanShareDownloadLimit.value) }),
   );
   clearCacheButton.addEventListener("click", () => {
     if (clearingCache) return;

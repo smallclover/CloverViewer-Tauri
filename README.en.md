@@ -47,6 +47,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Drag & drop open**: drag images or a folder directly into the window
 *   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens)
 *   **Right-click menu**: copy image, copy path, view
+*   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
 
 ### 📸 Screenshot & Annotation
@@ -58,6 +59,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
 *   **Export**: Enter to copy to clipboard / save to Desktop
+*   **LAN sharing**: after annotating, create a temporary link and QR code for devices on the same network to preview or download the screenshot
 *   **OCR text recognition**: based on the native Windows UWP OCR engine (`Windows.Media.Ocr`), multi-language (Chinese/English/Japanese), with grayscale + 2× nearest-neighbor upscaling preprocessing
 
 ### 🤖 MCP Server (New)
@@ -91,7 +93,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Launch on startup**: writes `HKCU\...\Run` registry; `--startup` argument silently starts into tray
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
-*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the three global hotkeys, magnifier, minimize to tray, launch on startup and software updates
+*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / LAN sharing / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the three global hotkeys, magnifier, minimize to tray, launch on startup, software updates and LAN-sharing rules
 *   **Temporary cache management**: Settings → Cache shows the file count and size of temporary long screenshots in `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand
 
 ## 🖼️ Supported Formats

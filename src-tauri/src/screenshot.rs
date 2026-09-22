@@ -416,6 +416,10 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             }
         }
 
+        // 分享可在截图窗口关闭后继续，以便用户把已复制的链接粘贴到聊天工具；
+        // 但开始一张新截图时必须主动撤销上一张，避免旧图意外持续暴露。
+        app.state::<crate::lan_share::LanShareStore>().stop();
+
         // 防并发：若上一次截屏尚未结束则丢弃本次
         {
             let mut cap = store.capturing.lock().unwrap();

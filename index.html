@@ -42,6 +42,9 @@
       <main id="content">
         <!-- 空态没有路径、数量或排序上下文，避免留下无内容的工具栏。 -->
         <header id="content-header" class="hidden">
+          <button id="grid-up" class="grid-header-icon" type="button" data-i18n-title="view.upFolder" aria-label="返回上级文件夹">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18-6-6 6-6"/></svg>
+          </button>
           <button id="back-to-grid" class="hidden" type="button" data-i18n-title="view.gridTitle">
             <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/><path d="M9 12h11"/></svg>
             <span class="back-folder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
@@ -49,7 +52,29 @@
           </button>
           <nav id="breadcrumb" class="breadcrumb"></nav>
           <span id="grid-count" class="grid-count"></span>
-          <div id="grid-menu"><button id="grid-sort" type="button"></button><button id="grid-size" type="button"></button></div>
+          <div id="grid-menu">
+            <div class="grid-menu-dropdown">
+              <button id="grid-sort" type="button" data-i18n-title="view.sortTitle" aria-haspopup="menu" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h11M8 12h8M8 18h5"/><path d="m4 5 2-2 2 2M6 3v18"/></svg>
+                <span id="grid-sort-label"></span><svg class="grid-menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg>
+              </button>
+              <div id="grid-sort-menu" class="grid-menu-popover hidden" role="menu">
+                <button type="button" role="menuitemradio" aria-checked="true" data-sort-order="newest" data-i18n="view.sortDescending">↓ 降序</button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-sort-order="oldest" data-i18n="view.sortAscending">↑ 升序</button>
+              </div>
+            </div>
+            <div class="grid-menu-dropdown">
+              <button id="grid-size" type="button" data-i18n-title="view.thumbSizeTitle" aria-haspopup="menu" aria-expanded="false">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+                <span id="grid-size-label"></span><svg class="grid-menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></svg>
+              </button>
+              <div id="grid-size-menu" class="grid-menu-popover hidden" role="menu">
+                <button type="button" role="menuitemradio" aria-checked="false" data-size-index="0" data-i18n="view.thumbSmall">缩略图：小</button>
+                <button type="button" role="menuitemradio" aria-checked="true" data-size-index="1" data-i18n="view.thumbMedium">缩略图：中</button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-size-index="2" data-i18n="view.thumbLarge">缩略图：大</button>
+              </div>
+            </div>
+          </div>
         </header>
         <div id="empty-state">
           <div class="empty-icon"><img src="/logo.png" alt="CloverViewer" /></div>
@@ -85,6 +110,7 @@
             <h3 data-i18n="props.title">属性</h3>
             <div id="props-list"></div>
           </aside>
+          <aside id="image-share-panel" class="collapsed" aria-label="局域网分享"></aside>
         </div>
       </main>
 
@@ -92,6 +118,11 @@
         <span id="status-left" data-i18n="status.ready">就绪</span>
         <div id="status-group">
           <span id="status-right"></span>
+        </div>
+        <div id="grid-density-control" class="hidden" data-i18n-title="view.thumbSizeTitle">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 15 2.6-3 2.1 2 1.7-2 2.6 3"/><circle cx="9" cy="9" r="1"/></svg>
+          <input id="grid-density" type="range" min="0" max="2" value="1" step="1" aria-label="缩略图大小" />
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
         </div>
       </footer>
 
@@ -261,6 +292,32 @@
                     <span class="setting-desc" data-i18n="settings.experimentalAutoScrollHint">仅适用于单一正文区域；默认关闭</span>
                   </div>
                   <input id="set-experimental-auto-scroll" type="checkbox" />
+                </div>
+              </div>
+              <span class="settings-group-title" data-i18n="settings.group.lanShare">局域网分享</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-lan-share-duration" data-i18n="settings.lanShareDuration">默认有效期</label>
+                    <span class="setting-desc" data-i18n="settings.lanShareDuration.desc">从创建分享链接起开始计时。</span>
+                  </div>
+                  <select id="set-lan-share-duration">
+                    <option value="60" data-i18n="settings.lanShareDuration.1m">1 分钟</option>
+                    <option value="300" data-i18n="settings.lanShareDuration.5m">5 分钟</option>
+                    <option value="600" data-i18n="settings.lanShareDuration.10m">10 分钟</option>
+                    <option value="1800" data-i18n="settings.lanShareDuration.30m">30 分钟</option>
+                    <option value="3600" data-i18n="settings.lanShareDuration.1h">1 小时</option>
+                  </select>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-lan-share-download-limit" data-i18n="settings.lanShareDownloads">默认下载规则</label>
+                    <span class="setting-desc" data-i18n="settings.lanShareDownloads.desc">预览图片不会计入下载次数。</span>
+                  </div>
+                  <select id="set-lan-share-download-limit">
+                    <option value="0" data-i18n="settings.lanShareDownloads.unlimited">有效期内不限次数</option>
+                    <option value="1" data-i18n="settings.lanShareDownloads.once">成功下载一次后失效</option>
+                  </select>
                 </div>
               </div>
             </section>

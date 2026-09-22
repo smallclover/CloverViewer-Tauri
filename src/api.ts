@@ -31,6 +31,10 @@ export interface AppConfig {
   launch_on_startup: boolean;
   /** 0 = 不自动清理；其它值为临时截图最长保留小时数。 */
   cache_cleanup_after_hours: number;
+  /** 局域网分享的默认有效期（秒）。 */
+  lan_share_duration_seconds: number;
+  /** 0 = 有效期内不限次数；1 = 首次下载后失效。 */
+  lan_share_download_limit: number;
   window_pos: [number, number] | null;
   window_size: [number, number] | null;
 }
@@ -122,6 +126,22 @@ export const closeScreenshot = () => invoke<void>("close_screenshot");
 
 export const finishScreenshot = (action: "save" | "clipboard", png: string) =>
   invoke<void>("finish_screenshot", { req: { action, png } });
+
+export interface LanShareInfo {
+  url: string;
+  qr_code: string;
+  expires_in_seconds: number;
+  download_limit: number;
+}
+
+/** Starts a temporary, token-protected HTTP share visible only to devices on the same LAN. */
+export const startLanShare = (png: string) => invoke<LanShareInfo>("start_lan_share", { png });
+
+/** Shares the current viewer image as a browser-compatible JPEG preview. */
+export const startImageLanShare = (path: string) =>
+  invoke<LanShareInfo>("start_image_lan_share", { path });
+
+export const stopLanShare = () => invoke<void>("stop_lan_share");
 
 export const copyText = (text: string) => invoke<void>("copy_text", { text });
 

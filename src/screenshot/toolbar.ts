@@ -11,6 +11,7 @@ export interface ToolbarOptions {
   onReselect: () => void;
   onCancel: () => void;
   onExport: (action: "clipboard" | "save") => void;
+  onShare: () => void;
   onColorChange: (color: string) => void;
   onStrokeWidthChange: (width: number) => void;
 }
@@ -114,7 +115,12 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
     event.stopPropagation();
     options.onExport("save");
   });
-  toolbar.append(reselect, cancel, copy, save);
+  const share = makeBtn("share", "shot.share");
+  share.addEventListener("click", (event) => {
+    event.stopPropagation();
+    options.onShare();
+  });
+  toolbar.append(reselect, cancel, share, save, copy);
 
   const colorPopup = document.createElement("div");
   colorPopup.className = "popup ui-interactive";

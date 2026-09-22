@@ -5,6 +5,7 @@ import {
   pickWindowAt,
   scrollCaptureProgress,
   scrollCaptureRunning,
+  stopLanShare,
   takeScrollStartMode,
   type ScrollCaptureDone,
   type ScrollCaptureProgress,
@@ -24,12 +25,14 @@ import {
   createScrollCapturePositioner,
   renderScrollCaptureOverlay,
 } from "./screenshot/scroll-capture-layout";
+import { placeScrollOverlay } from "./screenshot/overlay-layout";
 import { createScrollCaptureSession } from "./screenshot/scroll-capture-session";
 import { createScrollCaptureController } from "./screenshot/scroll-capture-controller";
 import { refreshScreenshotConfig, startScreenshotLifecycle } from "./screenshot/lifecycle";
 import { createScreenshotLoadController } from "./screenshot/screenshot-load-controller";
 import { createEditorUiController } from "./screenshot/editor-ui-controller";
 import { createEditorSession } from "./screenshot/editor-session";
+import { createLanSharePanel } from "./screenshot/lan-share-panel";
 import {
   isShapeHit,
   normRect,
@@ -96,6 +99,11 @@ const root = requiredElement("screenshot-root");
 const canvas = requiredElement<HTMLCanvasElement>("overlay-canvas");
 const ctx = requiredContext(canvas);
 const uiLayer = requiredElement("ui-layer");
+const lanSharePanel = createLanSharePanel({
+  uiLayer,
+  onCopy: copyText,
+  onStop: stopLanShare,
+});
 
 // 工具栏
 // ============================================================
@@ -114,6 +122,7 @@ const toolbarUi = createToolbar({
   },
   onCancel: () => void closeScreenshot(),
   onExport: (action) => void exportImage(action),
+  onShare: () => void shareImage(),
   onColorChange: (next) => {
     editorSession.color = next;
     toolbarUi.syncColor(editorSession.color);
@@ -246,6 +255,12 @@ screenshotActions = createScreenshotActionController({
   drawShape: editorRenderer.drawShape,
   translate: t,
   showOcr: showOcrPanel,
+  showLanShare: (info) => {
+    const selection = editorSession.selection;
+    if (!selection) return;
+    lanSharePanel.show(info, (size) => placeScrollOverlay(toCssBox(selection), rootBoxCss(), size));
+  },
+  showError: (message) => showScrollNotice(message, true),
 });
 
 function render() {
@@ -387,6 +402,10 @@ window.addEventListener("contextmenu", (e) => e.preventDefault());
 // ============================================================
 async function exportImage(action: "save" | "clipboard") {
   await screenshotActions.exportImage(action);
+}
+
+async function shareImage() {
+  await screenshotActions.shareImage();
 }
 
 // ============================================================
@@ -633,6 +652,7 @@ function renderScrollOverlay() {
 /** OCR 面板在滚动模式里要让位（否则会压在选区上/干扰视线） */
 function ctx0ClearOcr() {
   ocrPanel.style.display = "none";
+  lanSharePanel.hide();
 }
 
 // ============================================================
@@ -650,6 +670,7 @@ function resetScreenshotSession() {
   for (const button of toolBtns.values()) button.classList.toggle("active", false);
   textInput.classList.remove("editing");
   ocrPanel.style.display = "none";
+  lanSharePanel.hide();
   screens = [];
   editorInput.reset();
   scrollSession.reset();

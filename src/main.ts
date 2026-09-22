@@ -10,12 +10,14 @@ import { bindWindowChrome } from "./ui/window-chrome";
 import { createGridController } from "./viewer/grid-controller";
 import { createImageSourceResolver } from "./viewer/image-source";
 import { createImagePropertiesController } from "./viewer/image-properties-controller";
+import { createImageShareController } from "./viewer/image-share-controller";
 import { createSingleImageController } from "./viewer/single-image-controller";
 import { createViewerSession } from "./viewer/viewer-session";
 import {
   type AppConfig,
   type ImageEntry,
   copyImageFile,
+  copyText,
   fileSrc,
   formatDimensions,
   formatSize,
@@ -24,6 +26,8 @@ import {
   getThumbnail,
   listImages,
   readImageData,
+  startImageLanShare,
+  stopLanShare,
 } from "./api";
 
 // ---------- 状态 ----------
@@ -45,11 +49,19 @@ const imgStage = $("img-stage");
 const singleImg = $<HTMLImageElement>("single-img");
 const propsList = $("props-list");
 const propsPanel = $("props-panel");
+const imageSharePanel = $("image-share-panel");
 const breadcrumb = $("breadcrumb");
 const gridMenu = $("grid-menu");
 const gridSort = $<HTMLButtonElement>("grid-sort");
+const gridSortLabel = $("grid-sort-label");
+const gridSortMenu = $("grid-sort-menu");
 const gridSize = $<HTMLButtonElement>("grid-size");
+const gridSizeLabel = $("grid-size-label");
+const gridSizeMenu = $("grid-size-menu");
+const gridDensity = $<HTMLInputElement>("grid-density");
+const gridDensityControl = $("grid-density-control");
 const gridCount = $("grid-count");
+const gridUp = $<HTMLButtonElement>("grid-up");
 const backToGrid = $<HTMLButtonElement>("back-to-grid");
 const backToGridName = $("back-to-grid-name");
 const statusLeft = $("status-left");
@@ -104,6 +116,14 @@ const imagePropertiesController = createImagePropertiesController({
   formatDimensions,
   formatSize,
   translate: t,
+});
+const imageShareController = createImageShareController({
+  panel: imageSharePanel,
+  startLanShare: startImageLanShare,
+  copyText,
+  stopLanShare,
+  translate: t,
+  onClose: closeImageShare,
 });
 
 // ---------- 主题 ----------
@@ -178,17 +198,23 @@ const gridController = createGridController({
   grid,
   spacer: gridSpacer,
   sortButton: gridSort,
+  sortLabel: gridSortLabel,
+  sortMenu: gridSortMenu,
   sizeButton: gridSize,
+  sizeLabel: gridSizeLabel,
+  sizeMenu: gridSizeMenu,
+  sizeSlider: gridDensity,
   session: viewerSession,
   imageSource,
   getThumbnail,
-  formatDimensions,
   translate: t,
   onSelect: showSingle,
 });
 
 function showGrid() {
+  closeImageShare();
   viewerSession.viewMode = "grid";
+  contentHeader.classList.remove("single-context");
   // 初始空态不需要这条上下文栏；一旦用户选定目录（即使目录里没有图片）就恢复。
   contentHeader.classList.remove("hidden");
   emptyState.classList.toggle(
@@ -198,8 +224,10 @@ function showGrid() {
   gridView.classList.toggle("hidden", viewerSession.images.length === 0);
   singleView.classList.add("hidden");
   gridMenu.classList.remove("hidden");
+  gridDensityControl.classList.remove("hidden");
   breadcrumb.classList.remove("hidden");
   gridCount.classList.remove("hidden");
+  gridUp.classList.remove("hidden");
   backToGrid.classList.add("hidden");
   btnProps.classList.add("hidden");
   setImageToolsVisible(false);
@@ -225,18 +253,44 @@ function applyPropsState() {
   }
 }
 
+function closeImageShare() {
+  imageShareController.close();
+  imageSharePanel.classList.add("collapsed");
+  if (viewerSession.viewMode === "single") {
+    singleImageController.applyTransform();
+    refreshStatus();
+  }
+}
+
+function openImageShare(entry: ImageEntry) {
+  const index = viewerSession.images.findIndex((image) => image.path === entry.path);
+  if (index >= 0 && (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)) {
+    showSingle(index);
+  }
+  viewerSession.propsVisible = false;
+  applyPropsState();
+  imageSharePanel.classList.remove("collapsed");
+  imageShareController.open(entry);
+  singleImageController.applyTransform();
+  refreshStatus();
+}
+
 // ---------- 单图视图 ----------
 function showSingle(index: number) {
   if (index < 0 || index >= viewerSession.images.length) return;
   viewerSession.activeIndex = index;
+  closeImageShare();
   viewerSession.viewMode = "single";
+  contentHeader.classList.add("single-context");
   emptyState.classList.add("hidden");
   gridView.classList.add("hidden");
   singleView.classList.remove("hidden");
   playEnterAnimation(singleView);
   gridMenu.classList.add("hidden");
+  gridDensityControl.classList.add("hidden");
   breadcrumb.classList.add("hidden");
   gridCount.classList.add("hidden");
+  gridUp.classList.add("hidden");
   backToGrid.classList.remove("hidden");
   btnProps.classList.remove("hidden");
   setImageToolsVisible(true);
@@ -267,8 +321,7 @@ function refreshStatus() {
     statusRight.textContent = `${viewerSession.activeIndex + 1} / ${viewerSession.images.length} · ${formatDimensions(entry.width, entry.height)} · ${formatSize(entry.size)} · ${zoom}`;
     gridCount.classList.add("hidden");
   } else if (viewerSession.currentDir) {
-    // 文件夹名与图片数量已在顶部上下文栏显示；底部只承担即时状态。
-    statusLeft.textContent = t("status.ready");
+    statusLeft.textContent = t("status.imageCount", { count: viewerSession.images.length });
     statusRight.textContent = "";
     gridCount.textContent = t("status.imageCount", { count: viewerSession.images.length });
     gridCount.classList.remove("hidden");
@@ -380,8 +433,42 @@ async function pickFolder() {
 // ---------- 事件绑定 ----------
 $("btn-open").addEventListener("click", () => void pickFolder());
 backToGrid.addEventListener("click", showGrid);
-gridSort.addEventListener("click", () => gridController.toggleSort());
-gridSize.addEventListener("click", () => gridController.cycleSize());
+gridUp.addEventListener("click", () => {
+  const path = viewerSession.currentDir?.replace(/[\\/]+$/, "") ?? "";
+  const parentStart = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  let parent = path.slice(0, parentStart);
+  if (/^[A-Za-z]:$/.test(parent)) parent += "\\";
+  if (parent) void openDirectory(parent);
+});
+const closeGridMenus = () => {
+  gridSortMenu.classList.add("hidden");
+  gridSizeMenu.classList.add("hidden");
+  gridSort.ariaExpanded = "false";
+  gridSize.ariaExpanded = "false";
+};
+const toggleGridMenu = (menu: HTMLElement, button: HTMLButtonElement) => {
+  const willOpen = menu.classList.contains("hidden");
+  closeGridMenus();
+  menu.classList.toggle("hidden", !willOpen);
+  button.ariaExpanded = String(willOpen);
+};
+gridSort.addEventListener("click", () => toggleGridMenu(gridSortMenu, gridSort));
+gridSize.addEventListener("click", () => toggleGridMenu(gridSizeMenu, gridSize));
+gridSortMenu.querySelectorAll<HTMLButtonElement>("[data-sort-order]").forEach((button) => {
+  button.addEventListener("click", () => {
+    gridController.setNewestFirst(button.dataset.sortOrder === "newest");
+    closeGridMenus();
+  });
+});
+gridSizeMenu.querySelectorAll<HTMLButtonElement>("[data-size-index]").forEach((button) => {
+  button.addEventListener("click", () => {
+    gridController.setThumbSize(Number(button.dataset.sizeIndex));
+    closeGridMenus();
+  });
+});
+document.addEventListener("mousedown", (event) => {
+  if (!(event.target as HTMLElement).closest("#grid-menu")) closeGridMenus();
+});
 btnProps.addEventListener("click", toggleProps);
 btnRotate.addEventListener("click", () => singleImageController.rotate());
 btnFlipH.addEventListener("click", () => singleImageController.flipHorizontal());
@@ -433,6 +520,7 @@ createContextMenuController({
   onView: showSingle,
   onCopyImage: (entry) => void copyImageBitmap(entry),
   onCopyPath: (path) => void copyImagePath(path),
+  onShare: openImageShare,
   translate: t,
 });
 

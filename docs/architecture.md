@@ -34,9 +34,9 @@ Rust Tauri 命令与应用状态
 | --- | --- |
 | `src/api.ts` | 前端与 Rust 的唯一业务桥接层；定义共享数据类型，并封装 `invoke` 和 Tauri 事件。 |
 | `src/main.ts` | 主窗口组合入口：连接查看器控制器、设置/关于/菜单/窗口外观控制器，并编排加载流程。 |
-| `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格；`single-image-controller.ts` 管理单图变换和手势；`image-properties-controller.ts` 显示属性。 |
+| `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格；`single-image-controller.ts` 管理单图变换和手势；`image-properties-controller.ts` 显示属性；`image-share-controller.ts` 管理当前图片的局域网分享面板。 |
 | `src/screenshot.ts` | 截图页面组合入口，保留页面级 DOM、窗口事件和跨模块调度。 |
-| `src/screenshot/` | 截图领域实现：会话与历史、输入与快捷键、标注绘制、选区几何、工具栏/面板、文本输入、放大镜、导出、OCR、滚动截图及窗口生命周期。 |
+| `src/screenshot/` | 截图领域实现：会话与历史、输入与快捷键、标注绘制、选区几何、工具栏/面板、文本输入、放大镜、导出、OCR、滚动截图、局域网分享及窗口生命周期。 |
 | `src/ui/` | 与页面外观或通用交互相关的控制器，如设置（分类 + 搜索 + 缓存维护）、关于、右键菜单、窗口标题栏和应用桥接。 |
 | `src/locales/` | 各语言的静态翻译表。新增文案须同步更新所有语言表。 |
 | `src/i18n.ts` | 语言选择、插值、页面翻译应用；不承载具体翻译数据。 |
@@ -63,6 +63,7 @@ Rust Tauri 命令与应用状态
 | `src-tauri/src/image_info.rs` | 图像和 EXIF 信息读取。 |
 | `src-tauri/src/thumbnails.rs` | 缩略图生成、缓存与读取。 |
 | `src-tauri/src/screenshot.rs` | 常规屏幕捕获、截图窗口和导出相关的原生实现。 |
+| `src-tauri/src/lan_share.rs` | 临时、令牌保护的局域网图片分享服务与二维码生成。 |
 | `src-tauri/src/ocr.rs` | Windows OCR 调用与结果转换。 |
 | `src-tauri/src/scroll_capture/` | 滚动截图领域：平台交互、帧匹配、位移计算、拼接、预览、会话和 Tauri 桥接。 |
 | `src-tauri/src/mcp/` | MCP 截图服务：传输、工具协议、截图产物存储和捕获逻辑。 |
@@ -79,9 +80,11 @@ Rust Tauri 命令与应用状态
 
 ## 设置与临时缓存
 
-设置页是主窗口内的整页视图：左侧分类（应用 / 截图 / 维护）与右侧设置行由 `settings-controller.ts` 的单一 `render()` 统一渲染，搜索词同时过滤分类与设置行；每项改动立即写入配置，热键类改动需要显式「应用」。新增设置项时须同时补齐 `index.html` 的设置行、三条语言表的键与说明文案，以及 `AppConfig` 的 Rust/TypeScript 两端字段。
+设置页是主窗口内的整页视图：左侧分类（应用 / 截图 / 局域网分享 / 维护）与右侧设置行由 `settings-controller.ts` 的单一 `render()` 统一渲染，搜索词同时过滤分类与设置行；每项改动立即写入配置，热键类改动需要显式「应用」。新增设置项时须同时补齐 `index.html` 的设置行、三条语言表的键与说明文案，以及 `AppConfig` 的 Rust/TypeScript 两端字段。
 
 临时缓存只涉及应用自己的目录 `%TEMP%\CloverViewer`，用于保存长截图「在查看器中打开」产生的 PNG。`get_cache_summary` 统计该目录的文件数与体积，`clear_temp_cache(older_than_hours)` 按最后修改时间删除（`0` 表示全部），并在应用启动时按配置的 `cache_cleanup_after_hours` 自动执行一次。维护逻辑只遍历该目录的普通文件：不跟随符号链接、不触碰系统 Temp 的其他内容，被占用而删除失败的文件只记录警告。
+
+局域网分享由 `lan_share.rs` 持有单个临时 HTTP 服务状态；前端只经 `api.ts` 调用 `startLanShare`、`startImageLanShare` 和 `stopLanShare`。服务向同一局域网暴露带随机令牌的预览与下载地址，内容只保存在内存；到期、达到一次下载限制或主动停止后即失效。`AppConfig` 保存默认有效期和下载限制，截图与查看器各自的分享控制器只负责其界面状态。
 
 ## 国际化
 

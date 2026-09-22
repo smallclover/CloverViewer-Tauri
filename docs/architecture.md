@@ -103,6 +103,7 @@ Rust Tauri 命令与应用状态
 | `npm run lint` / `npm run format:check` | Biome 静态检查与格式检查。 |
 | `npm run test:unit` | 编译指定 TypeScript 单元测试并运行测试执行器。 |
 | `npm run check` | 执行格式、lint、类型、单元测试和版本一致性检查。 |
+| `npm run release:check` | 发版前预检：CHANGELOG 版本段落、三语 README 同步、介绍页与 sitemap 一致性、签名私钥忽略状态。仅发版时运行，不要接进 CI。完整流程见 [发布流程](release.md)。 |
 
 > 行尾：仓库按 LF 存储，`.gitattributes` 对 `*.ts`、`*.mjs`、`*.json` 显式声明 `eol=lf`。
 > 否则在 `core.autocrlf=true` 的 Windows 环境里这些文件会被检出成 CRLF，Biome 会判定

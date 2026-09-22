@@ -10,8 +10,8 @@
 - package.json / tauri.conf.json / Cargo.toml（[package].version）三处版本号必须一致，
   Cargo.lock 里的 cloverviewer-tauri 版本不一致只告警（cargo 构建时会自动更新）。
 - 同名标签已存在且指向其他提交时，默认直接报错退出；确需移动请显式加 -MoveExistingTag。
-- CHANGELOG.md 必须已有 `## v<版本>` 段落（发布流水线靠它抽取 Release 正文）；
-  还停留在「未发布」段落时直接报错，避免发布出兜底空正文。
+- 发布前自动运行 scripts/release-check.mjs（完整流程见 docs/release.md）：CHANGELOG 必须已有
+  `## v<版本>` 段落，三语 README、介绍页与 sitemap 必须一致；有阻塞项即退出。
 - 推送顺序为「先 main 后标签」，标签始终落在已推送到远端的提交上。
 - -PruneTags：发布成功后清理除当前版本以外的本地与远端标签（会先列清单并要求输入 yes 确认）。
   注意：清理标签不会删除 GitHub Release —— Release 只能在网页或 API 里删除。
@@ -87,19 +87,18 @@ try {
     Warn "Cargo.lock 里 cloverviewer-tauri 仍是 $($lockMatch.Groups[1].Value)，与 $pkgVersion 不一致（cargo 构建时会自行更新）。"
   }
 
-  # ---- 2.5 CHANGELOG 必须有该版本段落 ----
-  # release.yml 从 CHANGELOG.md 的 `## v<版本>` 段落抽取 Release 正文；抽不到会回退成
-  # 一句兜底文案，所以在这里就拦下来，而不是发布完才发现 Release 内容不对。
-  if (-not (Test-Path CHANGELOG.md)) { Fail 'CHANGELOG.md 不存在。' }
-  $changelog = @(Get-Content -Encoding UTF8 CHANGELOG.md)
-  $hasVersionSection = @($changelog | Where-Object { $_ -match "^##\s+v$([regex]::Escape($pkgVersion))(\s|$)" })
-  if ($hasVersionSection.Count -eq 0) {
-    if (@($changelog | Where-Object { $_ -match '^##\s*未发布' }).Count -gt 0) {
-      Fail "CHANGELOG.md 里仍是「未发布」段落，请先改写成 `## v$pkgVersion — <标题>` 再发布。"
-    }
-    Fail "CHANGELOG.md 里没有 v$pkgVersion 的段落，Release 正文会退化成兜底文案。"
+  # ---- 2.5 发版前机械预检 ----
+  # CHANGELOG 版本段落、三语 README 同步、介绍页与 sitemap 一致性等
+  # 由脚本统一校验（只读，不改文件）。这里只负责在出现阻塞项时中止发布。
+  # 完整发布流程与人工项见 docs/release.md。
+  Step '运行发版前机械预检（scripts/release-check.mjs）...'
+  if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Fail '找不到 node 命令，无法运行发版前预检（需要 Node.js 在 PATH 中）。'
   }
-  Step "CHANGELOG.md 已有 v$pkgVersion 段落"
+  node scripts/release-check.mjs
+  if ($LASTEXITCODE -ne 0) {
+    Fail '发版前预检未通过（见上方 [FAIL] 项），先修掉再发布。'
+  }
 
   # ---- 3. 工作区必须干净 ----
   $porcelain = @(git status --porcelain)

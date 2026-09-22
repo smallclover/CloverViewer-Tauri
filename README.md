@@ -212,6 +212,7 @@ Windows 10 / 11（依赖系统自带的 WebView2 运行时）。安装包是 NSI
 | [滚动截图 V2 设计](docs/scroll-capture-v2.md) | 手动滚动优先的不变量、模块划分与验证方式 |
 | [自动更新发布配置](docs/auto-update.md) | 签名密钥、GitHub Secrets 与更新验证步骤 |
 | [业务源码文件行数规范](docs/code-size-guidelines.md) | 拆分门槛、例外说明与当前基线 |
+| [发布流程](docs/release.md) | 维护者用：版本准备、预检、构建、发布、发布后验证与回滚 |
 | [仓库 SEO 与元数据清单](docs/seo.md) | 维护者用：关键词落位、Topics / Description、Pages 与发版检查 |
 | [更新日志](CHANGELOG.md) | 每个版本的用户可见变化 |
 | [在线介绍页](https://smallclover.github.io/CloverViewer-Tauri/) | 功能概览、常见问题与下载入口 |

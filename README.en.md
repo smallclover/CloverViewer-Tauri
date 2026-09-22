@@ -210,6 +210,7 @@ Configure `CloverViewer.exe --mcp` in `claude_desktop_config.json` as described 
 | [Scrolling capture V2 design](docs/scroll-capture-v2.md) | Manual-scroll-first invariants, modules and verification |
 | [Auto-update release setup](docs/auto-update.md) | Signing keys, GitHub Secrets and update verification steps |
 | [Source file size guidelines](docs/code-size-guidelines.md) | Split thresholds, exceptions and current baseline |
+| [Release process](docs/release.md) | Maintainer runbook: version prep, preflight, build, publish, post-release verification and rollback |
 | [Repository SEO and metadata checklist](docs/seo.md) | Maintainer notes: keyword placement, topics/description, Pages and release checks |
 | [Changelog](CHANGELOG.md) | User-visible changes per release |
 | [Landing page](https://smallclover.github.io/CloverViewer-Tauri/) | Feature overview, FAQ and download entry point |

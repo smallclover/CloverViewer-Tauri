@@ -210,6 +210,7 @@ Windows 10 / 11 です（システム同梱の WebView2 ランタイムを利用
 | [スクロール撮影 V2 設計](docs/scroll-capture-v2.md) | 手動スクロール優先の不変条件、モジュール構成、検証方法 |
 | [自動更新のリリース設定](docs/auto-update.md) | 署名キー、GitHub Secrets、更新の検証手順 |
 | [ソースファイル行数の規範](docs/code-size-guidelines.md) | 分割のしきい値、例外、現在のベースライン |
+| [リリース手順](docs/release.md) | メンテナー向け: バージョン準備、事前チェック、ビルド、公開、公開後の検証とロールバック |
 | [リポジトリ SEO とメタデータ一覧](docs/seo.md) | メンテナー向け: キーワードの配置、topics / description、Pages とリリース時の確認 |
 | [更新履歴](CHANGELOG.md) | リリースごとのユーザー向け変更点 |
 | [紹介ページ](https://smallclover.github.io/CloverViewer-Tauri/) | 機能概要、FAQ、ダウンロード入口 |

@@ -283,6 +283,7 @@ Invoke-RestMethod https://github.com/smallclover/CloverViewer-Tauri/releases/lat
 | Actions 构建失败 | 看 `release` 工作流日志：版本不一致 → 改清单版本并重新提交后**移动标签**（此时 Release 尚未产生，可用 `-MoveExistingTag`）；签名失败 → 检查 `TAURI_SIGNING_PRIVATE_KEY` Secret |
 | Release 正文是兜底文案 | 说明 CHANGELOG 段落没被抽到（标题格式或版本号不符）。改 CHANGELOG → 提交 → 移动标签重发（Release 已存在时先在网页补正文） |
 | `latest.json` 缺失或版本不对 | `createUpdaterArtifacts` 或签名配置问题，会导致**所有客户端更新检查失败**，优先修复并重发 |
+| 发布脚本在「推送 main」后直接退出（无 ERROR 提示） | 非交互环境下 git 的正常提示会被当成致命错误（v0.1.10 首次发布时踩到）。已改为所有 git 调用走 `Invoke-Git`；若仍复现，按顺序手动续跑（脚本此时已校验并创建好本地标签）：`git push origin main` → `git push origin refs/tags/vX.Y.Z` |
 | 标签打错（如 v0.1.91） | 若 Release 未产生：删标签重推正确标签。若已产生：删 Release 与标签，再发正确版本；**先确认没有用户装过** |
 | 发布后立刻发现严重 bug | 分两类：<br>① **已推送到客户端之前**（Release 刚创建、无人安装）：可删 Release 与标签回到上一版；<br>② **已可能被安装**：**不要**撤回，直接发 `vX.Y.Z+1` 修复 —— 自动更新只会向上，撤回无法把用户降级 |
 | 私钥丢失 | 无法挽回：现有客户端再也无法信任新包。只能让用户手动下载安装新签名密钥构建的版本（需公告） |

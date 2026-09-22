@@ -48,6 +48,31 @@ function Fail($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "警告：$msg" -ForegroundColor Yellow }
 
+# git 会把正常提示写到 stderr（例如 main 已是最新时的 "Everything up-to-date"）。
+# 当 PowerShell 的 stderr 被重定向（AI / CI / 管道场景）时，这些行会被包装成
+# ErrorRecord；配合下面的 $ErrorActionPreference = 'Stop'，脚本会在完全正常的位置
+# 中止（v0.1.10 发布时真实踩到，表现为推送 main 后直接退出、标签未推）。
+# 因此所有 git 调用统一走 Invoke-Git：stderr 也按普通文本捕获，返回退出码，
+# 由调用点显式判断成败，交互与非交互环境下行为一致。
+function Invoke-Git {
+  param([string[]]$Arguments)
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $captured = & git @Arguments 2>&1
+    $code = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previous
+  }
+  $lines = @(
+    foreach ($item in @($captured)) {
+      if ($item -is [System.Management.Automation.ErrorRecord]) { $item.ToString() }
+      else { [string]$item }
+    }
+  )
+  return [pscustomobject]@{ ExitCode = $code; Output = $lines }
+}
+
 Push-Location $RepoRoot
 try {
   # ---- 1. 标签格式 ----
@@ -101,8 +126,9 @@ try {
   }
 
   # ---- 3. 工作区必须干净 ----
-  $porcelain = @(git status --porcelain)
-  if ($LASTEXITCODE -ne 0) { Fail 'git status 执行失败，请确认当前目录是仓库根目录。' }
+  $status = Invoke-Git @('status', '--porcelain')
+  if ($status.ExitCode -ne 0) { Fail 'git status 执行失败，请确认当前目录是仓库根目录。' }
+  $porcelain = @($status.Output)
   if ($porcelain.Count -gt 0) {
     Write-Host '工作区还有未提交/未跟踪的改动，先 commit 或 stash 再发布：' -ForegroundColor Yellow
     $porcelain | ForEach-Object { Write-Host "  $_" }
@@ -111,20 +137,24 @@ try {
 
   # ---- 4. 远端可达 ----
   Step '检查远端 origin ...'
-  git ls-remote --exit-code origin HEAD > $null 2>&1
-  if ($LASTEXITCODE -ne 0) { Fail '无法访问远端 origin，请检查网络 / SSH 凭据。' }
+  $probe = Invoke-Git @('ls-remote', '--exit-code', 'origin', 'HEAD')
+  if ($probe.ExitCode -ne 0) { Fail '无法访问远端 origin，请检查网络 / SSH 凭据。' }
 
-  $headSha = (git rev-parse HEAD).Trim()
-  $headShort = (git rev-parse --short HEAD).Trim()
+  $headSha = @((Invoke-Git @('rev-parse', 'HEAD')).Output)[0]
+  if (-not $headSha) { Fail '无法读取 HEAD，请确认当前目录是 git 仓库。' }
+  $headSha = $headSha.Trim()
+  $headShort = @((Invoke-Git @('rev-parse', '--short', 'HEAD')).Output)[0].Trim()
   Step "当前 HEAD：$headShort（清单版本 $pkgVersion）"
 
   # ---- 5. 本地 / 远端同名标签的现状 ----
   $localSha = $null
-  git show-ref --verify --quiet "refs/tags/$Tag"
-  if ($LASTEXITCODE -eq 0) { $localSha = (git rev-list -n 1 $Tag).Trim() }
+  $showRef = Invoke-Git @('show-ref', '--verify', '--quiet', "refs/tags/$Tag")
+  if ($showRef.ExitCode -eq 0) {
+    $localSha = @((Invoke-Git @('rev-list', '-n', '1', $Tag)).Output)[0].Trim()
+  }
 
   $remoteSha = $null
-  foreach ($line in @(git ls-remote --tags origin "refs/tags/$Tag")) {
+  foreach ($line in (Invoke-Git @('ls-remote', '--tags', 'origin', "refs/tags/$Tag")).Output) {
     if ($line -and $line -notmatch '\^\{\}') {
       $remoteSha = ($line -split '\s+')[0]
       break
@@ -143,33 +173,36 @@ try {
     Step "本地标签 $Tag 已指向 HEAD，保持不动"
   } else {
     Step "创建本地标签 $Tag -> $headShort"
-    git tag -f $Tag HEAD
-    if ($LASTEXITCODE -ne 0) { Fail '本地打标签失败。' }
+    $tagResult = Invoke-Git @('tag', '-f', $Tag, 'HEAD')
+    if ($tagResult.ExitCode -ne 0) { Fail '本地打标签失败。' }
   }
 
   # ---- 7. 先推 main，再推标签 ----
   Step '推送 main ...'
-  git push origin main
-  if ($LASTEXITCODE -ne 0) { Fail '推送 main 失败（远端是否领先于本地？）。' }
+  $pushMain = Invoke-Git @('push', 'origin', 'main')
+  $pushMain.Output | ForEach-Object { Write-Host "    $_" }
+  if ($pushMain.ExitCode -ne 0) { Fail '推送 main 失败（远端是否领先于本地？）。' }
 
   if ($remoteSha -eq $headSha) {
     Step "远端标签 $Tag 已在当前提交上，跳过推送"
   } elseif ($remoteSha) {
     Step "强推标签 $Tag：$($remoteSha.Substring(0, 7)) -> $headShort"
-    git push --force origin "refs/tags/$Tag"
-    if ($LASTEXITCODE -ne 0) { Fail '推送标签失败。' }
+    $pushTag = Invoke-Git @('push', '--force', 'origin', "refs/tags/$Tag")
+    $pushTag.Output | ForEach-Object { Write-Host "    $_" }
+    if ($pushTag.ExitCode -ne 0) { Fail '推送标签失败。' }
   } else {
     Step "推送标签 $Tag ..."
-    git push origin "refs/tags/$Tag"
-    if ($LASTEXITCODE -ne 0) { Fail '推送标签失败。' }
+    $pushTag = Invoke-Git @('push', 'origin', "refs/tags/$Tag")
+    $pushTag.Output | ForEach-Object { Write-Host "    $_" }
+    if ($pushTag.ExitCode -ne 0) { Fail '推送标签失败。' }
   }
 
   # ---- 8. 可选：清理其余标签 ----
   if ($PruneTags) {
     Step '收集除当前版本以外的标签 ...'
-    $localTags = @(git tag -l | Where-Object { $_ -and $_ -ne $Tag })
+    $localTags = @((Invoke-Git @('tag', '-l')).Output | Where-Object { $_ -and $_ -ne $Tag })
     $remoteTags = @()
-    foreach ($line in @(git ls-remote --tags origin)) {
+    foreach ($line in (Invoke-Git @('ls-remote', '--tags', 'origin')).Output) {
       if ($line -match 'refs/tags/(.+)$') {
         $name = $Matches[1]
         if ($name -notmatch '\^\{\}$' -and $name -ne $Tag) { $remoteTags += $name }
@@ -190,11 +223,11 @@ try {
         Warn '已跳过标签清理。'
       } else {
         foreach ($t in $localTags) {
-          git tag -d $t | Out-Null
+          $null = Invoke-Git @('tag', '-d', $t)
         }
         if ($remoteTags.Count -gt 0) {
-          git push origin --delete $remoteTags
-          if ($LASTEXITCODE -ne 0) { Warn '部分远端标签删除失败，请检查上面输出。' }
+          $deleteTags = Invoke-Git (@('push', 'origin', '--delete') + $remoteTags)
+          if ($deleteTags.ExitCode -ne 0) { Warn '部分远端标签删除失败，请检查上面输出。' }
         }
         Write-Host '标签清理完成。'
       }

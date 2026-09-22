@@ -29,6 +29,8 @@ export interface AppConfig {
   experimental_auto_scroll: boolean;
   screenshot_hides_main_window: boolean;
   launch_on_startup: boolean;
+  /** 0 = 不自动清理；其它值为临时截图最长保留小时数。 */
+  cache_cleanup_after_hours: number;
   window_pos: [number, number] | null;
   window_size: [number, number] | null;
 }
@@ -36,6 +38,18 @@ export interface AppConfig {
 export const getConfig = () => invoke<AppConfig>("get_config");
 
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
+
+export interface CacheSummary {
+  files: number;
+  bytes: number;
+}
+
+export interface CacheCleanupResult extends CacheSummary {}
+
+export const getCacheSummary = () => invoke<CacheSummary>("get_cache_summary");
+
+export const clearTempCache = (olderThanHours: number) =>
+  invoke<CacheCleanupResult>("clear_temp_cache", { olderThanHours });
 
 export const setLaunchOnStartup = (enabled: boolean) =>
   invoke<void>("set_launch_on_startup", { enabled });

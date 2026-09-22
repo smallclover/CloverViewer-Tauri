@@ -14,7 +14,7 @@ export function bindWindowChrome() {
   const titlebar = element("titlebar");
   titlebar.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
-    if ((event.target as HTMLElement).closest(".titlebar-controls")) return;
+    if ((event.target as HTMLElement).closest(".titlebar-controls, #toolbar")) return;
     void windowHandle.startDragging();
   });
   document.querySelectorAll<HTMLElement>(".resize-handle").forEach((handle) => {

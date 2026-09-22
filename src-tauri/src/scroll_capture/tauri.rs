@@ -561,7 +561,7 @@ pub fn finish_scroll_capture(
                 dir.join(format!("screenshot_long_{ts}.png"))
             } else {
                 // 「在查看器中打开」用临时文件，不往桌面丢东西
-                let dir = std::env::temp_dir().join("CloverViewer");
+                let dir = crate::commands::temporary_capture_dir();
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                 let ts = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

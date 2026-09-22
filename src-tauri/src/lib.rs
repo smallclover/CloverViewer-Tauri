@@ -98,6 +98,7 @@ pub fn run() {
     let startup_pos = config.window_pos;
     let startup_size = config.window_size;
     let launch_on_startup = config.launch_on_startup;
+    let cache_cleanup_after_hours = config.cache_cleanup_after_hours;
     // --startup：由开机自启触发，启动后隐藏到托盘（不显示主窗口）
     let start_in_background = std::env::args().any(|a| a == "--startup");
 
@@ -116,6 +117,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
+            commands::get_cache_summary,
+            commands::clear_temp_cache,
             commands::set_launch_on_startup,
             commands::set_show_screenshot_hotkey,
             commands::set_scroll_capture_hotkey,
@@ -145,6 +148,18 @@ pub fn run() {
             take_startup_notices,
         ])
         .setup(move |app| {
+            // 只在启动时清一次，避免用户当前正在查看的临时长截图被后台删掉。
+            if cache_cleanup_after_hours > 0 {
+                match commands::clear_temp_cache(cache_cleanup_after_hours) {
+                    Ok(result) if result.files > 0 => tracing::info!(
+                        "已自动清理 {} 个临时截图（{} 字节）",
+                        result.files,
+                        result.bytes
+                    ),
+                    Ok(_) => {}
+                    Err(error) => tracing::warn!("自动清理临时缓存失败: {error}"),
+                }
+            }
             // 显式设置窗口/任务栏图标：Tauri 2 窗口默认不套用 default_window_icon，
             // 否则窗口内部/任务栏图标是系统默认而非真实图标。
             if let Some(win) = app.get_webview_window(MAIN_WINDOW) {

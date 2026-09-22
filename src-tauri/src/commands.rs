@@ -3,7 +3,7 @@
 use crate::config::{Config, ConfigStore};
 use crate::image_scan::{self, ImageEntry};
 use base64::Engine;
-use std::path::Path;
+use std::{fs, path::Path, time::SystemTime};
 use tauri::State;
 
 #[tauri::command]
@@ -24,6 +24,81 @@ pub fn set_config(store: State<'_, ConfigStore>, config: Config) {
     }
     store.replace(new_config.clone());
     crate::config::save_config(&new_config);
+}
+
+/// 长截图在查看器中打开时的临时文件目录。只对这个应用自己创建的目录做维护，
+/// 绝不扫描或清理系统 Temp 的其它内容。
+pub fn temporary_capture_dir() -> std::path::PathBuf {
+    std::env::temp_dir().join("CloverViewer")
+}
+
+#[derive(serde::Serialize)]
+pub struct CacheSummary {
+    pub files: u64,
+    pub bytes: u64,
+}
+
+#[derive(serde::Serialize)]
+pub struct CacheCleanupResult {
+    pub files: u64,
+    pub bytes: u64,
+}
+
+fn temporary_capture_files() -> Vec<(std::path::PathBuf, fs::Metadata)> {
+    let Ok(entries) = fs::read_dir(temporary_capture_dir()) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            // file_type 不跟随链接，避免目录内的符号链接把清理范围带到目录外。
+            if !entry.file_type().ok()?.is_file() {
+                return None;
+            }
+            let metadata = entry.metadata().ok()?;
+            Some((entry.path(), metadata))
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn get_cache_summary() -> CacheSummary {
+    temporary_capture_files().into_iter().fold(
+        CacheSummary { files: 0, bytes: 0 },
+        |mut summary, (_, metadata)| {
+            summary.files += 1;
+            summary.bytes += metadata.len();
+            summary
+        },
+    )
+}
+
+/// 删除指定时间以前创建（以最后修改时间为准）的应用临时截图。
+/// `older_than_hours = 0` 代表删除全部。
+#[tauri::command]
+pub fn clear_temp_cache(older_than_hours: u32) -> Result<CacheCleanupResult, String> {
+    let cutoff = SystemTime::now().checked_sub(std::time::Duration::from_secs(
+        u64::from(older_than_hours) * 3600,
+    ));
+    let mut result = CacheCleanupResult { files: 0, bytes: 0 };
+    for (path, metadata) in temporary_capture_files() {
+        let expired = older_than_hours == 0
+            || cutoff
+                .and_then(|time| metadata.modified().ok().map(|modified| modified < time))
+                .unwrap_or(false);
+        if expired {
+            let bytes = metadata.len();
+            match fs::remove_file(&path) {
+                Ok(()) => {
+                    result.files += 1;
+                    result.bytes += bytes;
+                }
+                // 临时文件可能刚好被查看器占用；跳过它比让整个清理失败更合理。
+                Err(error) => tracing::warn!("无法删除临时缓存 {}: {error}", path.display()),
+            }
+        }
+    }
+    Ok(result)
 }
 
 /// 设置开机自启（写/删 HKCU\...\Run 注册表）

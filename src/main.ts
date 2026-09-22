@@ -65,23 +65,26 @@ const navNext = $<HTMLButtonElement>("nav-next");
 const dropOverlay = $("drop-overlay");
 const toastEl = $("toast");
 
-// 左侧导航与原型保持同一组 Lucide 轮廓：FolderOpen / Images / Settings2 / CircleHelp。
-function setRailIcon(id: string, paths: string) {
-  $(id).innerHTML =
-    `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-}
-setRailIcon(
-  "btn-open",
-  `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="m6 14 1.5-2.9A2 2 0 0 1 9.28 10H20a2 2 0 0 1 1.94 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V7"/>`,
-);
-setRailIcon(
-  "btn-settings",
-  `<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>`,
-);
-setRailIcon(
-  "btn-about",
-  `<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/>`,
-);
+// 标题栏菜单：同一时间只展开一个，执行菜单项或按 Esc 后收起。
+const appMenus = Array.from(document.querySelectorAll<HTMLDetailsElement>("#toolbar .app-menu"));
+appMenus.forEach((menu) => {
+  menu.addEventListener("toggle", () => {
+    if (menu.open)
+      appMenus.filter((other) => other !== menu).forEach((other) => (other.open = false));
+  });
+  menu.querySelectorAll<HTMLButtonElement>("button").forEach((item) =>
+    item.addEventListener("click", () => {
+      menu.open = false;
+    }),
+  );
+});
+document.addEventListener("mousedown", (event) => {
+  if (!(event.target as HTMLElement).closest("#toolbar"))
+    appMenus.forEach((menu) => (menu.open = false));
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") appMenus.forEach((menu) => (menu.open = false));
+});
 
 const toast = createToast(toastEl);
 const singleImageController = createSingleImageController({

@@ -9,6 +9,26 @@
     <div id="app">
       <div id="titlebar">
         <span class="titlebar-title"><img class="tb-logo" src="/logo.png" alt="CloverViewer" /> CloverViewer</span>
+        <nav id="toolbar" aria-label="应用菜单">
+          <details class="app-menu">
+            <summary data-i18n="menu.file">文件</summary>
+            <div class="app-menu-popover" role="menu">
+              <button id="btn-open" type="button" role="menuitem" data-i18n-title="toolbar.openTitle"><span data-i18n="toolbar.open">打开文件夹</span><kbd>Ctrl+O</kbd></button>
+            </div>
+          </details>
+          <details class="app-menu">
+            <summary data-i18n="menu.edit">编辑</summary>
+            <div class="app-menu-popover" role="menu">
+              <button id="btn-settings" type="button" role="menuitem" data-i18n="toolbar.settings">设置</button>
+            </div>
+          </details>
+          <details class="app-menu">
+            <summary data-i18n="menu.help">帮助</summary>
+            <div class="app-menu-popover" role="menu">
+              <button id="btn-about" type="button" role="menuitem" data-i18n="menu.about">关于 CloverViewer</button>
+            </div>
+          </details>
+        </nav>
         <div class="titlebar-spacer"></div>
         <div class="titlebar-controls">
           <button id="win-min" class="titlebar-btn" data-i18n-title="win.min" title="最小化">
@@ -19,15 +39,6 @@
           </button>
         </div>
       </div>
-
-      <header id="toolbar">
-        <button id="btn-open" class="tb-btn" data-i18n-title="toolbar.openTitle">
-          <span data-i18n="toolbar.open">打开文件夹</span>
-        </button>
-        <button id="btn-about" class="tb-btn" data-i18n-title="toolbar.about"></button>
-        <button id="btn-settings" class="tb-btn" data-i18n-title="toolbar.settings"></button>
-      </header>
-
       <main id="content">
         <!-- 空态没有路径、数量或排序上下文，避免留下无内容的工具栏。 -->
         <header id="content-header" class="hidden">
@@ -108,80 +119,222 @@
       <div id="settings-overlay" class="hidden">
         <div id="settings-panel" role="dialog" aria-modal="true">
           <nav class="settings-nav" aria-label="设置分类">
-            <h2 data-i18n="settings.title">设置</h2>
-            <button class="active" type="button" data-settings-tab="general">常规</button>
-            <button type="button" data-settings-tab="view">查看</button>
-            <button type="button" data-settings-tab="capture">截图</button>
-            <button type="button" data-settings-tab="hotkeys">快捷键</button>
+            <button id="settings-back" class="settings-back" type="button">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+              <span data-i18n="settings.back">返回查看器</span>
+            </button>
+
+            <div class="settings-search">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="settings-search" type="search" spellcheck="false" autocomplete="off" placeholder="搜索设置…" data-i18n-placeholder="settings.search" />
+            </div>
+
+            <div class="settings-nav-group" data-settings-nav-group>
+              <span class="settings-nav-label" data-i18n="settings.navGroup.app">应用</span>
+              <button class="active" type="button" data-settings-tab="general">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg>
+                <span data-i18n="settings.tab.general">常规</span>
+              </button>
+              <button type="button" data-settings-tab="view">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span data-i18n="settings.tab.view">查看</span>
+              </button>
+            </div>
+
+            <div class="settings-nav-group" data-settings-nav-group>
+              <span class="settings-nav-label" data-i18n="settings.navGroup.capture">截图</span>
+              <button type="button" data-settings-tab="capture">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/></svg>
+                <span data-i18n="settings.tab.capture">截图</span>
+              </button>
+              <button type="button" data-settings-tab="hotkeys">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+                <span data-i18n="settings.tab.hotkeys">快捷键</span>
+              </button>
+            </div>
+
+            <div class="settings-nav-group" data-settings-nav-group>
+              <span class="settings-nav-label" data-i18n="settings.navGroup.maintenance">维护</span>
+              <button type="button" data-settings-tab="cache">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
+                <span data-i18n="settings.tab.cache">缓存</span>
+              </button>
+            </div>
+
+            <p id="settings-nav-empty" class="settings-nav-empty" hidden data-i18n="settings.searchEmpty">没有匹配的设置</p>
           </nav>
           <header class="settings-header">
-            <h2 data-i18n="settings.title">设置</h2>
+            <h2 id="settings-current-tab">常规</h2>
+            <p class="settings-tab-desc" id="settings-current-desc"></p>
           </header>
           <div class="settings-body">
-            <div class="setting-row" data-settings-section="general">
-              <label for="set-language" data-i18n="settings.language">语言 / Language</label>
-              <select id="set-language">
-                <option value="Zh" data-i18n="settings.language.zh">简体中文</option>
-                <option value="En" data-i18n="settings.language.en">English</option>
-                <option value="Ja" data-i18n="settings.language.ja">日本語</option>
-              </select>
-            </div>
-            <div class="setting-row" data-settings-section="general">
-              <label for="set-theme" data-i18n="settings.theme">主题</label>
-              <select id="set-theme">
-                <option value="system" data-i18n="settings.theme.system">跟随系统</option>
-                <option value="dark" data-i18n="settings.theme.dark">深色</option>
-                <option value="light" data-i18n="settings.theme.light">浅色</option>
-              </select>
-            </div>
-            <div class="setting-row" data-settings-section="view">
-              <label for="set-zoom"><span data-i18n="settings.zoom">缩放灵敏度</span> <span class="hint" id="set-zoom-val"></span></label>
-              <input id="set-zoom" type="range" min="0.3" max="3" step="0.1" />
-            </div>
-            <div class="setting-row" data-settings-section="hotkeys">
-              <label for="set-hotkey" data-i18n="settings.hotkey">截图热键</label>
-              <div class="hotkey-row">
-                <input id="set-hotkey" type="text" spellcheck="false" placeholder="Alt+S" />
-                <button id="set-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
+            <section class="settings-group" data-settings-section="general">
+              <span class="settings-group-title" data-i18n="settings.group.startup">启动与窗口</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-autostart" data-i18n="settings.autostart">开机自启</label>
+                    <span class="setting-desc" data-i18n="settings.autostart.desc">登录系统后自动启动 CloverViewer。</span>
+                  </div>
+                  <input id="set-autostart" type="checkbox" />
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-minimize" data-i18n="settings.minimize">关闭时最小化到托盘</label>
+                    <span class="setting-desc" data-i18n="settings.minimize.desc">点关闭按钮时隐藏到托盘继续常驻，而不是退出应用。</span>
+                  </div>
+                  <input id="set-minimize" type="checkbox" />
+                </div>
               </div>
-            </div>
-            <div class="setting-row" data-settings-section="hotkeys">
-              <label for="set-color-hotkey" data-i18n="settings.colorHotkey">取色热键</label>
-              <div class="hotkey-row">
-                <input id="set-color-hotkey" type="text" spellcheck="false" placeholder="Alt+C" />
-                <button id="set-color-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
+            </section>
+
+            <section class="settings-group" data-settings-section="general">
+              <span class="settings-group-title" data-i18n="settings.group.appearance">语言与外观</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-language" data-i18n="settings.language">语言 / Language</label>
+                    <span class="setting-desc" data-i18n="settings.language.desc">界面显示语言，切换后立即生效。</span>
+                  </div>
+                  <select id="set-language">
+                    <option value="Zh" data-i18n="settings.language.zh">简体中文</option>
+                    <option value="En" data-i18n="settings.language.en">English</option>
+                    <option value="Ja" data-i18n="settings.language.ja">日本語</option>
+                  </select>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-theme" data-i18n="settings.theme">主题</label>
+                    <span class="setting-desc" data-i18n="settings.theme.desc">跟随系统，或手动固定为深色 / 浅色。</span>
+                  </div>
+                  <select id="set-theme">
+                    <option value="system" data-i18n="settings.theme.system">跟随系统</option>
+                    <option value="dark" data-i18n="settings.theme.dark">深色</option>
+                    <option value="light" data-i18n="settings.theme.light">浅色</option>
+                  </select>
+                </div>
               </div>
-            </div>
-            <div class="setting-row" data-settings-section="hotkeys">
-              <label for="set-scroll-hotkey" data-i18n="settings.scrollHotkey">滚动截图热键</label>
-              <div class="hotkey-row">
-                <input id="set-scroll-hotkey" type="text" spellcheck="false" placeholder="Alt+Shift+S" />
-                <button id="set-scroll-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
+            </section>
+
+            <section class="settings-group" data-settings-section="general">
+              <span class="settings-group-title" data-i18n="settings.group.update">更新</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <span data-i18n="settings.update">软件更新</span>
+                    <span class="setting-desc" data-i18n="settings.update.desc">检查是否有可用更新并在线安装。</span>
+                  </div>
+                  <button id="check-update" class="mini-btn" type="button" data-i18n="settings.checkUpdate">检查更新</button>
+                </div>
               </div>
-            </div>
-            <div class="setting-row toggle" data-settings-section="capture">
-              <span data-i18n="settings.magnifier">截图放大镜</span>
-              <input id="set-magnifier" type="checkbox" />
-            </div>
-            <div class="setting-row toggle" data-settings-section="capture">
-              <label for="set-experimental-auto-scroll">
-                <span data-i18n="settings.experimentalAutoScroll">启用自动滚动（试验）</span>
-                <small class="hint" data-i18n="settings.experimentalAutoScrollHint">仅适用于单一正文区域；默认关闭</small>
-              </label>
-              <input id="set-experimental-auto-scroll" type="checkbox" />
-            </div>
-            <div class="setting-row toggle" data-settings-section="general">
-              <span data-i18n="settings.minimize">关闭时最小化到托盘</span>
-              <input id="set-minimize" type="checkbox" />
-            </div>
-            <div class="setting-row toggle" data-settings-section="general">
-              <span data-i18n="settings.autostart">开机自启</span>
-              <input id="set-autostart" type="checkbox" />
-            </div>
-            <div class="setting-row" data-settings-section="general">
-              <label for="check-update" data-i18n="settings.update">软件更新</label>
-              <button id="check-update" class="mini-btn" type="button" data-i18n="settings.checkUpdate">检查更新</button>
-            </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="view">
+              <span class="settings-group-title" data-i18n="settings.group.browsing">浏览</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-zoom" data-i18n="settings.zoom">缩放灵敏度</label>
+                    <span class="setting-desc" data-i18n="settings.zoom.desc">滚轮缩放每格的步进倍率，数值越大缩放越快。</span>
+                  </div>
+                  <div class="zoom-row">
+                    <input id="set-zoom" type="range" min="0.3" max="3" step="0.1" />
+                    <span class="setting-value" id="set-zoom-val"></span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="capture">
+              <span class="settings-group-title" data-i18n="settings.group.capture">截图行为</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-magnifier" data-i18n="settings.magnifier">截图放大镜</label>
+                    <span class="setting-desc" data-i18n="settings.magnifier.desc">框选时在光标旁放大像素，方便对齐边缘。</span>
+                  </div>
+                  <input id="set-magnifier" type="checkbox" />
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-experimental-auto-scroll" data-i18n="settings.experimentalAutoScroll">启用自动滚动（试验）</label>
+                    <span class="setting-desc" data-i18n="settings.experimentalAutoScrollHint">仅适用于单一正文区域；默认关闭</span>
+                  </div>
+                  <input id="set-experimental-auto-scroll" type="checkbox" />
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="hotkeys">
+              <span class="settings-group-title" data-i18n="settings.group.hotkeys">全局快捷键</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-hotkey" data-i18n="settings.hotkey">截图热键</label>
+                    <span class="setting-desc" data-i18n="settings.hotkey.desc">在任何界面按下即可开始区域截图。</span>
+                  </div>
+                  <div class="hotkey-row">
+                    <input id="set-hotkey" type="text" spellcheck="false" placeholder="Alt+S" />
+                    <button id="set-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-color-hotkey" data-i18n="settings.colorHotkey">取色热键</label>
+                    <span class="setting-desc" data-i18n="settings.colorHotkey.desc">按下后进入取色模式，颜色值直接复制到剪贴板。</span>
+                  </div>
+                  <div class="hotkey-row">
+                    <input id="set-color-hotkey" type="text" spellcheck="false" placeholder="Alt+C" />
+                    <button id="set-color-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-scroll-hotkey" data-i18n="settings.scrollHotkey">滚动截图热键</label>
+                    <span class="setting-desc" data-i18n="settings.scrollHotkey.desc">长页面滚动拼接，适合聊天记录与网页全文。</span>
+                  </div>
+                  <div class="hotkey-row">
+                    <input id="set-scroll-hotkey" type="text" spellcheck="false" placeholder="Alt+Shift+S" />
+                    <button id="set-scroll-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="cache">
+              <span class="settings-group-title" data-i18n="settings.group.cache">临时截图缓存</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-cache-retention" data-i18n="settings.cacheRetention">自动清理临时截图</label>
+                    <span class="setting-desc" data-i18n="settings.cacheRetentionHint">应用启动时清理超过保留期的文件</span>
+                  </div>
+                  <select id="set-cache-retention">
+                    <option value="0" data-i18n="settings.cacheRetention.off">不自动清理</option>
+                    <option value="1" data-i18n="settings.cacheRetention.1h">保留 1 小时</option>
+                    <option value="24" data-i18n="settings.cacheRetention.1d">保留 1 天</option>
+                    <option value="168" data-i18n="settings.cacheRetention.7d">保留 7 天</option>
+                    <option value="720" data-i18n="settings.cacheRetention.30d">保留 30 天</option>
+                  </select>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <span data-i18n="settings.cacheUsage">临时截图缓存</span>
+                    <span class="setting-desc" id="cache-summary" aria-live="polite"></span>
+                  </div>
+                  <div class="cache-action-row">
+                    <select id="set-cache-clear-age" aria-label="清理范围">
+                      <option value="1" data-i18n="settings.cacheClear.older1h">超过 1 小时</option>
+                      <option value="24" data-i18n="settings.cacheClear.older1d">超过 1 天</option>
+                      <option value="168" data-i18n="settings.cacheClear.older7d">超过 7 天</option>
+                      <option value="720" data-i18n="settings.cacheClear.older30d">超过 30 天</option>
+                      <option value="0" data-i18n="settings.cacheClear.all">全部清理</option>
+                    </select>
+                    <button id="clear-cache" class="mini-btn" type="button" data-i18n="settings.cacheClear">立即清理</button>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>

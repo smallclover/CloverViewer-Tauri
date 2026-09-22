@@ -447,7 +447,8 @@ body {
   gap: 8px;
 }
 
-/* 设置与工作区采用同一套整页两栏，不再弹出居中的旧对话框。 */
+/* 设置与工作区采用同一套整页两栏，不再弹出居中的旧对话框。
+   具体的导航、分组卡片等组件样式统一定义在下方「设置页」区块。 */
 #settings-overlay {
   inset: 38px 0 0 56px;
   display: block;
@@ -455,7 +456,7 @@ body {
 }
 #settings-panel {
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   max-width: none;
@@ -468,32 +469,11 @@ body {
 }
 .settings-nav {
   grid-row: 1 / span 2;
-  padding: 34px 24px;
   border-right: 1px solid var(--border);
   background: var(--glass);
 }
-.settings-nav h2 { margin: 0 0 22px; font-size: 22px; font-weight: 500; }
-.settings-nav button {
-  display: block;
-  width: 100%;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--fg-dim);
-  text-align: left;
-  cursor: pointer;
-}
-.settings-nav button.active { background: var(--accent-soft); color: var(--accent); }
-.settings-header { grid-column: 2; padding: 28px 36px 16px; background: transparent; backdrop-filter: none; }
-.settings-header h2 { font-size: 17px; font-weight: 500; }
-.settings-body { grid-column: 2; overflow-y: auto; padding: 0 36px 36px; }
-.setting-row { max-width: 660px; }
-
-/* 整页设置的退出是“返回查看器”，不再使用突兀的右上角关闭叉。 */
-.settings-header { justify-content: flex-start; gap: 12px; }
-.settings-close { width: auto; height: auto; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); font-size: 12px; }
-.settings-close:hover { background: var(--accent-soft); color: var(--accent); }
+.settings-header { grid-column: 2; background: transparent; backdrop-filter: none; }
+.settings-body { grid-column: 2; overflow-y: auto; }
 
 /* ---------- 拖放遮罩 / Toast ---------- */
 #drop-overlay {
@@ -572,126 +552,222 @@ body {
   background: var(--border);
 }
 
-/* ---------- 设置面板 ---------- */
+/* ---------- 设置页（左栏分类 + 右侧分组卡片） ---------- */
+/* 整页布局在文件上方统一声明，这里只补浮动层级。 */
 #settings-overlay {
   position: fixed;
-  inset: 0;
   z-index: 300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.4);
 }
 
-#settings-panel {
-  width: 420px;
-  max-width: calc(100vw - 40px);
-  max-height: calc(100vh - 40px);
+/* 左栏：返回查看器 + 搜索 + 分组导航 */
+.settings-nav {
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 22px 60px var(--shadow);
-  overflow: hidden;
+  padding: 16px 14px 20px;
 }
-
-.settings-header {
+.settings-back {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 15px 20px;
-  background: var(--glass);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-}
-.settings-header h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--fg);
-}
-.settings-close {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
+  gap: 8px;
+  align-self: flex-start;
+  margin-bottom: 16px;
+  padding: 6px 8px 6px 4px;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--fg-dim);
-  font-size: 14px;
+  font: inherit;
+  font-size: 12.5px;
   cursor: pointer;
 }
-.settings-close:hover {
-  background: var(--bg-hover);
+.settings-back .ic { width: 15px; height: 15px; }
+.settings-back:hover { background: var(--bg-hover); color: var(--fg); }
+
+.settings-search { position: relative; margin-bottom: 20px; }
+.settings-search .ic {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+.settings-search input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 9px 7px 29px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
   color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+.settings-search input::placeholder { color: var(--fg-dim); }
+.settings-search input:focus {
+  border-color: var(--accent);
+  background: var(--bg-panel);
 }
 
+.settings-nav-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 16px; }
+.settings-nav-label {
+  padding: 0 10px 7px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-nav button .ic { flex: none; width: 15px; height: 15px; opacity: 0.9; }
+.settings-nav button:hover,
+.settings-nav button.active { background: var(--accent-soft); color: var(--accent); }
+.settings-nav-empty { padding: 6px 10px; color: var(--fg-dim); font-size: 12px; }
+
+/* 搜索过滤与分类切换都靠 hidden 属性；这里必须允许压过 flex 显示值。 */
+.settings-nav button[hidden],
+.settings-nav-group[hidden],
+.settings-nav-empty[hidden],
+.settings-group[hidden],
+.setting-row[hidden] { display: none !important; }
+
+/* 右栏：大标题 + 一句话说明 */
+#settings-panel .settings-header {
+  display: block;
+  padding: 38px 44px 0;
+}
+#settings-panel .settings-header h2 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 22px;
+  font-weight: 600;
+}
+.settings-tab-desc {
+  max-width: 640px;
+  margin: 7px 0 0;
+  color: var(--fg-dim);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* 内容：分组小标题 + 圆角卡片 */
 .settings-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 26px 44px 44px;
+}
+.settings-group { display: flex; flex-direction: column; }
+.settings-group-title {
+  margin: 0 0 9px 2px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-card {
+  max-width: 720px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--shadow) 60%, transparent);
 }
 
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 28px;
+  padding: 15px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
 }
-.setting-row:last-child { border-bottom: none; }
-.setting-row > label {
-  font-size: 13px;
-  color: var(--fg);
-  /* 允许长文案换行（日语热键标签较长），避免把右侧按钮挤得变形/换行 */
-  white-space: normal;
-  line-height: 1.4;
-  min-width: 0;
+.setting-row:last-child { border-bottom: 0; }
+.settings-card .setting-row:hover { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+
+/* 左侧标题 + 说明：允许换行（日语长文案），但绝不挤压右侧控件 */
+.setting-text {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
-.setting-row > span {
-  font-size: 13px;
+.setting-text > label,
+.setting-text > span:not(.setting-desc) {
   color: var(--fg);
-  white-space: nowrap;
+  font-size: 13.5px;
+  line-height: 1.35;
 }
-.setting-row .hint {
+.setting-text > .setting-desc {
   color: var(--fg-dim);
   font-size: 12px;
-  margin-left: 6px;
+  line-height: 1.45;
 }
 
+/* 右侧控件统一成柔和的浅色胶囊 */
 .setting-row select,
 .setting-row input[type="text"] {
-  min-width: 140px;
-  padding: 5px 9px;
+  min-width: 132px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
   color: var(--fg);
-  font-size: 13px;
+  font-size: 12.5px;
   outline: none;
 }
+.setting-row select:hover,
+.setting-row input[type="text"]:hover { background: var(--bg-hover); }
 .setting-row select:focus,
-.setting-row input[type="text"]:focus {
-  border-color: var(--accent);
-}
+.setting-row input[type="text"]:focus { border-color: var(--accent); }
 
-.setting-row input[type="range"] {
-  flex: 1;
-  accent-color: var(--accent);
-}
+.zoom-row { display: flex; flex: none; align-items: center; gap: 10px; width: 240px; }
+.setting-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.setting-value { width: 42px; color: var(--fg-dim); font-size: 12.5px; text-align: right; }
 
+/* 开关：原生 checkbox 换成胶囊开关（不改任何 JS，checked 语义不变） */
 .setting-row input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 18%, transparent);
+  appearance: none;
   cursor: pointer;
+  transition: background var(--motion-fast) ease;
 }
-
-.setting-row.toggle {
-  cursor: pointer;
+.setting-row input[type="checkbox"]::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  content: "";
+  transition: transform var(--motion-fast) var(--motion-ease);
 }
+.setting-row input[type="checkbox"]:checked { background: var(--accent); }
+.setting-row input[type="checkbox"]:checked::after { transform: translateX(16px); }
+.setting-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .hotkey-row {
   display: flex;
@@ -700,9 +776,17 @@ body {
   /* 不参与收缩：输入框+按钮始终保持固定大小/位置，三种语言布局一致 */
   flex-shrink: 0;
 }
+/* 键帽质感：等宽、居中，一眼看出这里填的是组合键 */
 .hotkey-row input {
-  width: 110px;
+  width: 124px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-align: center;
 }
+.cache-action-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.cache-action-row select { min-width: 116px; }
 .mini-btn {
   padding: 5px 12px;
   border: 1px solid var(--border);
@@ -945,18 +1029,6 @@ body {
   .about-wrap { animation: none; }
 }
 
-/* 设置页覆盖旧版居中弹窗规则：保留左侧应用导航轨，内容使用完整双栏。 */
-#settings-overlay { inset: 38px 0 0 56px; display: block; background: var(--bg); }
-#settings-panel { display: grid; grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); width: 100%; max-width: none; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; background: var(--bg-panel); }
-.settings-nav { grid-row: 1 / span 2; padding: 34px 24px; border-right: 1px solid var(--border); background: var(--glass); }
-.settings-nav h2 { margin: 0 0 22px; font-size: 22px; font-weight: 500; }
-.settings-nav button { display: block; width: 100%; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-dim); text-align: left; cursor: pointer; }
-.settings-nav button.active { background: var(--accent-soft); color: var(--accent); }
-.settings-header { grid-column: 2; padding: 28px 36px 16px; background: transparent; backdrop-filter: none; }
-.settings-header h2 { font-size: 17px; font-weight: 500; }
-.settings-body { grid-column: 2; overflow-y: auto; padding: 0 36px 36px; }
-.setting-row { max-width: 660px; }
-
 /* 实际工作区结构：上下文栏属于内容区，图片胶囊属于 img-stage。 */
 #content { display: flex; flex-direction: column; padding-top: 0; }
 #content-header {
@@ -1002,13 +1074,6 @@ body {
 .img-tool:hover, .img-tool.active { background: var(--accent-soft); color: var(--accent); }
 .img-tool-sep { width: 1px; height: 22px; margin: 0 3px; background: var(--border); }
 
-/* 设置分类必须在旧弹窗样式之后覆盖。 */
-.setting-row[data-settings-section][hidden] { display: none !important; }
-#settings-panel .settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
 #toolbar #btn-settings.active { background: var(--accent-soft); color: var(--accent); }
 
 /* 左轨采用独立、统一的线框图标语言；不再继承旧顶部工具栏的按钮感。 */
@@ -1031,6 +1096,87 @@ body {
   transform: none;
 }
 #toolbar .tb-btn:active { transform: none; }
+
+/* ---------- 标题栏菜单 ----------
+   三个应用级入口收进标题栏：文件（打开）、编辑（设置）、帮助（关于）。
+   这样内容区不再为三枚按钮永久让出一整列空间。 */
+#titlebar { position: relative; z-index: 60; }
+#titlebar #toolbar {
+  position: static;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+  width: auto;
+  height: 100%;
+  padding: 0 0 0 9px;
+  background: transparent;
+  border: 0;
+}
+#toolbar .app-menu { position: relative; }
+#toolbar .app-menu > summary {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  color: var(--fg-dim);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+#toolbar .app-menu > summary::-webkit-details-marker { display: none; }
+#toolbar .app-menu[open] > summary,
+#toolbar .app-menu > summary:hover { background: var(--accent-soft); color: var(--accent); }
+#toolbar .app-menu-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 80;
+  min-width: 164px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
+  box-shadow: 0 10px 28px var(--shadow);
+  backdrop-filter: blur(16px) saturate(1.1);
+}
+#toolbar .app-menu-popover button {
+  position: static;
+  bottom: auto;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+#toolbar .app-menu-popover button:hover,
+#toolbar .app-menu-popover button.active { background: var(--accent-soft); color: var(--accent); }
+#toolbar .app-menu-popover kbd {
+  margin-left: auto;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 11px;
+}
+/* 旧左侧导航曾把这两枚按钮绝对定位到底部；菜单内必须恢复正常流，
+   否则弹出层会因没有内容高度而被压成一条细缝。 */
+#titlebar #toolbar #btn-settings,
+#titlebar #toolbar #btn-about {
+  position: static;
+  bottom: auto;
+}
+#content,
+#statusbar { margin-left: 0; }
+#settings-overlay { inset: 38px 0 0; }
 
 /* ---------- 交互动效 ----------
    统一只动画 opacity / transform（属性栏额外动画 width），避免滚动、缩放图片
@@ -1126,7 +1272,7 @@ body {
   transition: transform var(--motion-normal) var(--motion-ease), opacity var(--motion-fast) ease;
 }
 #about-overlay.is-visible #about-panel { transform: translateY(0); opacity: 1; }
-.setting-row.tab-enter { animation: workspaceIn var(--motion-fast) var(--motion-ease) both; }
+.settings-group.tab-enter { animation: workspaceIn var(--motion-fast) var(--motion-ease) both; }
 
 #drop-overlay { transform: scale(1.015); transition: opacity var(--motion-fast) ease, transform var(--motion-normal) var(--motion-ease); }
 #drop-overlay.is-visible { transform: scale(1); pointer-events: none; }
@@ -1207,23 +1353,22 @@ body {
 .update-primary-btn:hover { filter: brightness(1.08); }
 .update-primary-btn:focus-visible, .update-actions .mini-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 设置分类、行项目和图标按钮都获得一致而克制的状态反馈。 */
+/* 设置分类、行项目和图标按钮都获得一致而克制的状态反馈。
+   导航项不再做横向位移：新版是紧凑列表，位移会带动整列图标抖动。 */
 .settings-nav button,
+.settings-back,
 .setting-row,
 .img-tool,
 #grid-menu button,
 #back-to-grid,
-.about-close,
-.settings-close {
+.about-close {
   transition: background var(--motion-fast) ease, color var(--motion-fast) ease,
     transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) ease;
 }
-.settings-nav button:hover { transform: translateX(3px); }
 .settings-nav button:active,
 .img-tool:active,
 #grid-menu button:active,
 #back-to-grid:active { transform: scale(.96); }
-.setting-row:hover { background: color-mix(in srgb, var(--accent-soft) 42%, transparent); }
 .about-lic details { transition: background var(--motion-fast) ease; }
 .about-lic details[open] { background: color-mix(in srgb, var(--accent-soft) 24%, transparent); }
 

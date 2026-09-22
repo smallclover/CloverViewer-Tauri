@@ -103,6 +103,10 @@ pub struct Config {
     pub screenshot_hides_main_window: bool,
     #[serde(default = "default_launch_on_startup")]
     pub launch_on_startup: bool,
+    /// 长截图「在查看器中打开」时产生的临时 PNG 保留时长（小时）。
+    /// 0 表示关闭启动时的自动清理；旧配置缺字段时默认保留 7 天。
+    #[serde(default = "default_cache_cleanup_after_hours")]
+    pub cache_cleanup_after_hours: u32,
 
     #[serde(default)]
     pub window_pos: Option<(f32, f32)>,
@@ -122,6 +126,9 @@ fn default_magnifier_enabled() -> bool {
 fn default_launch_on_startup() -> bool {
     false
 }
+fn default_cache_cleanup_after_hours() -> u32 {
+    24 * 7
+}
 
 impl Default for Config {
     fn default() -> Self {
@@ -135,6 +142,7 @@ impl Default for Config {
             experimental_auto_scroll: false,
             screenshot_hides_main_window: false,
             launch_on_startup: default_launch_on_startup(),
+            cache_cleanup_after_hours: default_cache_cleanup_after_hours(),
             window_pos: None,
             window_size: None,
         }

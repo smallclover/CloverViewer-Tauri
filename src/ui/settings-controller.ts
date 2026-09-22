@@ -1,6 +1,9 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import {
+  clearTempCache,
+  formatSize,
+  getCacheSummary,
   setConfig,
   setLaunchOnStartup,
   setScrollCaptureHotkey,
@@ -31,6 +34,11 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
 export function createSettingsController(options: SettingsControllerOptions) {
   const overlay = element("settings-overlay");
   const button = element("btn-settings");
+  const backButton = element<HTMLButtonElement>("settings-back");
+  const search = element<HTMLInputElement>("settings-search");
+  const searchEmpty = element("settings-nav-empty");
+  const currentTabTitle = element("settings-current-tab");
+  const currentTabDesc = element("settings-current-desc");
   const language = element<HTMLSelectElement>("set-language");
   const theme = element<HTMLSelectElement>("set-theme");
   const zoom = element<HTMLInputElement>("set-zoom");
@@ -42,6 +50,10 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const experimentalAutoScroll = element<HTMLInputElement>("set-experimental-auto-scroll");
   const minimize = element<HTMLInputElement>("set-minimize");
   const autostart = element<HTMLInputElement>("set-autostart");
+  const cacheRetention = element<HTMLSelectElement>("set-cache-retention");
+  const cacheClearAge = element<HTMLSelectElement>("set-cache-clear-age");
+  const cacheSummary = element("cache-summary");
+  const clearCacheButton = element<HTMLButtonElement>("clear-cache");
   const checkUpdateButton = element<HTMLButtonElement>("check-update");
   const updateOverlay = element("update-overlay");
   const updateVersion = element("update-version");
@@ -49,18 +61,69 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const updateNow = element<HTMLButtonElement>("update-now");
   const updateLater = element<HTMLButtonElement>("update-later");
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"));
-  const sections = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
+  const navGroups = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-nav-group]"));
+  const groups = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
+  let activeTab = "general";
   let checkingForUpdate = false;
+  let clearingCache = false;
   let updateResolver: ((install: boolean) => void) | undefined;
 
+  const tabOf = (button: HTMLButtonElement) => button.dataset.settingsTab ?? "general";
+
+  /**
+   * 唯一的渲染入口：搜索词同时过滤左栏分类与右侧设置行，
+   * 过滤后当前分类若不可见就自动落到第一个可见分类。
+   */
+  const render = (animate = false) => {
+    const query = search.value.trim().toLowerCase();
+    const groupHits = new Map<HTMLElement, number>();
+    const tabHits = new Map<string, number>();
+    for (const group of groups) {
+      const tab = group.dataset.settingsSection ?? "general";
+      let hits = 0;
+      for (const row of group.querySelectorAll<HTMLElement>(".setting-row")) {
+        const hit = !query || (row.textContent ?? "").toLowerCase().includes(query);
+        row.hidden = !hit;
+        if (hit) hits += 1;
+      }
+      groupHits.set(group, hits);
+      tabHits.set(tab, (tabHits.get(tab) ?? 0) + hits);
+    }
+
+    for (const tab of tabs) {
+      tab.hidden =
+        Boolean(query) &&
+        !(tab.textContent ?? "").toLowerCase().includes(query) &&
+        (tabHits.get(tabOf(tab)) ?? 0) === 0;
+    }
+    for (const group of navGroups) {
+      group.hidden = !Array.from(
+        group.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"),
+      ).some((tab) => !tab.hidden);
+    }
+    searchEmpty.hidden = tabs.some((tab) => !tab.hidden);
+
+    const activeButton = tabs.find((tab) => tabOf(tab) === activeTab);
+    if (!activeButton || activeButton.hidden) {
+      const fallback = tabs.find((tab) => !tab.hidden);
+      if (fallback) activeTab = tabOf(fallback);
+    }
+    for (const tab of tabs) tab.classList.toggle("active", tabOf(tab) === activeTab);
+
+    for (const group of groups) {
+      const visible =
+        group.dataset.settingsSection === activeTab && (groupHits.get(group) ?? 0) > 0;
+      group.hidden = !visible;
+      if (visible && animate) playEnterAnimation(group, "tab-enter");
+    }
+
+    currentTabTitle.textContent = options.translate(`settings.tab.${activeTab}`);
+    currentTabDesc.textContent = options.translate(`settings.tab.${activeTab}.desc`);
+  };
+
   const selectTab = (tab: string) => {
-    tabs.forEach((tabButton) => {
-      tabButton.classList.toggle("active", tabButton.dataset.settingsTab === tab);
-    });
-    sections.forEach((section) => {
-      section.hidden = section.dataset.settingsSection !== tab;
-      if (!section.hidden) playEnterAnimation(section, "tab-enter");
-    });
+    activeTab = tab;
+    render(true);
   };
 
   const save = (partial: Partial<AppConfig>, silent = false) => {
@@ -82,6 +145,17 @@ export function createSettingsController(options: SettingsControllerOptions) {
     button.classList.remove("active");
     button.setAttribute("aria-pressed", "false");
   };
+  const refreshCacheSummary = async () => {
+    try {
+      const summary = await getCacheSummary();
+      cacheSummary.textContent = options.translate("settings.cacheUsageValue", {
+        files: summary.files,
+        size: formatSize(summary.bytes),
+      });
+    } catch {
+      cacheSummary.textContent = options.translate("settings.cacheUsageUnavailable");
+    }
+  };
   const open = () => {
     const config = options.getConfig();
     if (!config) return;
@@ -96,6 +170,10 @@ export function createSettingsController(options: SettingsControllerOptions) {
     experimentalAutoScroll.checked = config.experimental_auto_scroll;
     minimize.checked = config.minimize_on_close;
     autostart.checked = config.launch_on_startup;
+    cacheRetention.value = String(config.cache_cleanup_after_hours ?? 168);
+    void refreshCacheSummary();
+    // 每次打开都回到干净状态：无搜索词、停在「常规」。
+    search.value = "";
     selectTab("general");
     button.classList.add("active");
     button.setAttribute("aria-pressed", "true");
@@ -165,7 +243,16 @@ export function createSettingsController(options: SettingsControllerOptions) {
     else open();
   });
   tabs.forEach((tab) => {
-    tab.addEventListener("click", () => selectTab(tab.dataset.settingsTab ?? "general"));
+    tab.addEventListener("click", () => selectTab(tabOf(tab)));
+  });
+  backButton.addEventListener("click", () => close());
+  search.addEventListener("input", () => render());
+  search.addEventListener("keydown", (event) => {
+    // Esc 先清空搜索词，不要顺手把整个设置页关掉。
+    if (event.key !== "Escape" || !search.value) return;
+    event.stopPropagation();
+    search.value = "";
+    render();
   });
   overlay.addEventListener("mousedown", (event) => {
     if (event.target === overlay) close();
@@ -175,6 +262,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
     save({ language: next });
     options.setLanguage(next);
     options.applyI18n();
+    // 文案换了语言，分组标题与描述都要跟着重算。
+    render();
     if (!updateOverlay.classList.contains("hidden") && !updateNotes.dataset.hasNotes) {
       updateNotes.textContent = options.translate("update.noReleaseNotes");
     }
@@ -206,6 +295,32 @@ export function createSettingsController(options: SettingsControllerOptions) {
       .catch((error) => {
         autostart.checked = !autostart.checked;
         options.toast(options.translate("toast.autostartFailed", { msg: String(error) }), "error");
+      });
+  });
+  cacheRetention.addEventListener("change", () =>
+    save({ cache_cleanup_after_hours: Number(cacheRetention.value) }),
+  );
+  clearCacheButton.addEventListener("click", () => {
+    if (clearingCache) return;
+    clearingCache = true;
+    clearCacheButton.disabled = true;
+    void clearTempCache(Number(cacheClearAge.value))
+      .then((result) => {
+        options.toast(
+          options.translate("toast.cacheCleared", {
+            files: result.files,
+            size: formatSize(result.bytes),
+          }),
+          "success",
+        );
+        void refreshCacheSummary();
+      })
+      .catch((error) =>
+        options.toast(options.translate("toast.cacheClearFailed", { msg: String(error) }), "error"),
+      )
+      .finally(() => {
+        clearingCache = false;
+        clearCacheButton.disabled = false;
       });
   });
   checkUpdateButton.addEventListener("click", () => void checkForUpdate());

@@ -34,7 +34,9 @@ CloverViewer-Tauri：Windows 图片查看器 + 截图工具，Tauri 2（Rust 后
 npm run release:check     # 发版前机械预检（CHANGELOG 段落、三语同步、站点一致性、密钥忽略）
 ```
 
-流程中的三个停点（版本确认 / 推标签前 / 收尾人工项）必须停下来问人。
+流程只保留**一个停点**：推送标签前必须停下来问人一次。其余按 `docs/release.md` 的 B 档自动完成；
+若环境里有 `GITHUB_SETUP_TOKEN`（限本仓库的细粒度 token），仓库 Description / Website / Topics /
+Pages Source 也用 API 一并做完 —— 该 token 只放环境变量，绝不写入任何文件。
 
 ## 常用命令
 

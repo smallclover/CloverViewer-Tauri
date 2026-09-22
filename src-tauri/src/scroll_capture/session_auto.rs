@@ -107,16 +107,7 @@ pub fn run_session_ext(
 
     let first = capture_settled(&cap, options, &gate)?;
     let mut engine = CaptureEngine::new(first);
-    emit(
-        on_progress,
-        "capturing",
-        &cap,
-        &engine,
-        None,
-        None,
-        None,
-        false,
-    );
+    emit(on_progress, "capturing", &cap, &engine, None, None, None);
 
     let mut method = options.method;
     let mut candidate_index = 0usize;
@@ -196,7 +187,6 @@ pub fn run_session_ext(
                     Some(selected),
                     candidate_preview.clone(),
                     message,
-                    false,
                 );
             }
             EngineEvent::NoMotion => {
@@ -218,7 +208,6 @@ pub fn run_session_ext(
                         Some(selected),
                         candidate_preview.clone(),
                         Some(format!("{} 无响应，正在尝试其他滚动方式…", selected.name())),
-                        false,
                     );
                     continue;
                 }
@@ -245,7 +234,6 @@ pub fn run_session_ext(
                     Some(selected),
                     candidate_preview.clone(),
                     Some("等待内容继续滚动…".into()),
-                    false,
                 );
             }
             EngineEvent::Reverse => {
@@ -277,7 +265,6 @@ pub fn run_session_ext(
                     Some(selected),
                     candidate_preview.clone(),
                     Some(format!("本帧未采用：{reason}")),
-                    true,
                 );
             }
         }
@@ -309,6 +296,9 @@ fn capture_settled(
     result
 }
 
+/// 自动滚动的进度上报：`stage` 直接决定 HUD 标签，低置信度时由调用方传
+/// `"low_confidence"`，因此这里不再额外接收 `low` 标志（手动模式需要它，
+/// 因为「等待匹配」是可恢复状态，必须保留原标签）。
 fn emit(
     sink: &mut dyn FnMut(ScrollCaptureProgress),
     stage: &str,
@@ -317,10 +307,8 @@ fn emit(
     method: Option<ScrollMethod>,
     candidate_preview: Option<String>,
     message: Option<String>,
-    low: bool,
 ) {
-    let mut progress = ScrollCaptureProgress::bare(if low { "low_confidence" } else { stage }, cap)
-        .with_capture(cap);
+    let mut progress = ScrollCaptureProgress::bare(stage, cap).with_capture(cap);
     progress.frames = engine.frames();
     progress.width = engine.width();
     progress.height = engine.height();

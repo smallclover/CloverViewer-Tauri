@@ -13,7 +13,7 @@ pub(super) fn frame_data_url(frame: &RgbaImage) -> Option<String> {
     let proportional_height = ((frame.height() as u64 * width as u64)
         .saturating_add(frame.width().max(1) as u64 - 1)
         / frame.width().max(1) as u64) as u32;
-    let height = proportional_height.min(INSPECTION_MAX_HEIGHT).max(1);
+    let height = proportional_height.clamp(1, INSPECTION_MAX_HEIGHT);
     let preview =
         image::imageops::resize(frame, width, height, image::imageops::FilterType::Lanczos3);
     let png = encode_png(&preview, true).ok()?;

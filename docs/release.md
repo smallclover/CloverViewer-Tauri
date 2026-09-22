@@ -17,16 +17,49 @@
 
 | 谁 | 能做什么 | 不能做什么 |
 | --- | --- | --- |
-| AI | 改版本与文案、跑预检与构建、commit、push `main`、打并推送标签、发布后验证、汇报 | 不得自行决定版本号与发布时机；不得跳过人工项；不得使用 `-MoveExistingTag`；不得删除 Release 或标签 |
-| 人 | 确认版本号与主题、GitHub Settings 类设置、Search Console、最终决定撤回或热修 | —— |
+| AI | 改版本与文案、跑预检与构建、commit、push `main`、打并推送标签、发布后验证、汇报；**若提供了限权 token，还用 GitHub API 完成仓库设置** | 不得自行决定版本号与发布时机；不得使用 `-MoveExistingTag`；不得删除 Release 或标签；不得把 token 写进任何文件 |
+| 人 | 提供版本号与主题、推标签前批准一次、上传 Social preview 图片（无 API） | —— |
 
-**流程中的三个必停点**（AI 必须停下、向人输出待确认内容、得到答复再继续）：
+**本仓库采用「B 档：只留一道闸」**：除「推送标签前的一次确认」外全部由 AI 自动完成。
 
-| 停点 | 时机 | 为什么必须停 |
+| 停点 | 时机 | 为什么要停 |
 | --- | --- | --- |
-| **S1** | 阶段 A 结束、动手改版本号之前/之后立即 | 版本号一旦落成标签就有 Release，选错要付出撤回成本 |
-| **S2** | 阶段 E 执行 `publish-release.ps1` **之前** | 这是不可逆动作：推送标签即触发构建与公开 Release |
-| **S3** | 阶段 G 结束后 | 人工项（Pages / About / Social preview / GSC）只能人做，AI 要交清单而不是假装做完 |
+| **S2（唯一必停）** | 阶段 E 执行 `publish-release.ps1` **之前** | 这是不可逆动作：推送标签即触发构建与公开 Release |
+| ~~S1~~ | —— | 已取消：人给出「发布 vX.Y.Z」即视为版本与主题授权，AI 改完直接继续 |
+| ~~S3~~ | 阶段 G 之后 | 不再是停点：有 token 时由 AI 用 API 完成仓库设置；仅 Social preview 图片需要人 |
+
+### 可选：用限权 token 让 AI 完成仓库设置
+
+Description / Website / Topics / Pages Source 都能通过 GitHub API 完成，但需要一个**只授这一个仓库**的
+细粒度 token（`Administration: write` + `Pages: write` + `Contents: read`）。把它放在运行 AI 的环境变量
+`GITHUB_SETUP_TOKEN` 里，**不要写进任何文件**（用完可随时撤销）：
+
+```powershell
+$h = @{ Authorization = "Bearer $env:GITHUB_SETUP_TOKEN"; Accept = "application/vnd.github+json" }
+$repo = "https://api.github.com/repos/smallclover/CloverViewer-Tauri"
+
+# 1. Description + Website（文案见 docs/seo.md 1.1）
+Invoke-RestMethod -Method Patch -Uri $repo -Headers $h -Body (@{
+  description = "免费开源的 Windows 图片查看器 + 截图工具：多屏截图标注、滚动长截图、OCR 取字、内置 MCP Server（Tauri 2）"
+  homepage    = "https://smallclover.github.io/CloverViewer-Tauri/"
+} | ConvertTo-Json)
+
+# 2. Topics（20 个，见 docs/seo.md 1.3）
+Invoke-RestMethod -Method Put -Uri "$repo/topics" `
+  -Headers ($h + @{ Accept = "application/vnd.github.mercy-preview+json" }) `
+  -Body (@{ names = @("image-viewer","screenshot","screenshot-tool","scrolling-screenshot",
+    "long-screenshot","screen-capture","annotation","ocr","windows","desktop-app","tauri",
+    "tauri2","rust","typescript","mcp","model-context-protocol","claude-desktop",
+    "portable-app","mit-license","image-processing") } | ConvertTo-Json)
+
+# 3. Pages Source = GitHub Actions（已配置时返回 409，可忽略）
+Invoke-RestMethod -Method Post -Uri "$repo/pages" -Headers $h -Body (@{ build_type = "workflow" } | ConvertTo-Json)
+```
+
+没有 token 时不要假装做过：按阶段 G 的清单交给人。
+
+**Social preview 图片没有 API**，只能网页上传。影响有限：`og:image` 已经覆盖微信 / X / Slack / Discord
+的抓取，GitHub 自带的只影响 GitHub 站内链接预览。
 
 ---
 
@@ -74,7 +107,8 @@
    npm run release:check
    ```
 
-**→ 停点 S1**：向人汇报「准备发布 vX.Y.Z，主题：____，用户可见变化摘要：____」，等确认。
+> B 档下这里**不停**：人给出「发布 vX.Y.Z」即视为版本与主题授权。AI 只需在最终汇报里写明本次的
+> 版本号、主题与用户可见变化摘要，供人回溯。
 
 ---
 
@@ -110,7 +144,7 @@ src-tauri/target/release/cloverviewer-tauri.exe
 src-tauri/target/release/bundle/nsis/CloverViewer_x.y.z_x64-setup.exe
 ```
 
-最小冒烟（用 `cloverviewer-tauri.exe` 或刚装的安装包各走一遍）：
+最小冒烟（建议做，但不阻塞发布；明确跳过时必须在汇报里写明「已跳过」）：
 
 - [ ] 启动主窗口，标题栏三个菜单（文件 / 编辑 / 帮助）能展开、点空白与 Esc 能收起
 - [ ] 「编辑 → 设置」能搜索设置项、切分类，改语言三语即时生效
@@ -118,6 +152,12 @@ src-tauri/target/release/bundle/nsis/CloverViewer_x.y.z_x64-setup.exe
 - [ ] `Alt+S` 截图 → 标注 → Enter 复制
 - [ ] `Alt+Shift+S` 长截图框选 → 手动滚动 → 生成结果并能「在查看器中打开」
 - [ ] 关于页版本号与本次版本一致
+
+产物核对（替代冒烟的机械部分，必做）：
+
+- [ ] `bundle/nsis/CloverViewer_x.y.z_x64-setup.exe` 存在且体积量级正常（约 3.8 MB）
+- [ ] 同名 `.sig` 存在（更新签名链路可用；本地签名需 `TAURI_SIGNING_PRIVATE_KEY` 指向私钥）
+- [ ] `target/release/cloverviewer-tauri.exe` 已生成
 
 > 网络受限时 NSIS 工具链首次下载可能卡住，处理办法见 README 的镜像说明。
 
@@ -192,13 +232,15 @@ Invoke-RestMethod https://github.com/smallclover/CloverViewer-Tauri/releases/lat
 2. 提交收尾改动（如站点 `lastmod`、发布公告用到的文档修正）。
 3. 不要往 CHANGELOG 里加任何「下一版占位」：下一个版本的段落等真正发布时再写。
 
-**→ 停点 S3**：输出下面这份清单交给人，等其逐条确认。
+**→ 不是停点**：有 `GITHUB_SETUP_TOKEN` 时直接用第 0 节的 API 完成前 3 项；没有则把下面清单
+交给人，并明确说明「未自动完成」。
 
 ```text
-需要人工完成（AI 无法代做，详细步骤见 docs/seo.md）：
+仓库设置（有 GITHUB_SETUP_TOKEN 时由 AI 用 API 完成，否则人工照做）：
 [ ] Settings → Pages → Source = GitHub Actions
 [ ] 仓库首页 About → 齿轮：Description 填 ____；Website 填 https://smallclover.github.io/CloverViewer-Tauri/
 [ ] 同一弹窗 Topics：20 个（文案见 docs/seo.md 1.3）
+以下两项只能人工（无 API / 可选）：
 [ ] Settings → General → Social preview：上传 site/og-image.png
 [ ] Search Console：Sitemaps 提交 sitemap.xml；网址检查 → 请求编入索引（可选）
 ```
@@ -209,23 +251,24 @@ Invoke-RestMethod https://github.com/smallclover/CloverViewer-Tauri/releases/lat
 已发布：vX.Y.Z（主题）
 标签：vX.Y.Z，提交：<short sha>
 验证：F1–F7 结果（逐条）
+冒烟：完成 / 已跳过（谁决定的）
 跳过/异常：____
-仍需人做：S3 清单中的 ____
+仍需人做：Social preview 上传、Search Console（可选）
 ```
 
 ---
 
-## 9. 人工专属清单（AI 到此必须停下）
+## 9. 仓库设置清单
 
-这些是 GitHub/Google 侧设置，仓库文件无法表达；完整文案与理由见 `docs/seo.md`。
+这些是 GitHub / Google 侧设置，仓库文件无法表达；文案与理由见 `docs/seo.md`。
+**有 `GITHUB_SETUP_TOKEN` 时前 3 项由 AI 用 API 完成**（见第 0 节），否则交给人。
 
-| # | 位置 | 要做的动作 | 为什么 |
+| # | 位置 | 要做的动作 | 谁能做 |
 | --- | --- | --- | --- |
-| 1 | Settings → Pages | Source 选 **GitHub Actions** | 不开则介绍页、canonical、sitemap 全是死链 |
-| 2 | 仓库首页 About → 齿轮 | Description / Website / Topics 按 `docs/seo.md` 1.1–1.3 填 | 决定站内搜索、推荐与结果摘要 |
-| 3 | Settings → General → Social preview | 上传 `site/og-image.png` | 决定分享链接的缩略图与点击率 |
-| 4 | Search Console / Bing | 验证站点、提交 `sitemap.xml`、请求编入索引 | 从「等几周」变成「几天」，并可看关键词数据 |
-| 5 | 发布前最终确认 | 版本号与 CHANGELOG 主题是否符合预期 | 标签一经推送即公开，撤回成本高 |
+| 1 | Settings → Pages | Source 选 **GitHub Actions** | AI（API） |
+| 2 | 仓库首页 About → 齿轮 | Description / Website / Topics 按 `docs/seo.md` 1.1–1.3 填 | AI（API） |
+| 3 | Settings → General → Social preview | 上传 `site/og-image.png` | **仅人工**（GitHub 无此 API） |
+| 4 | Search Console / Bing | 验证站点、提交 `sitemap.xml`、请求编入索引 | 人工（可选） |
 
 第 1、3 项只需做一次；第 2 项在定位或关键词变化时更新；第 4 项每次发版可顺手重抓一次。
 
@@ -254,11 +297,12 @@ Invoke-RestMethod https://github.com/smallclover/CloverViewer-Tauri/releases/lat
 - [ ] `package.json` 版本 = 标签 = CHANGELOG 段落版本
 - [ ] `npm run release:check` 阻塞项为 0
 - [ ] `npm run check` 与三条 cargo 门禁全绿
-- [ ] 构建产物与冒烟清单通过
-- [ ] AI 在 S1 / S2 / S3 三个停点都向人确认过
+- [ ] 构建产物核对通过（安装包 + `.sig` + 可执行文件）
+- [ ] 冒烟已完成，或已在汇报中显式写明「已跳过」（谁决定的）
+- [ ] AI 在**唯一停点 S2**（推标签前）向人确认过
 - [ ] F1–F7 逐条验证并汇报
 - [ ] CHANGELOG 只有已发布版本段落，没有「下一版占位」
-- [ ] S3 人工项清单已交付给人
+- [ ] 仓库设置清单已由 API 完成，或已交付给人（含仅人工的 Social preview）
 
 ---
 
@@ -283,14 +327,15 @@ git add -A; git commit -m "release: X.Y.Z"; git push origin main
 # 四、发布（不可逆，先向人确认）
 ./publish-release.ps1 -Tag vX.Y.Z
 
-# 五、验证（见第 7 节 F1–F7），然后确认站点 lastmod 并交付 S3 人工清单
+# 五、验证（见第 7 节 F1–F7），然后确认站点 lastmod 并处理仓库设置清单（第 9 节）
 ```
 
 交给 AI 的提示词模板：
 
 ```text
 请按仓库的 docs/release.md 发布 vX.Y.Z（主题：____）。
-要求：严格执行阶段 A–G，三个停点（S1/S2/S3）必须停下来问我；
+要求：严格执行阶段 A–G；只在推标签前（S2）停下来问我一次，其余自动完成；
 不要使用 -MoveExistingTag，不要删除 Release 或标签；
-结束时按文档里的汇报模板给我结果，并附上 S3 的人工待办清单。
+若环境里有 GITHUB_SETUP_TOKEN，用 API 完成 Description / Website / Topics / Pages Source；
+结束时按文档里的汇报模板给我结果，并列出仍需人工的项（Social preview、Search Console）。
 ```

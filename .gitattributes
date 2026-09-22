@@ -4,6 +4,12 @@
 # Ensure shell scripts always use LF
 *.sh text eol=lf
 
+# Biome 与 CI 都按 LF 校验这些文件；显式声明 eol，避免 Windows 上
+# core.autocrlf=true 时被检出成 CRLF，导致 npm run format:check 在本地失败。
+*.ts text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+
 # Binary assets
 *.png binary
 *.ico binary

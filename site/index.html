@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CloverViewer —— 免费开源的 Windows 图片查看器与长截图工具（Tauri 2）</title>
+    <meta
+      name="description"
+      content="CloverViewer 是一款免费开源的 Windows 图片查看器与截图工具：网格/单图双视图、多屏截图与标注、滚动长截图、Windows 原生 OCR 取字，并内置 MCP Server 让 AI 客户端直接截图看屏幕。基于 Tauri 2，MIT 协议。"
+    />
+    <meta name="author" content="smallclover" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <link rel="canonical" href="https://smallclover.github.io/CloverViewer-Tauri/" />
+    <meta name="theme-color" content="#0c1a11" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CloverViewer" />
+    <meta property="og:url" content="https://smallclover.github.io/CloverViewer-Tauri/" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta
+      property="og:title"
+      content="CloverViewer —— 免费开源的 Windows 图片查看器与长截图工具"
+    />
+    <meta
+      property="og:description"
+      content="图片浏览、多屏截图标注、滚动长截图、OCR 取字与内置 MCP Server，全部装进一个轻量的 Windows 应用。基于 Tauri 2，MIT 开源。"
+    />
+    <meta
+      property="og:image"
+      content="https://smallclover.github.io/CloverViewer-Tauri/og-image.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="CloverViewer：免费开源的 Windows 图片查看器与截图工具"
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="CloverViewer —— 免费开源的 Windows 图片查看器与长截图工具"
+    />
+    <meta
+      name="twitter:description"
+      content="图片浏览、多屏截图标注、滚动长截图、OCR 取字与内置 MCP Server，基于 Tauri 2，MIT 开源。"
+    />
+    <meta
+      name="twitter:image"
+      content="https://smallclover.github.io/CloverViewer-Tauri/og-image.png"
+    />
+
+    <link rel="icon" href="logo.png" type="image/png" />
+    <link rel="apple-touch-icon" href="logo.png" />
+    <link rel="stylesheet" href="styles.css" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "CloverViewer",
+        "alternateName": "CloverViewer-Tauri",
+        "applicationCategory": "MultimediaApplication",
+        "applicationSubCategory": "Image viewer and screenshot tool",
+        "operatingSystem": "Windows 10, Windows 11",
+        "softwareRequirements": "Windows 10/11 with the WebView2 runtime",
+        "downloadUrl": "https://github.com/smallclover/CloverViewer-Tauri/releases/latest",
+        "installUrl": "https://github.com/smallclover/CloverViewer-Tauri/releases/latest",
+        "license": "https://opensource.org/license/mit",
+        "isAccessibleForFree": true,
+        "inLanguage": ["zh-CN", "en", "ja"],
+        "description": "免费开源的 Windows 图片查看器与截图工具：网格/单图双视图、多屏截图与标注、滚动长截图、Windows 原生 OCR 取字，并内置 MCP Server 让 AI 客户端直接截图看屏幕。",
+        "featureList": [
+          "网格视图与单图视图，大目录虚拟滚动与缩略图缓存",
+          "多显示器跨屏截图与矩形、椭圆、箭头、画笔、马赛克、文字标注",
+          "滚动长截图：逐帧按重叠像素配准拼接成长图",
+          "基于 Windows 原生 UWP OCR 的中英日文字识别",
+          "内置 MCP Server（stdio 与 streamable HTTP），供 AI 客户端调用截图与 OCR",
+          "三语言界面（简体中文 / English / 日本語）、明暗主题、全局热键与系统托盘"
+        ],
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+        "sameAs": ["https://github.com/smallclover/CloverViewer-Tauri"]
+      }
+    </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "CloverViewer 是免费的吗？可以商用吗？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "免费且开源，协议为 MIT。个人使用、公司内部使用和二次开发都可以，只需保留版权声明。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "支持哪些 Windows 版本？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Windows 10 / 11，依赖系统自带的 WebView2 运行时。安装包是 NSIS 的 per-user 安装，不需要管理员权限，也可以直接使用便携版 CloverViewer.exe。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "CloverViewer 会把我浏览的图片或截图上传吗？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "不会。图片浏览、截图、标注、长截图拼接和 OCR 全部在本机完成，应用没有账号体系，也不收集使用数据。唯一的联网行为是你在「设置 → 软件更新」中点「检查更新」时访问 GitHub Releases，应用不会在后台自动联网。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "长截图（滚动截图）支持所有应用吗？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "不保证 100% 成功。默认是手动滚动优先：你按自己的节奏滚动，程序逐帧配准并只把验证通过的新内容追加进长图；自动注入滚动是设置里的试验功能，默认关闭。失败或中途停止时已捕获的部分会保留。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "CloverViewer 和其它截图工具有什么不同？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "它把图片查看器和截图标注合在同一个免费开源应用里，并且内置 MCP Server，让 Claude Desktop 等 AI 客户端可以直接调用截图与 OCR。长截图输出中的每个像素都来自某一帧真实屏幕画面，而不是推算出来的。"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "怎么让 Claude Desktop 用上 CloverViewer 的截图能力？",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "在 claude_desktop_config.json 中把 command 指向 CloverViewer.exe 并传入 --mcp 参数，即可调用 list_monitors、take_screenshot、get_screenshot、ocr_screenshot 与 delete_screenshot。"
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">跳到主要内容</a>
+
+    <header class="topbar">
+      <a class="brand" href="./">
+        <img src="logo.png" width="32" height="32" alt="CloverViewer 应用图标" />
+        <span>CloverViewer</span>
+      </a>
+      <nav aria-label="页面导航">
+        <a href="#features">功能</a>
+        <a href="#scroll-capture">长截图</a>
+        <a href="#shortcuts">快捷键</a>
+        <a href="#faq">常见问题</a>
+        <a href="#docs">文档</a>
+        <a class="ghost" href="https://github.com/smallclover/CloverViewer-Tauri">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <img
+          class="hero-logo"
+          src="logo.png"
+          width="112"
+          height="112"
+          alt="CloverViewer —— 开源 Windows 图片查看器与长截图工具的应用图标"
+        />
+        <h1>免费开源的 Windows 图片查看器与长截图工具</h1>
+        <p class="lead">
+          CloverViewer 把<strong>图片浏览</strong>、<strong>多屏截图与标注</strong>、<strong>滚动长截图</strong>、<strong>Windows
+          原生 OCR 取字</strong>，以及一个面向 AI 的 <strong>MCP Server</strong> 装进同一个轻量应用。基于
+          <a href="https://tauri.app">Tauri 2</a>（Rust 后端 + Vite/TypeScript 前端）重写，MIT
+          协议开源，无广告、无捆绑、无需注册。
+        </p>
+        <p class="cta">
+          <a
+            class="btn primary"
+            href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest"
+            >下载最新版</a
+          >
+          <a class="btn" href="https://github.com/smallclover/CloverViewer-Tauri">查看源码</a>
+          <a class="btn" href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/CHANGELOG.md"
+            >更新日志</a
+          >
+        </p>
+        <ul class="chips">
+          <li>Windows 10 / 11</li>
+          <li>NSIS 安装包 · 免管理员</li>
+          <li>便携版单文件</li>
+          <li>简体中文 / English / 日本語</li>
+          <li>MIT License</li>
+        </ul>
+      </section>
+
+      <section id="features">
+        <h2>功能一览</h2>
+        <div class="cards">
+          <article class="card">
+            <h3>🖼️ 图片查看器</h3>
+            <p>
+              网格视图与单图视图随时切换；打开文件夹即加载全部图片，大目录使用虚拟滚动与缩略图
+              LRU 缓存，上千张图也不卡。滚轮缩放、拖拽平移、旋转翻转、←/→ 快速切换，并显示尺寸、
+              体积、修改时间与 EXIF（相机、ISO、光圈、快门、焦距、镜头）。
+            </p>
+          </article>
+          <article class="card">
+            <h3>📸 截图与标注</h3>
+            <p>
+              跨屏拼接虚拟桌面截图，支持活动窗口吸附与区域框选；矩形、椭圆、箭头、画笔、马赛克、
+              文字六种标注，颜色与线宽随手切换，Ctrl+Z / Ctrl+Y 撤销重做，Enter 直接复制到剪贴板或保存到桌面。
+            </p>
+          </article>
+          <article class="card">
+            <h3>🧵 滚动长截图</h3>
+            <p>
+              框选一块可滚动区域后自己滚动，程序逐帧按重叠像素配准，只把验证通过的新内容拼进长图，
+              并自动跳过吸顶标题栏、吸底工具栏与固定侧栏。聊天记录、网页全文、长列表、代码 diff
+              都能变成一张图。
+            </p>
+          </article>
+          <article class="card">
+            <h3>🔍 OCR 文字识别</h3>
+            <p>
+              基于 Windows 原生 UWP OCR 引擎（<code>Windows.Media.Ocr</code>）识别中、英、日文字，
+              带灰度 + 2× 最近邻放大预处理，截图取字不需要把画面发给任何在线服务。
+            </p>
+          </article>
+          <article class="card">
+            <h3>🤖 面向 AI 的 MCP Server</h3>
+            <p>
+              内置 <a href="https://modelcontextprotocol.io">Model Context Protocol</a> 服务，
+              Claude Desktop 等客户端可调用 <code>list_monitors</code>、<code>take_screenshot</code>、
+              <code>get_screenshot</code>、<code>ocr_screenshot</code>、<code>delete_screenshot</code>，
+              让 AI 直接看到报错窗口、设置页或终端输出。
+            </p>
+          </article>
+          <article class="card">
+            <h3>⚙️ 系统集成</h3>
+            <p>
+              全局热键（默认 Alt+S 截图、Alt+Shift+S 长截图）、系统托盘常驻、开机自启、单实例运行、
+              明暗主题跟随系统，以及与旧版 egui 版共用的配置文件。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="scroll-capture">
+        <h2>滚动长截图是怎么做的</h2>
+        <p>
+          CloverViewer 的长截图默认<strong>由你控制滚动位置</strong>：程序只负责稳定取帧、配准、拼接和反馈。
+          每个被接受的帧都必须有足够的纹理证据和像素支持，未匹配、反向或重复的帧不会改写拼接基准；
+          结束采样同样要通过同一套门槛，所以末帧不会被重复追加。
+        </p>
+        <ul class="ticks">
+          <li><strong>输出可追溯</strong>：长图中的每个像素都来自某一帧真实屏幕截图，而不是推算出来的。</li>
+          <li><strong>固定栏只保留一份</strong>：吸顶标题栏来自首帧，吸底工具栏来自末帧，滚动条与固定侧栏自动忽略。</li>
+          <li><strong>中途也能续接</strong>：出现未匹配帧只是跳过，继续滚动后仍能从最后一个可信位置接着拼接。</li>
+          <li><strong>失败可解释</strong>：不可滚动、选区太矮、动画干扰等原因分别给出提示，Esc 停止时已捕获部分保留。</li>
+          <li><strong>自动滚动是试验功能</strong>：默认关闭，开启后由程序探测目标应用接受的滚动方式（滚轮消息 / 模拟滚轮 / PageDown / 滚动条）。</li>
+        </ul>
+      </section>
+
+      <section id="shortcuts">
+        <h2>常用快捷键</h2>
+        <div class="tables">
+          <div>
+            <h3>图片查看器</h3>
+            <table>
+              <thead>
+                <tr><th>快捷键</th><th>功能</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>← / →</td><td>上一张 / 下一张</td></tr>
+                <tr><td>滚轮</td><td>缩放（单图视图）</td></tr>
+                <tr><td>Ctrl+O</td><td>打开文件夹</td></tr>
+                <tr><td>R / H / V</td><td>旋转 / 水平翻转 / 垂直翻转</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3>截图工具</h3>
+            <table>
+              <thead>
+                <tr><th>快捷键</th><th>功能</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Alt+S（可改）</td><td>全局唤起截图</td></tr>
+                <tr><td>Alt+Shift+S（可改）</td><td>直接进入滚动长截图</td></tr>
+                <tr><td>Enter</td><td>复制选区到剪贴板</td></tr>
+                <tr><td>Ctrl+Z / Ctrl+Y</td><td>撤销 / 重做标注</td></tr>
+                <tr><td>Alt+C（可改）</td><td>复制放大镜中心色值</td></tr>
+                <tr><td>Esc</td><td>取消截图 / 停止滚动捕获</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="install">
+        <h2>下载与安装</h2>
+        <ol class="steps">
+          <li>
+            到
+            <a href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest">Releases</a>
+            下载 <code>CloverViewer_x.y.z_x64-setup.exe</code>（NSIS 安装器，per-user 安装，不需要管理员权限）。
+          </li>
+          <li>也可以直接下载便携版 <code>CloverViewer.exe</code>，放在任意目录运行。</li>
+          <li>
+            系统要求：Windows 10 / 11（含 WebView2 运行时）；从源码构建需要
+            <a href="https://www.rust-lang.org/tools/install">Rust</a>、Node.js ≥ 18 与 Tauri 2 工具链。
+          </li>
+          <li>
+            支持的图片格式：PNG · JPEG · GIF · BMP · WebP · TIFF。
+          </li>
+        </ol>
+        <p class="note">
+          应用内更新已支持签名校验：从 v0.1.5 起可在「设置 → 软件更新」中检查、下载并自动重启安装；自 v0.1.8 起检查完全由你手动触发，应用不会在后台自动联网。
+        </p>
+      </section>
+
+      <section id="faq">
+        <h2>常见问题</h2>
+
+        <h3>CloverViewer 是免费的吗？可以商用吗？</h3>
+        <p>免费且开源，协议为 <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE">MIT</a>：个人使用、公司内部使用和二次开发都可以，只需保留版权声明。</p>
+
+        <h3>支持哪些 Windows 版本？</h3>
+        <p>Windows 10 / 11，依赖系统自带的 WebView2 运行时。安装包是 NSIS 的 per-user 安装，不需要管理员权限；也可以直接使用便携版 <code>CloverViewer.exe</code>。</p>
+
+        <h3>会把我浏览的图片或截图上传吗？</h3>
+        <p>不会。图片浏览、截图、标注、长截图拼接和 OCR 全部在本机完成，应用没有账号体系，也不收集使用数据。唯一的联网行为是「检查更新」：只有你在「设置 → 软件更新」中点「检查更新」时，应用才会访问 GitHub Releases 获取版本信息，不会在后台自动联网。</p>
+
+        <h3>长截图（滚动截图）支持所有应用吗？</h3>
+        <p>不保证 100% 成功。默认是手动滚动优先：你按自己的节奏滚动，程序逐帧配准并只把验证通过的新内容追加进长图；自动注入滚动属于设置里的试验功能，默认关闭。目标应用有粘性标题栏、动态内容或大面积动画时成功率会下降，失败或中途停止时已捕获的部分会保留。</p>
+
+        <h3>和其它截图工具有什么不同？</h3>
+        <p>它把「图片查看器」和「截图标注」合在同一个免费开源应用里，并且内置 MCP Server 让 AI 客户端可以直接调用截图与 OCR。长截图走的是「真实帧 + 重叠像素配准」路线：输出中的每个像素都来自某一帧真实屏幕画面，而不是推算出来的。</p>
+
+        <h3>和原版 CloverViewer（egui 版）是什么关系？</h3>
+        <p>本页介绍的是 Tauri 2 重实现：Rust 后端 + Web 前端（Vite + TypeScript + Canvas），界面由 egui 原生控件换成自定义无边框窗口。两者配置文件互通，共用 <code>%APPDATA%\CloverViewer\config.json</code>。原 egui 版见 <a href="https://github.com/smallclover/CloverViewer">smallclover/CloverViewer</a>。</p>
+
+        <h3>怎么让 Claude Desktop 用上截图能力？</h3>
+        <p>
+          在 <code>claude_desktop_config.json</code> 中配置 <code>CloverViewer.exe --mcp</code> 即可，
+          详见 <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/mcp-guide.md">MCP 使用指南</a>。
+          HTTP 模式需要显式提供 <code>--token</code>，只监听本机回环地址。
+        </p>
+      </section>
+
+      <section id="docs">
+        <h2>文档</h2>
+        <ul class="doclist">
+          <li>
+            <a href="https://github.com/smallclover/CloverViewer-Tauri#readme">README（三语言）</a>
+            —— 功能特性、安装、构建与快捷键总览。
+          </li>
+          <li>
+            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/CHANGELOG.md">CHANGELOG</a>
+            —— 每个版本的用户可见变化。
+          </li>
+          <li>
+            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/mcp-guide.md">MCP 使用指南</a>
+            —— 接入方式、工具参数、典型工作流与隐私说明。
+          </li>
+          <li>
+            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/architecture.md">项目架构</a>
+            —— 前端与 Rust 后端的目录职责、数据流与维护边界。
+          </li>
+          <li>
+            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/scroll-capture-v2.md">滚动截图 V2 设计</a>
+            —— 手动滚动优先的不变量与验证方式。
+          </li>
+          <li>
+            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/auto-update.md">自动更新发布配置</a>
+            —— 签名密钥、Secrets 与验证步骤。
+          </li>
+        </ul>
+      </section>
+
+      <section id="english" lang="en">
+        <h2>English overview</h2>
+        <p>
+          CloverViewer is a free, open-source <strong>Windows image viewer and screenshot tool</strong>
+          built with <a href="https://tauri.app">Tauri 2</a> (Rust backend, Vite + TypeScript frontend).
+          It browses folders in a virtualized grid or a single-image view with EXIF details, captures
+          and annotates screenshots across multiple monitors, stitches
+          <strong>scrolling screenshots</strong> from real captured frames, extracts text with the
+          native Windows OCR engine (Chinese, English, Japanese), and ships a built-in
+          <strong>MCP Server</strong> so AI clients such as Claude Desktop can list monitors, take
+          screenshots and read on-screen text. Trilingual UI (简体中文 / English / 日本語), global
+          hotkeys, tray support and signed in-app updates are included. Licensed under MIT.
+        </p>
+        <p>
+          <a class="btn" href="https://github.com/smallclover/CloverViewer-Tauri#readme">Read the English README</a>
+          <a class="btn primary" href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest">Download for Windows</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        CloverViewer-Tauri · <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE">MIT License</a>
+        · <a href="https://github.com/smallclover/CloverViewer-Tauri">GitHub</a>
+        · <a href="https://github.com/smallclover/CloverViewer-Tauri/releases">Releases</a>
+        · 作者 <a href="https://github.com/smallclover">smallclover</a>
+      </p>
+      <p class="fine">
+        CloverViewer 与 Windows、Microsoft 无隶属关系；Windows 是 Microsoft 的商标。页面提到的其它产品名称仅用于说明兼容性与用途。
+      </p>
+    </footer>
+  </body>
+</html>

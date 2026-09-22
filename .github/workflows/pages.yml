@@ -1,0 +1,42 @@
+name: pages
+
+# 把 site/ 作为静态介绍页发布到 GitHub Pages（供搜索引擎索引与外部分享）。
+# 首次使用需要在仓库 Settings → Pages 里把 Source 切到 "GitHub Actions"。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # site/ 下没有构建步骤：直接上传静态文件（含 robots.txt 与 sitemap.xml）。
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

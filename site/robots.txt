@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://smallclover.github.io/CloverViewer-Tauri/sitemap.xml

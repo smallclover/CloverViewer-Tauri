@@ -37,7 +37,7 @@ Rust Tauri 命令与应用状态
 | `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格；`single-image-controller.ts` 管理单图变换和手势；`image-properties-controller.ts` 显示属性。 |
 | `src/screenshot.ts` | 截图页面组合入口，保留页面级 DOM、窗口事件和跨模块调度。 |
 | `src/screenshot/` | 截图领域实现：会话与历史、输入与快捷键、标注绘制、选区几何、工具栏/面板、文本输入、放大镜、导出、OCR、滚动截图及窗口生命周期。 |
-| `src/ui/` | 与页面外观或通用交互相关的控制器，如设置、关于、右键菜单、窗口标题栏和应用桥接。 |
+| `src/ui/` | 与页面外观或通用交互相关的控制器，如设置（分类 + 搜索 + 缓存维护）、关于、右键菜单、窗口标题栏和应用桥接。 |
 | `src/locales/` | 各语言的静态翻译表。新增文案须同步更新所有语言表。 |
 | `src/i18n.ts` | 语言选择、插值、页面翻译应用；不承载具体翻译数据。 |
 | `src/styles.css` | 全局设计 token 与页面/组件样式。 |
@@ -57,7 +57,7 @@ Rust Tauri 命令与应用状态
 
 | 路径 | 职责 |
 | --- | --- |
-| `src-tauri/src/commands.rs` | Tauri 命令边界：配置、文件打开、图片查询、热键和窗口操作等。 |
+| `src-tauri/src/commands.rs` | Tauri 命令边界：配置、文件打开、图片查询、热键、窗口操作与临时缓存维护（`get_cache_summary` / `clear_temp_cache`）。 |
 | `src-tauri/src/config.rs` | 应用配置的数据模型、读取与持久化。 |
 | `src-tauri/src/image_scan.rs` | 文件夹中的图像扫描与排序。 |
 | `src-tauri/src/image_info.rs` | 图像和 EXIF 信息读取。 |
@@ -76,6 +76,12 @@ Rust Tauri 命令与应用状态
 配置由 Rust 持久化，前端经 `api.ts` 读取和更新。跨端 DTO 的字段名、可选性与枚举值属于稳定契约：修改 Rust 命令、事件载荷或配置结构时，应同时检查 `src/api.ts`、调用控制器和相关单元测试。
 
 前端接口遵循 Tauri 命令参数的实际命名约定。不要在 UI 控制器中散落 `invoke` 字符串或重复定义后端类型；先在 `api.ts` 增加封装，再向领域模块暴露语义化方法。
+
+## 设置与临时缓存
+
+设置页是主窗口内的整页视图：左侧分类（应用 / 截图 / 维护）与右侧设置行由 `settings-controller.ts` 的单一 `render()` 统一渲染，搜索词同时过滤分类与设置行；每项改动立即写入配置，热键类改动需要显式「应用」。新增设置项时须同时补齐 `index.html` 的设置行、三条语言表的键与说明文案，以及 `AppConfig` 的 Rust/TypeScript 两端字段。
+
+临时缓存只涉及应用自己的目录 `%TEMP%\CloverViewer`，用于保存长截图「在查看器中打开」产生的 PNG。`get_cache_summary` 统计该目录的文件数与体积，`clear_temp_cache(older_than_hours)` 按最后修改时间删除（`0` 表示全部），并在应用启动时按配置的 `cache_cleanup_after_hours` 自动执行一次。维护逻辑只遍历该目录的普通文件：不跟随符号链接、不触碰系统 Temp 的其他内容，被占用而删除失败的文件只记录警告。
 
 ## 国际化
 
@@ -97,6 +103,10 @@ Rust Tauri 命令与应用状态
 | `npm run lint` / `npm run format:check` | Biome 静态检查与格式检查。 |
 | `npm run test:unit` | 编译指定 TypeScript 单元测试并运行测试执行器。 |
 | `npm run check` | 执行格式、lint、类型、单元测试和版本一致性检查。 |
+
+> 行尾：仓库按 LF 存储，`.gitattributes` 对 `*.ts`、`*.mjs`、`*.json` 显式声明 `eol=lf`。
+> 否则在 `core.autocrlf=true` 的 Windows 环境里这些文件会被检出成 CRLF，Biome 会判定
+> `format:check` 失败（CI 使用 LF 检出，因此只在本地出现）。
 
 ## 维护边界
 

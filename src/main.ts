@@ -67,23 +67,26 @@ const toastEl = $("toast");
 
 // 标题栏菜单：同一时间只展开一个，执行菜单项或按 Esc 后收起。
 const appMenus = Array.from(document.querySelectorAll<HTMLDetailsElement>("#toolbar .app-menu"));
+const closeMenus = (except?: HTMLDetailsElement) => {
+  for (const menu of appMenus) {
+    if (menu !== except) menu.open = false;
+  }
+};
 appMenus.forEach((menu) => {
   menu.addEventListener("toggle", () => {
-    if (menu.open)
-      appMenus.filter((other) => other !== menu).forEach((other) => (other.open = false));
+    if (menu.open) closeMenus(menu);
   });
-  menu.querySelectorAll<HTMLButtonElement>("button").forEach((item) =>
+  menu.querySelectorAll<HTMLButtonElement>("button").forEach((item) => {
     item.addEventListener("click", () => {
       menu.open = false;
-    }),
-  );
+    });
+  });
 });
 document.addEventListener("mousedown", (event) => {
-  if (!(event.target as HTMLElement).closest("#toolbar"))
-    appMenus.forEach((menu) => (menu.open = false));
+  if (!(event.target as HTMLElement).closest("#toolbar")) closeMenus();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") appMenus.forEach((menu) => (menu.open = false));
+  if (event.key === "Escape") closeMenus();
 });
 
 const toast = createToast(toastEl);

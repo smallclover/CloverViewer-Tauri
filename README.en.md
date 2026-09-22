@@ -5,7 +5,7 @@
     <a href="README.md">中文</a> · <b>English</b> · <a href="README.ja.md">日本語</a>
   </p>
   <p>
-    A free, lightweight Windows app for browsing images and capturing/annotating screenshots — rebuilt with <a href="https://tauri.app">Tauri 2</a> from the original [CloverViewer](https://github.com/smallclover/CloverViewer) (Rust + egui).<br>
+    A free, lightweight Windows app for browsing images and capturing/annotating screenshots — rebuilt with <a href="https://tauri.app">Tauri 2</a> from the original <a href="https://github.com/smallclover/CloverViewer">CloverViewer</a> (Rust + egui).<br>
     Rust backend + Web frontend (Vite + TypeScript), with a built-in <a href="https://modelcontextprotocol.io">MCP Server</a>.
   </p>
   <p>
@@ -17,6 +17,7 @@
   </p>
   <p>
     <a href="https://github.com/smallclover"><img src="https://img.shields.io/badge/Author-smallclover-green" alt="Author: smallclover"></a>
+    <a href="https://smallclover.github.io/CloverViewer-Tauri/"><img src="https://img.shields.io/badge/Landing%20page-view%20online-2E7D32" alt="CloverViewer landing page"></a>
   </p>
 </div>
 
@@ -26,11 +27,20 @@
 
 CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot tool** built with **Tauri 2**. It is the next-generation reimplementation of the original [CloverViewer](https://github.com/smallclover/CloverViewer) (egui/eframe version) — **with a complete UI overhaul**: the Rust-native egui interface is replaced by a modern, custom, frameless interface built on the Web (Vite + TypeScript + Canvas). It looks and feels brand new. On top of feature parity, it adds a **built-in MCP Server**, letting AI clients such as Claude Desktop call the screenshot capability directly. Lightweight and fast, it packs image browsing, multi-monitor screenshot capture, annotation, and OCR into one portable Windows app.
 
+## 🎯 Who It Is For
+
+*   **Anyone replacing the built-in viewer**: free, open source, no ads, no bundled extras, no account or sign-in.
+*   **Anyone documenting bugs or writing guides**: multi-monitor capture plus rectangle, ellipse, arrow, pen, mosaic and text annotations; press Enter to copy.
+*   **Anyone who needs long screenshots**: stitch chat logs, full web pages, long lists, logs or code diffs into one tall image.
+*   **Anyone extracting text from the screen**: native Windows OCR for Chinese, English and Japanese — nothing is uploaded.
+*   **Anyone letting AI see the screen**: the built-in MCP Server lets Claude Desktop and other MCP clients list monitors, take screenshots and read text.
+
 ## ✨ Features
 
 ### 🖼️ Image Viewer
 
 *   **Dual view modes**: grid view (thumbnails) and single-image view (large image)
+*   **Large folders stay smooth**: virtualized grid scrolling plus an LRU thumbnail cache, so folders with thousands of images keep scrolling fluidly
 *   **Folder browsing**: opening a folder loads all images automatically
 *   **Quick navigation**: ←/→ to switch, with preloading of adjacent images
 *   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity
@@ -42,7 +52,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 ### 📸 Screenshot & Annotation
 
 *   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens
-*   **Scrolling capture (long screenshot)**: select a scrollable region and it scrolls automatically, stitching frames by overlapping pixels. It probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar), and skips sticky headers, pinned footers and fixed sidebars; the result can be copied, saved to Desktop, or opened in the viewer
+*   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended, while sticky headers, pinned footers and fixed sidebars are skipped. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text
 *   **Color & line width**: long-press a tool icon to open the color palette
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
@@ -75,12 +85,14 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 
 *   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly
 *   **Light/dark theme**: follow system / dark / light
+*   **Title-bar menus**: File (open folder) / Edit (settings) / Help (about CloverViewer); close them by clicking elsewhere or pressing Esc
 *   **Global hotkey**: default **Alt+S** to summon the screenshot (available from tray; customizable)
 *   **System tray**: optionally minimize to tray on close
 *   **Launch on startup**: writes `HKCU\...\Run` registry; `--startup` argument silently starts into tray
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
-*   **Settings panel**: language / theme / zoom sensitivity / screenshot hotkey / color hotkey / magnifier / minimize to tray / launch on startup
+*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the three global hotkeys, magnifier, minimize to tray, launch on startup and software updates
+*   **Temporary cache management**: Settings → Cache shows the file count and size of temporary long screenshots in `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand
 
 ## 🖼️ Supported Formats
 
@@ -146,7 +158,7 @@ npm run tauri build
 | Shortcut | Function |
 |--------|------|
 | **Alt+S** (customizable) | Global screenshot |
-| **Alt+Shift+S** (customizable) | Go straight into scrolling capture: starts automatically once you select a region (clicking a window captures that window) |
+| **Alt+Shift+S** (customizable) | Go straight into scrolling capture: capturing starts as soon as you select a region (manual scrolling by default; auto-injected scrolling is an experimental setting); clicking a window captures that window |
 | Esc | Cancel screenshot / stop scrolling capture (keeps what was captured) |
 | Enter | Copy selection to clipboard |
 | Delete | Delete selected annotation |
@@ -158,6 +170,49 @@ npm run tauri build
 *   Original egui version: [CloverViewer](https://github.com/smallclover/CloverViewer) (eframe + full-Rust UI)
 *   This repo: Tauri 2 reimplementation; **a complete UI generation overhaul** — a custom frameless window built with the Web stack (HTML/CSS/TS) instead of the original egui native controls
 *   Configuration files are interchangeable
+
+## ❓ FAQ
+
+### Is CloverViewer free? Can I use it commercially?
+
+Yes. It is free and open source under the [MIT license](LICENSE): personal use, internal company use and derivative work are all fine as long as the copyright notice is kept.
+
+### Which Windows versions are supported?
+
+Windows 10 and 11, relying on the WebView2 runtime that ships with the system. The installer is a per-user NSIS package that needs no administrator rights, and the portable `CloverViewer.exe` works as well.
+
+### Does it upload my images or screenshots?
+
+No. Image browsing, capture, annotation, long-screenshot stitching and OCR all happen locally; there is no account system and no usage data collection. The only network access is the update check, and it contacts GitHub Releases only when you press “Check for updates” under Settings → Software updates — there is no background auto-check.
+
+### Does scrolling capture work in every app?
+
+Not guaranteed. The default flow is **manual-scroll-first**: you scroll at your own pace and the app registers each frame, appending only verified new content. Auto-injected scrolling is an experimental setting that is off by default. Sticky headers, animated or dynamic content lower the success rate, and anything already captured is kept when it stops or fails.
+
+### How is it different from other screenshot tools?
+
+It combines an image viewer and a screenshot annotator in one free, open-source app, and ships an MCP Server so AI clients can call capture and OCR directly. Scrolling capture follows a "real frames + overlap registration" approach: every pixel in the output comes from an actual captured screen frame rather than an estimate.
+
+### How does it relate to the original CloverViewer (egui)?
+
+This repository is the Tauri 2 reimplementation: Rust backend plus a Web frontend (Vite + TypeScript + Canvas), replacing egui native controls with a custom frameless window. Configuration files are interchangeable and share `%APPDATA%\CloverViewer\config.json`.
+
+### How do I let Claude Desktop take screenshots?
+
+Configure `CloverViewer.exe --mcp` in `claude_desktop_config.json` as described in the [MCP guide](docs/mcp-guide.md); the client can then call `list_monitors`, `take_screenshot`, `get_screenshot`, `ocr_screenshot` and `delete_screenshot`.
+
+## 📚 Documentation
+
+| Document | Contents |
+|----------|----------|
+| [MCP guide](docs/mcp-guide.md) | Setup, tool parameters, typical workflows, privacy and limits |
+| [Architecture and directories](docs/architecture.md) | Frontend / Rust backend responsibilities, data flow and maintenance boundaries |
+| [Scrolling capture V2 design](docs/scroll-capture-v2.md) | Manual-scroll-first invariants, modules and verification |
+| [Auto-update release setup](docs/auto-update.md) | Signing keys, GitHub Secrets and update verification steps |
+| [Source file size guidelines](docs/code-size-guidelines.md) | Split thresholds, exceptions and current baseline |
+| [Repository SEO and metadata checklist](docs/seo.md) | Maintainer notes: keyword placement, topics/description, Pages and release checks |
+| [Changelog](CHANGELOG.md) | User-visible changes per release |
+| [Landing page](https://smallclover.github.io/CloverViewer-Tauri/) | Feature overview, FAQ and download entry point |
 
 ## 📝 Changelog
 

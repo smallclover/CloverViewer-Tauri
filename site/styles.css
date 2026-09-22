@@ -1,0 +1,389 @@
+:root {
+  --bg: #0b1512;
+  --bg-soft: #101d18;
+  --panel: #13251d;
+  --line: #234234;
+  --text: #e8f2ec;
+  --muted: #a9c2b4;
+  --accent: #56c07a;
+  --accent-strong: #2e7d32;
+  --radius: 14px;
+  --wide: 1060px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 520px at 12% -8%, #17392a 0%, transparent 62%),
+    linear-gradient(180deg, var(--bg) 0%, #09110e 100%);
+  color: var(--text);
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  background: #0d1c15;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.1em 0.4em;
+  font-size: 0.9em;
+  font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip:focus {
+  left: 12px;
+  top: 12px;
+  background: var(--panel);
+  padding: 8px 14px;
+  border-radius: 8px;
+  z-index: 9;
+}
+
+/* 顶栏 */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px max(20px, calc((100vw - var(--wide)) / 2));
+  background: rgba(9, 17, 14, 0.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(35, 66, 52, 0.7);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.topbar nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.topbar nav a {
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.94rem;
+}
+
+.topbar nav a:hover {
+  color: var(--text);
+  background: rgba(86, 192, 122, 0.12);
+  text-decoration: none;
+}
+
+.topbar nav a.ghost {
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+/* 版心 */
+main {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 0 20px 48px;
+}
+
+section {
+  margin: 56px 0;
+}
+
+h1 {
+  font-size: clamp(1.9rem, 4.4vw, 2.9rem);
+  line-height: 1.25;
+  margin: 18px 0 12px;
+  letter-spacing: -0.5px;
+}
+
+h2 {
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+h3 {
+  font-size: 1.06rem;
+  margin: 22px 0 6px;
+}
+
+p {
+  color: var(--text);
+}
+
+/* Hero */
+.hero {
+  margin-top: 34px;
+  text-align: center;
+}
+
+.hero-logo {
+  border-radius: 22px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.hero .lead {
+  max-width: 780px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 1.06rem;
+}
+
+.hero .lead strong {
+  color: var(--text);
+}
+
+.cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 26px 0 18px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.96rem;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.btn:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  background: rgba(86, 192, 122, 0.12);
+}
+
+.btn.primary {
+  background: var(--accent-strong);
+  border-color: #3d9450;
+  color: #f4fff7;
+}
+
+.btn.primary:hover {
+  background: #37913c;
+}
+
+.chips {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chips li {
+  border: 1px solid var(--line);
+  background: rgba(19, 37, 29, 0.7);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 0.86rem;
+}
+
+/* 卡片 */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.card h3 {
+  margin-top: 0;
+}
+
+.card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* 列表 */
+.ticks {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.ticks li {
+  position: relative;
+  padding-left: 28px;
+  color: var(--muted);
+}
+
+.ticks li::before {
+  content: "✔";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.ticks strong {
+  color: var(--text);
+}
+
+.tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  background: rgba(19, 37, 29, 0.65);
+}
+
+tbody tr:hover {
+  background: rgba(86, 192, 122, 0.07);
+}
+
+.steps {
+  padding-left: 22px;
+  color: var(--muted);
+}
+
+.steps li {
+  margin: 6px 0;
+}
+
+.note {
+  border-left: 3px solid var(--accent-strong);
+  background: rgba(19, 37, 29, 0.55);
+  padding: 10px 16px;
+  border-radius: 0 10px 10px 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.doclist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.doclist li {
+  color: var(--muted);
+  border-bottom: 1px dashed rgba(35, 66, 52, 0.8);
+  padding-bottom: 8px;
+}
+
+#faq p {
+  color: var(--muted);
+}
+
+#english p {
+  color: var(--muted);
+}
+
+footer {
+  max-width: var(--wide);
+  margin: 0 auto;
+  padding: 26px 20px 44px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+footer a {
+  color: var(--accent);
+}
+
+.fine {
+  font-size: 0.82rem;
+  opacity: 0.78;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+  }
+
+  section {
+    margin: 40px 0;
+  }
+
+  .topbar {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .btn {
+    transition: none;
+  }
+}

@@ -20,6 +20,7 @@ interface SettingsControllerOptions {
   applyTheme: (theme: AppConfig["theme"]) => void;
   applyI18n: () => void;
   refreshViewerTranslations: () => void;
+  refreshImagePreviewStrip: () => void;
   translate: (key: string, vars?: Record<string, string | number>) => string;
   toast: (message: string, kind?: ToastKind) => void;
 }
@@ -43,6 +44,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const theme = element<HTMLSelectElement>("set-theme");
   const zoom = element<HTMLInputElement>("set-zoom");
   const zoomValue = element("set-zoom-val");
+  const imagePreviewStrip = element<HTMLInputElement>("set-image-preview-strip");
   const screenshotHotkey = element<HTMLInputElement>("set-hotkey");
   const colorHotkey = element<HTMLInputElement>("set-color-hotkey");
   const scrollHotkey = element<HTMLInputElement>("set-scroll-hotkey");
@@ -165,6 +167,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     theme.value = config.theme;
     zoom.value = String(config.zoom_sensitivity);
     zoomValue.textContent = `${config.zoom_sensitivity.toFixed(1)}×`;
+    imagePreviewStrip.checked = config.image_preview_strip_enabled;
     screenshotHotkey.value = config.hotkeys.show_screenshot;
     colorHotkey.value = config.hotkeys.copy_color;
     scrollHotkey.value = config.hotkeys.scroll_capture || "Alt+Shift+S";
@@ -282,6 +285,10 @@ export function createSettingsController(options: SettingsControllerOptions) {
     zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
   });
   zoom.addEventListener("change", () => save({ zoom_sensitivity: Number(zoom.value) }));
+  imagePreviewStrip.addEventListener("change", () => {
+    save({ image_preview_strip_enabled: imagePreviewStrip.checked });
+    options.refreshImagePreviewStrip();
+  });
   magnifier.addEventListener("change", () => save({ magnifier_enabled: magnifier.checked }));
   experimentalAutoScroll.addEventListener("change", () =>
     save({ experimental_auto_scroll: experimentalAutoScroll.checked }),

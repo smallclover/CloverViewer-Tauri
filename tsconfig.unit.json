@@ -10,6 +10,7 @@
   },
   "include": [
     "src/viewer/grid-layout.ts",
+    "src/viewer/image-sort.ts",
     "src/viewer/image-source.ts",
     "src/screenshot/geometry.ts",
     "src/screenshot/history.ts",

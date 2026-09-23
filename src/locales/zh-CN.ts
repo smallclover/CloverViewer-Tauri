@@ -41,6 +41,10 @@ export const zh = {
   "empty.hint": "点击「打开文件夹」或拖入图片 / Ctrl+O",
   // 属性栏
   "props.title": "属性",
+  "props.sectionFile": "文件",
+  "props.sectionImage": "图像",
+  "props.sectionTime": "时间",
+  "props.sectionExif": "拍摄信息",
   // 状态栏
   "status.ready": "就绪",
   "status.fit": "适应",
@@ -104,6 +108,8 @@ export const zh = {
   "settings.theme.light": "浅色",
   "settings.zoom": "缩放灵敏度",
   "settings.zoom.desc": "滚轮缩放每格的步进倍率，数值越大缩放越快。",
+  "settings.imagePreviewStrip": "显示相邻图片预览",
+  "settings.imagePreviewStrip.desc": "在单图查看底部显示当前图片前后的缩略预览。",
   "settings.hotkey": "截图热键",
   "settings.hotkey.desc": "在任何界面按下即可开始区域截图。",
   "settings.colorHotkey": "取色热键",
@@ -212,6 +218,8 @@ export const zh = {
   "prop.shareStopped": "已停止",
   // 右键菜单
   "ctx.view": "查看",
+  "ctx.backToGrid": "返回列表",
+  "ctx.properties": "属性",
   "ctx.copyImage": "复制图片",
   "ctx.copyPath": "复制图片路径",
   "ctx.share": "局域网分享",

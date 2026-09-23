@@ -89,6 +89,9 @@ pub struct Config {
     pub theme: ThemePreference,
     #[serde(default = "default_zoom_sensitivity")]
     pub zoom_sensitivity: f32,
+    /// 单图视图底部的相邻图片预览条；旧配置缺字段时保持默认开启。
+    #[serde(default = "default_image_preview_strip_enabled")]
+    pub image_preview_strip_enabled: bool,
     #[serde(default)]
     pub hotkeys: HotkeysConfig,
     #[serde(default = "default_minimize_on_close")]
@@ -123,6 +126,9 @@ pub struct Config {
 fn default_zoom_sensitivity() -> f32 {
     1.0
 }
+fn default_image_preview_strip_enabled() -> bool {
+    true
+}
 fn default_minimize_on_close() -> bool {
     true
 }
@@ -145,6 +151,7 @@ impl Default for Config {
             language: Language::default(),
             theme: ThemePreference::default(),
             zoom_sensitivity: default_zoom_sensitivity(),
+            image_preview_strip_enabled: default_image_preview_strip_enabled(),
             hotkeys: HotkeysConfig::default(),
             minimize_on_close: default_minimize_on_close(),
             magnifier_enabled: default_magnifier_enabled(),

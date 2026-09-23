@@ -13,6 +13,8 @@ interface ContextMenuControllerOptions {
   onCopyImage: (entry: ImageEntry) => void;
   onCopyPath: (path: string) => void;
   onShare: (entry: ImageEntry) => void;
+  onProperties: (entry: ImageEntry) => void;
+  onBackToGrid: () => void;
   translate: (key: string) => string;
 }
 
@@ -47,15 +49,26 @@ export function createContextMenuController(options: ContextMenuControllerOption
     requestAnimationFrame(() => menu.classList.add("is-visible"));
   };
   const actionsFor = (entry: ImageEntry, index?: number): ContextItem[] => {
-    const viewActions: ContextItem[] =
+    const leadingActions: ContextItem[] =
       index === undefined
-        ? []
+        ? [
+            { label: options.translate("ctx.backToGrid"), action: options.onBackToGrid },
+            {
+              label: options.translate("ctx.properties"),
+              action: () => options.onProperties(entry),
+            },
+            "separator",
+          ]
         : [
             { label: options.translate("ctx.view"), action: () => options.onView(index) },
+            {
+              label: options.translate("ctx.properties"),
+              action: () => options.onProperties(entry),
+            },
             "separator",
           ];
     return [
-      ...viewActions,
+      ...leadingActions,
       { label: options.translate("ctx.copyImage"), action: () => options.onCopyImage(entry) },
       { label: options.translate("ctx.copyPath"), action: () => options.onCopyPath(entry.path) },
       "separator",

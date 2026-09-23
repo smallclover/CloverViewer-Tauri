@@ -2,12 +2,14 @@ import {
   createGridLayout,
   createGridSections,
   GRID_GAP,
+  GRID_HORIZONTAL_PADDING,
   type GridLayout,
   type GridSection,
   thumbnailPixelSize,
   THUMB_COLUMNS,
 } from "./grid-layout";
 import type { createImageSourceResolver } from "./image-source";
+import { sortImagesByModified } from "./image-sort";
 import type { createViewerSession } from "./viewer-session";
 
 interface GridControllerOptions {
@@ -77,7 +79,7 @@ export function createGridController(options: GridControllerOptions) {
 
   const renderGrid = () => {
     layout = createGridLayout(
-      options.gridView.clientWidth,
+      options.grid.clientWidth + GRID_HORIZONTAL_PADDING,
       options.session.images.length,
       THUMB_COLUMNS[thumbSizeIndex],
     );
@@ -199,20 +201,21 @@ export function createGridController(options: GridControllerOptions) {
     });
   };
 
-  const setNewestFirst = (nextNewestFirst: boolean) => {
-    if (newestFirst === nextNewestFirst) return;
-    newestFirst = nextNewestFirst;
+  const sortCurrentImages = () => {
     const activePath =
       options.session.activeIndex >= 0
         ? options.session.images[options.session.activeIndex]?.path
         : undefined;
-    options.session.images.sort((a, b) => {
-      const delta = new Date(a.modified).getTime() - new Date(b.modified).getTime();
-      return newestFirst ? -delta : delta;
-    });
+    options.session.images = sortImagesByModified(options.session.images, newestFirst);
     options.session.activeIndex = activePath
       ? options.session.images.findIndex((entry) => entry.path === activePath)
       : -1;
+  };
+
+  const setNewestFirst = (nextNewestFirst: boolean) => {
+    if (newestFirst === nextNewestFirst) return;
+    newestFirst = nextNewestFirst;
+    sortCurrentImages();
     refreshMenu();
     renderGrid();
   };
@@ -251,6 +254,7 @@ export function createGridController(options: GridControllerOptions) {
     renderGrid,
     refreshMenu,
     setNewestFirst,
+    sortCurrentImages,
     setThumbSize,
     toggleSort,
     cycleSize,

@@ -10,6 +10,7 @@ import { bindWindowChrome } from "./ui/window-chrome";
 import { createGridController } from "./viewer/grid-controller";
 import { createImageSourceResolver } from "./viewer/image-source";
 import { createImagePropertiesController } from "./viewer/image-properties-controller";
+import { createImagePreviewStripController } from "./viewer/image-preview-strip-controller";
 import { createImageShareController } from "./viewer/image-share-controller";
 import { createSingleImageController } from "./viewer/single-image-controller";
 import { createViewerSession } from "./viewer/viewer-session";
@@ -49,6 +50,7 @@ const imgStage = $("img-stage");
 const singleImg = $<HTMLImageElement>("single-img");
 const propsList = $("props-list");
 const propsPanel = $("props-panel");
+const propsClose = $<HTMLButtonElement>("props-close");
 const imageSharePanel = $("image-share-panel");
 const breadcrumb = $("breadcrumb");
 const gridMenu = $("grid-menu");
@@ -62,16 +64,9 @@ const gridDensity = $<HTMLInputElement>("grid-density");
 const gridDensityControl = $("grid-density-control");
 const gridCount = $("grid-count");
 const gridUp = $<HTMLButtonElement>("grid-up");
-const backToGrid = $<HTMLButtonElement>("back-to-grid");
-const backToGridName = $("back-to-grid-name");
 const statusLeft = $("status-left");
 const statusRight = $("status-right");
-const btnProps = $("btn-props");
-const btnRotate = $("btn-rotate");
-const btnFlipH = $("btn-flip-h");
-const btnFlipV = $("btn-flip-v");
-const btnResetTransform = $("btn-reset-transform");
-const imageTools = $("image-tools");
+const imagePreviewStrip = $("image-preview-strip");
 const navPrev = $<HTMLButtonElement>("nav-prev");
 const navNext = $<HTMLButtonElement>("nav-next");
 const dropOverlay = $("drop-overlay");
@@ -145,7 +140,6 @@ function renderBreadcrumb() {
   const name = document.createElement("span");
   name.className = "crumb current";
   name.textContent = parts[parts.length - 1] ?? viewerSession.currentDir;
-  backToGridName.textContent = name.textContent;
   breadcrumb.append(icon, name);
 }
 
@@ -154,6 +148,7 @@ async function openDirectory(dir: string) {
   try {
     const entries = await listImages(dir);
     viewerSession.setDirectory(dir, entries);
+    gridController.sortCurrentImages();
     imageSource.clear();
     renderBreadcrumb();
     if (entries.length === 0) {
@@ -183,15 +178,6 @@ async function openFileOrFolder(path: string) {
   if (idx >= 0) showSingle(idx);
 }
 
-// 单图专属工具栏按钮（旋转/翻转）显隐
-function setImageToolsVisible(v: boolean) {
-  imageTools.classList.toggle("hidden", !v);
-  btnRotate.classList.toggle("hidden", !v);
-  btnFlipH.classList.toggle("hidden", !v);
-  btnFlipV.classList.toggle("hidden", !v);
-  if (v) playEnterAnimation(imageTools, "tools-enter");
-}
-
 // ---------- 网格视图（窗口化虚拟滚动） ----------
 const gridController = createGridController({
   gridView,
@@ -210,11 +196,25 @@ const gridController = createGridController({
   translate: t,
   onSelect: showSingle,
 });
+const imagePreviewStripController = createImagePreviewStripController({
+  strip: imagePreviewStrip,
+  session: viewerSession,
+  imageSource,
+  getThumbnail,
+  onSelect: showSingle,
+});
+
+function applyImagePreviewStripState() {
+  const visible = config?.image_preview_strip_enabled ?? true;
+  imagePreviewStrip.classList.toggle("hidden", !visible);
+  if (visible && viewerSession.viewMode === "single" && viewerSession.activeIndex >= 0) {
+    imagePreviewStripController.render(viewerSession.activeIndex);
+  }
+}
 
 function showGrid() {
   closeImageShare();
   viewerSession.viewMode = "grid";
-  contentHeader.classList.remove("single-context");
   // 初始空态不需要这条上下文栏；一旦用户选定目录（即使目录里没有图片）就恢复。
   contentHeader.classList.remove("hidden");
   emptyState.classList.toggle(
@@ -228,9 +228,6 @@ function showGrid() {
   breadcrumb.classList.remove("hidden");
   gridCount.classList.remove("hidden");
   gridUp.classList.remove("hidden");
-  backToGrid.classList.add("hidden");
-  btnProps.classList.add("hidden");
-  setImageToolsVisible(false);
   gridController.refreshMenu();
   gridController.renderGrid();
   playEnterAnimation(gridView);
@@ -238,19 +235,17 @@ function showGrid() {
   refreshStatus();
 }
 
-// ---------- 属性栏开关 ----------
-function toggleProps() {
-  viewerSession.propsVisible = !viewerSession.propsVisible;
-  applyPropsState();
-}
-
 function applyPropsState() {
-  btnProps.classList.toggle("active", viewerSession.propsVisible);
   propsPanel.classList.toggle("collapsed", !viewerSession.propsVisible);
   if (viewerSession.viewMode === "single") {
     singleImageController.applyTransform(); // 面板显隐改变可视区域，重算适应/平移
     refreshStatus();
   }
+}
+
+function closeProps() {
+  viewerSession.propsVisible = false;
+  applyPropsState();
 }
 
 function closeImageShare() {
@@ -281,7 +276,7 @@ function showSingle(index: number) {
   viewerSession.activeIndex = index;
   closeImageShare();
   viewerSession.viewMode = "single";
-  contentHeader.classList.add("single-context");
+  contentHeader.classList.add("hidden");
   emptyState.classList.add("hidden");
   gridView.classList.add("hidden");
   singleView.classList.remove("hidden");
@@ -291,9 +286,6 @@ function showSingle(index: number) {
   breadcrumb.classList.add("hidden");
   gridCount.classList.add("hidden");
   gridUp.classList.add("hidden");
-  backToGrid.classList.remove("hidden");
-  btnProps.classList.remove("hidden");
-  setImageToolsVisible(true);
   gridController.updateActive();
   applyPropsState();
   updateNavButtons();
@@ -304,6 +296,7 @@ function showSingle(index: number) {
     singleImg.src = src;
   });
   imagePropertiesController.render(entry);
+  applyImagePreviewStripState();
   refreshStatus();
   preloadNeighbors(index);
 }
@@ -432,7 +425,7 @@ async function pickFolder() {
 
 // ---------- 事件绑定 ----------
 $("btn-open").addEventListener("click", () => void pickFolder());
-backToGrid.addEventListener("click", showGrid);
+propsClose.addEventListener("click", closeProps);
 gridUp.addEventListener("click", () => {
   const path = viewerSession.currentDir?.replace(/[\\/]+$/, "") ?? "";
   const parentStart = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -469,18 +462,6 @@ gridSizeMenu.querySelectorAll<HTMLButtonElement>("[data-size-index]").forEach((b
 document.addEventListener("mousedown", (event) => {
   if (!(event.target as HTMLElement).closest("#grid-menu")) closeGridMenus();
 });
-btnProps.addEventListener("click", toggleProps);
-btnRotate.addEventListener("click", () => singleImageController.rotate());
-btnFlipH.addEventListener("click", () => singleImageController.flipHorizontal());
-btnFlipV.addEventListener("click", () => singleImageController.flipVertical());
-btnResetTransform.addEventListener("click", () => {
-  singleImageController.reset();
-  refreshStatus();
-});
-// 工具胶囊位于画布内：隔离手势，避免连续点击“还原”冒泡成画布双击，
-// 意外触发“适应窗口 ↔ 100%”缩放切换。
-imageTools.addEventListener("mousedown", (e) => e.stopPropagation());
-imageTools.addEventListener("dblclick", (e) => e.stopPropagation());
 // 单图切图按钮：点击切换 + 阻止 mousedown 冒泡，避免误触发拖拽平移
 navPrev.addEventListener("mousedown", (e) => e.stopPropagation());
 navNext.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -521,6 +502,18 @@ createContextMenuController({
   onCopyImage: (entry) => void copyImageBitmap(entry),
   onCopyPath: (path) => void copyImagePath(path),
   onShare: openImageShare,
+  onProperties: (entry) => {
+    const index = viewerSession.images.findIndex((image) => image.path === entry.path);
+    if (
+      index >= 0 &&
+      (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)
+    ) {
+      showSingle(index);
+    }
+    viewerSession.propsVisible = true;
+    applyPropsState();
+  },
+  onBackToGrid: showGrid,
   translate: t,
 });
 
@@ -545,6 +538,7 @@ const settingsController = createSettingsController({
   applyTheme,
   applyI18n: () => applyI18n(document),
   refreshViewerTranslations,
+  refreshImagePreviewStrip: applyImagePreviewStripState,
   translate: t,
   toast,
 });

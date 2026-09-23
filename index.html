@@ -45,11 +45,6 @@
           <button id="grid-up" class="grid-header-icon" type="button" data-i18n-title="view.upFolder" aria-label="返回上级文件夹">
             <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18-6-6 6-6"/></svg>
           </button>
-          <button id="back-to-grid" class="hidden" type="button" data-i18n-title="view.gridTitle">
-            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/><path d="M9 12h11"/></svg>
-            <span class="back-folder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
-            <span id="back-to-grid-name"></span>
-          </button>
           <nav id="breadcrumb" class="breadcrumb"></nav>
           <span id="grid-count" class="grid-count"></span>
           <div id="grid-menu">
@@ -97,17 +92,15 @@
             <button id="nav-next" class="nav-btn" title="下一张" data-i18n-title="nav.next" aria-label="下一张">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
             </button>
-            <div id="image-tools" class="hidden" aria-label="图片工具">
-              <button id="btn-rotate" class="img-tool" data-i18n-title="toolbar.rotate"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg></button>
-              <button id="btn-flip-h" class="img-tool" data-i18n-title="toolbar.flipH"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/><path d="M12 3v18"/></svg></button>
-              <button id="btn-flip-v" class="img-tool" data-i18n-title="toolbar.flipV"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 3-5 5-5-5h10"/><path d="m17 21-5-5-5 5h10"/></svg></button>
-              <span class="img-tool-sep"></span>
-              <button id="btn-reset-transform" class="img-tool" data-i18n-title="toolbar.reset"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-5-5 5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg></button>
-              <button id="btn-props" class="img-tool" data-i18n-title="toolbar.propsTitle"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
-            </div>
+            <div id="image-preview-strip"></div>
           </div>
           <aside id="props-panel">
-            <h3 data-i18n="props.title">属性</h3>
+            <header id="props-header">
+              <h3 data-i18n="props.title">属性</h3>
+              <button id="props-close" type="button" data-i18n-title="settings.close" data-i18n-aria-label="settings.close" title="关闭" aria-label="关闭">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m7 7 10 10M17 7 7 17"/></svg>
+              </button>
+            </header>
             <div id="props-list"></div>
           </aside>
           <aside id="image-share-panel" class="collapsed" aria-label="局域网分享"></aside>
@@ -272,6 +265,13 @@
                     <input id="set-zoom" type="range" min="0.3" max="3" step="0.1" />
                     <span class="setting-value" id="set-zoom-val"></span>
                   </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-image-preview-strip" data-i18n="settings.imagePreviewStrip">显示相邻图片预览</label>
+                    <span class="setting-desc" data-i18n="settings.imagePreviewStrip.desc">在单图查看底部显示当前图片前后的缩略预览。</span>
+                  </div>
+                  <input id="set-image-preview-strip" type="checkbox" />
                 </div>
               </div>
             </section>

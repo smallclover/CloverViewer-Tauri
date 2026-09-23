@@ -32,6 +32,7 @@ export function t(key: string, vars?: Record<string, string | number>): string {
  * 扫描 root 下的 data-i18n* 属性并替换文案：
  *   data-i18n             → textContent
  *   data-i18n-title       → title
+ *   data-i18n-aria-label  → aria-label
  *   data-i18n-placeholder → placeholder
  */
 export function applyI18n(root: ParentNode = document) {
@@ -40,6 +41,9 @@ export function applyI18n(root: ParentNode = document) {
   });
   root.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((el) => {
     if (el.dataset.i18nTitle) el.title = t(el.dataset.i18nTitle);
+  });
+  root.querySelectorAll<HTMLElement>("[data-i18n-aria-label]").forEach((el) => {
+    if (el.dataset.i18nAriaLabel) el.ariaLabel = t(el.dataset.i18nAriaLabel);
   });
   root.querySelectorAll<HTMLInputElement>("[data-i18n-placeholder]").forEach((el) => {
     if (el.dataset.i18nPlaceholder) el.placeholder = t(el.dataset.i18nPlaceholder);

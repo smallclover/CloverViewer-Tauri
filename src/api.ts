@@ -22,6 +22,8 @@ export interface AppConfig {
   language: "Zh" | "En" | "Ja";
   theme: "dark" | "light" | "system";
   zoom_sensitivity: number;
+  /** Whether the single-image view shows its adjacent-image preview strip. */
+  image_preview_strip_enabled: boolean;
   hotkeys: HotkeysConfig;
   minimize_on_close: boolean;
   magnifier_enabled: boolean;

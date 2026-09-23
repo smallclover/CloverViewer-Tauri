@@ -2,7 +2,7 @@
 export const THUMB_COLUMNS = [6, 4, 3] as const;
 
 const GAP = 16;
-const HORIZONTAL_PADDING = 96;
+export const GRID_HORIZONTAL_PADDING = 96;
 const MIN_CELL_WIDTH = 136;
 const BUFFER_ROWS = 2;
 const SECTION_HEADING_HEIGHT = 32;
@@ -29,7 +29,7 @@ export function createGridLayout(
   itemCount: number,
   preferredColumns: number,
 ): GridLayout {
-  const availableWidth = Math.max(1, viewportWidth - HORIZONTAL_PADDING);
+  const availableWidth = Math.max(1, viewportWidth - GRID_HORIZONTAL_PADDING);
   const maxColumns = Math.max(1, Math.floor((availableWidth + GAP) / (MIN_CELL_WIDTH + GAP)));
   const columns = Math.min(preferredColumns, maxColumns);
   const cellWidth = Math.floor((availableWidth - (columns - 1) * GAP) / columns);

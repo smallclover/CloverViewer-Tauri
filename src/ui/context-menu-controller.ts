@@ -53,18 +53,10 @@ export function createContextMenuController(options: ContextMenuControllerOption
       index === undefined
         ? [
             { label: options.translate("ctx.backToGrid"), action: options.onBackToGrid },
-            {
-              label: options.translate("ctx.properties"),
-              action: () => options.onProperties(entry),
-            },
             "separator",
           ]
         : [
             { label: options.translate("ctx.view"), action: () => options.onView(index) },
-            {
-              label: options.translate("ctx.properties"),
-              action: () => options.onProperties(entry),
-            },
             "separator",
           ];
     return [
@@ -73,6 +65,11 @@ export function createContextMenuController(options: ContextMenuControllerOption
       { label: options.translate("ctx.copyPath"), action: () => options.onCopyPath(entry.path) },
       "separator",
       { label: options.translate("ctx.share"), action: () => options.onShare(entry) },
+      "separator",
+      {
+        label: options.translate("ctx.properties"),
+        action: () => options.onProperties(entry),
+      },
     ];
   };
 

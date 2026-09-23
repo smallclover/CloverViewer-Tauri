@@ -63,7 +63,6 @@ const gridSizeMenu = $("grid-size-menu");
 const gridDensity = $<HTMLInputElement>("grid-density");
 const gridDensityControl = $("grid-density-control");
 const gridCount = $("grid-count");
-const gridUp = $<HTMLButtonElement>("grid-up");
 const statusLeft = $("status-left");
 const statusRight = $("status-right");
 const imagePreviewStrip = $("image-preview-strip");
@@ -227,7 +226,6 @@ function showGrid() {
   gridDensityControl.classList.remove("hidden");
   breadcrumb.classList.remove("hidden");
   gridCount.classList.remove("hidden");
-  gridUp.classList.remove("hidden");
   gridController.refreshMenu();
   gridController.renderGrid();
   playEnterAnimation(gridView);
@@ -285,7 +283,6 @@ function showSingle(index: number) {
   gridDensityControl.classList.add("hidden");
   breadcrumb.classList.add("hidden");
   gridCount.classList.add("hidden");
-  gridUp.classList.add("hidden");
   gridController.updateActive();
   applyPropsState();
   updateNavButtons();
@@ -426,13 +423,6 @@ async function pickFolder() {
 // ---------- 事件绑定 ----------
 $("btn-open").addEventListener("click", () => void pickFolder());
 propsClose.addEventListener("click", closeProps);
-gridUp.addEventListener("click", () => {
-  const path = viewerSession.currentDir?.replace(/[\\/]+$/, "") ?? "";
-  const parentStart = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  let parent = path.slice(0, parentStart);
-  if (/^[A-Za-z]:$/.test(parent)) parent += "\\";
-  if (parent) void openDirectory(parent);
-});
 const closeGridMenus = () => {
   gridSortMenu.classList.add("hidden");
   gridSizeMenu.classList.add("hidden");

@@ -54,7 +54,6 @@ export const ja = {
   "nav.next": "次へ",
   "view.grid": "グリッド",
   "view.gridTitle": "グリッド表示",
-  "view.upFolder": "親フォルダーへ移動",
   "view.single": "単一",
   "view.sortNewest": "日付 ↓",
   "view.sortOldest": "日付 ↑",

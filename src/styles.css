@@ -1144,22 +1144,6 @@ body {
   background: transparent;
 }
 #content-header .breadcrumb { position: static; display: flex; height: auto; padding: 0; background: transparent; }
-.grid-header-icon {
-  display: inline-flex;
-  width: 30px;
-  height: 30px;
-  align-items: center;
-  justify-content: center;
-  margin-right: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--fg-dim);
-  cursor: pointer;
-}
-.grid-header-icon:hover { background: var(--accent-soft); color: var(--accent); }
-.grid-header-icon .ic { width: 18px; height: 18px; }
 .breadcrumb-icon { display: inline-flex; width: 20px; height: 20px; color: var(--fg); }
 .breadcrumb-icon svg { width: 20px; height: 20px; }
 #content-header .breadcrumb .crumb.current { padding: 4px 6px; color: var(--fg); font-size: 17px; font-weight: 600; cursor: default; }

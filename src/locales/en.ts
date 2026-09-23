@@ -53,7 +53,6 @@ export const en = {
   "nav.next": "Next",
   "view.grid": "Grid",
   "view.gridTitle": "Grid View",
-  "view.upFolder": "Go to parent folder",
   "view.single": "Single",
   "view.sortNewest": "Date ↓",
   "view.sortOldest": "Date ↑",

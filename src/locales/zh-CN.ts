@@ -55,7 +55,6 @@ export const zh = {
   // 视图切换
   "view.grid": "网格",
   "view.gridTitle": "网格视图",
-  "view.upFolder": "返回上级文件夹",
   "view.single": "单图",
   "view.sortNewest": "日期 ↓",
   "view.sortOldest": "日期 ↑",

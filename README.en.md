@@ -46,9 +46,10 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity
 *   **Drag & drop open**: drag images or a folder directly into the window
 *   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens)
-*   **Right-click menu**: copy image, copy path, view
+*   **Right-click menu**: copy image, copy path, view, edit image
 *   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
+*   **Image editing**: enter from the toolbar, Edit menu, or right-click menu; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete, undo/redo, and export PNG / JPEG / WebP or overwrite the source image
 
 ### 📸 Screenshot & Annotation
 
@@ -58,7 +59,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Color & line width**: long-press a tool icon to open the color palette
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
-*   **Export**: Enter to copy to clipboard / save to Desktop
+*   **Export**: Enter to copy to clipboard / save to Desktop; the toolbar can open a regular screenshot directly in the viewer
 *   **LAN sharing**: after annotating, create a temporary link and QR code for devices on the same network to preview or download the screenshot
 *   **OCR text recognition**: based on the native Windows UWP OCR engine (`Windows.Media.Ocr`), multi-language (Chinese/English/Japanese), with grayscale + 2× nearest-neighbor upscaling preprocessing
 

@@ -126,6 +126,8 @@ pub fn run() {
             commands::set_scroll_capture_hotkey,
             commands::list_images,
             commands::read_image_data,
+            commands::read_editable_image_data,
+            commands::save_edited_image,
             commands::get_app_info,
             commands::open_url,
             thumbnails::get_thumbnail,

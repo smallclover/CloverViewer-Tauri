@@ -333,7 +333,7 @@ pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
 /// Rust 侧只负责「落盘」或「写剪贴板」，然后隐藏截图窗口。
 #[derive(Debug, Deserialize)]
 pub struct FinishRequest {
-    /// "save" | "clipboard"
+    /// "save" | "clipboard" | "open"
     pub action: String,
     /// 前端 `canvas.toBlob` 导出的 PNG（base64，可带 data: 前缀）
     pub png: String,
@@ -347,15 +347,34 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
         .map_err(|e| e.to_string())?;
 
     match req.action.as_str() {
-        "save" => {
-            let desktop = dirs::desktop_dir().ok_or("未找到桌面目录")?;
-            let ts = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let path = desktop.join(format!("screenshot_{ts}.png"));
+        "save" | "open" => {
+            let path = if req.action == "save" {
+                let desktop = dirs::desktop_dir().ok_or("未找到桌面目录")?;
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                desktop.join(format!("screenshot_{ts}.png"))
+            } else {
+                // 与滚动截图一致：只写应用自己的临时目录，供查看器打开。
+                let dir = crate::commands::temporary_capture_dir();
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+                dir.join(format!("screenshot_{ts}.png"))
+            };
             std::fs::write(&path, &png).map_err(|e| e.to_string())?;
             tracing::info!("截图已保存: {}", path.display());
+            if req.action == "open" {
+                if let Some(main) = app.get_webview_window("main") {
+                    let _ = main.show();
+                    let _ = main.unminimize();
+                    let _ = main.set_focus();
+                }
+                let _ = app.emit("open-image", serde_json::json!({ "path": path }));
+            }
         }
         "clipboard" => {
             let img = image::load_from_memory_with_format(&png, image::ImageFormat::Png)

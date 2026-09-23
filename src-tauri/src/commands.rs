@@ -281,3 +281,58 @@ pub fn read_image_data(path: String) -> Result<String, String> {
     let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
     Ok(format!("data:image/png;base64,{b64}"))
 }
+
+/// 返回适合 Canvas 编辑的 data URL。asset protocol 在 WebView2 中可展示，
+/// 但它不保证满足 Canvas 的同源导出要求；编辑时统一转为内联数据，避免 tainted canvas。
+#[tauri::command]
+pub fn read_editable_image_data(path: String) -> Result<String, String> {
+    let extension = Path::new(&path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let mime = match extension.as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "bmp" => Some("image/bmp"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "avif" => Some("image/avif"),
+        _ => None,
+    };
+    if let Some(mime) = mime {
+        let bytes = fs::read(&path).map_err(|e| format!("读取图片失败：{e}"))?;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        return Ok(format!("data:{mime};base64,{b64}"));
+    }
+    // TIFF 等浏览器不直接支持的格式沿用原有 Rust 解码 → PNG 路径。
+    read_image_data(path)
+}
+
+/// 将前端 Canvas 的 PNG 以用户选择的格式写入指定位置。
+///
+/// 解码与编码均在 Rust 侧完成，避免 WebView2 对 WebP 编码支持差异影响导出结果。
+#[tauri::command]
+pub fn save_edited_image(path: String, png: String, format: String) -> Result<(), String> {
+    let source = png.split_once(',').map_or(png.as_str(), |(_, value)| value);
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(source)
+        .map_err(|e| format!("编辑结果不是有效 Base64：{e}"))?;
+    let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+        .map_err(|e| format!("无法解码编辑结果：{e}"))?;
+    let target_format = match format.as_str() {
+        "png" => image::ImageFormat::Png,
+        "jpeg" => image::ImageFormat::Jpeg,
+        "webp" => image::ImageFormat::WebP,
+        _ => return Err(format!("不支持的导出格式: {format}")),
+    };
+
+    // 先完整编码到内存；编码失败时绝不截断用户的原文件。
+    let mut encoded = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut encoded), target_format)
+        .map_err(|e| format!("图片编码失败：{e}"))?;
+    std::fs::write(&path, encoded).map_err(|e| format!("无法写入图片：{e}"))?;
+    tracing::info!("已保存编辑图片: {path}");
+    Ok(())
+}

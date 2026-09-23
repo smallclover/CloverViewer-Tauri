@@ -400,7 +400,7 @@ window.addEventListener("contextmenu", (e) => e.preventDefault());
 // ============================================================
 // 导出
 // ============================================================
-async function exportImage(action: "save" | "clipboard") {
+async function exportImage(action: "save" | "clipboard" | "open") {
   await screenshotActions.exportImage(action);
 }
 

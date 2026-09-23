@@ -1,6 +1,6 @@
 import type { ImageEntry } from "../api";
 
-export type ViewerMode = "grid" | "single";
+export type ViewerMode = "grid" | "single" | "edit";
 
 /** Shared durable state for directory, image selection, and the active viewer mode. */
 export function createViewerSession() {

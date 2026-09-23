@@ -13,6 +13,7 @@ interface ContextMenuControllerOptions {
   onCopyImage: (entry: ImageEntry) => void;
   onCopyPath: (path: string) => void;
   onShare: (entry: ImageEntry) => void;
+  onEdit: (entry: ImageEntry) => void;
   onProperties: (entry: ImageEntry) => void;
   onBackToGrid: () => void;
   translate: (key: string) => string;
@@ -62,6 +63,7 @@ export function createContextMenuController(options: ContextMenuControllerOption
     return [
       ...leadingActions,
       { label: options.translate("ctx.copyImage"), action: () => options.onCopyImage(entry) },
+      { label: options.translate("ctx.edit"), action: () => options.onEdit(entry) },
       { label: options.translate("ctx.copyPath"), action: () => options.onCopyPath(entry.path) },
       "separator",
       { label: options.translate("ctx.share"), action: () => options.onShare(entry) },

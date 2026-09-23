@@ -24,7 +24,7 @@ export function bindFileDrop(
   });
 }
 
-/** Opens a long screenshot that the backend has materialized as a temporary image file. */
+/** Opens a screenshot that the backend has materialized as a temporary image file. */
 export async function bindOpenImageBridge(
   openPath: (path: string) => Promise<void>,
   translate: Translate,

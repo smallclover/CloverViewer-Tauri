@@ -363,6 +363,84 @@ body {
   box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 52%, transparent);
 }
 
+/* ---------- 图片编辑器 ---------- */
+#image-editor-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.image-editor-controls {
+  position: absolute;
+  z-index: 2;
+  bottom: 18px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 28px);
+  padding: 7px 9px;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--shadow) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(1.25);
+  transform: translateX(-50%);
+}
+.image-editor-controls button,
+.image-editor-select {
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  cursor: pointer;
+}
+.image-editor-controls button svg { width: 19px; height: 19px; display: block; }
+.image-editor-select { width: auto; min-width: 58px; padding: 3px 6px; }
+.image-editor-controls button:hover,
+.image-editor-controls button.active { background: var(--accent-soft); border-color: var(--accent); }
+.image-editor-divider { width: 1px; height: 22px; background: var(--border); flex: none; }
+.image-editor-color { width: 32px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.image-editor-workspace {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 20px 80px;
+  background: repeating-conic-gradient(var(--bg-hover) 0% 25%, transparent 0% 50%) 50% / 20px 20px;
+}
+.image-editor-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 60%, transparent);
+  touch-action: none;
+  cursor: crosshair;
+}
+.image-editor-text-input {
+  position: absolute;
+  z-index: 3;
+  width: min(260px, calc(100% - 32px));
+  min-height: 58px;
+  padding: 8px 10px;
+  resize: both;
+  color: var(--fg);
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  outline: 3px solid var(--accent-soft);
+  background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 60%, transparent);
+  font: 600 16px/1.35 "Segoe UI", system-ui, sans-serif;
+}
+
 #props-panel {
   width: 280px;
   flex: none;

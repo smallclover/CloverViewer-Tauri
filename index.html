@@ -19,6 +19,7 @@
           <details class="app-menu">
             <summary data-i18n="menu.edit">编辑</summary>
             <div class="app-menu-popover" role="menu">
+              <button id="btn-enter-edit" type="button" role="menuitem" data-i18n="toolbar.enterEdit" disabled>进入编辑模式 (Ctrl+E)</button>
               <button id="btn-settings" type="button" role="menuitem" data-i18n="toolbar.settings">设置</button>
             </div>
           </details>
@@ -102,6 +103,8 @@
           </aside>
           <aside id="image-share-panel" class="collapsed" aria-label="局域网分享"></aside>
         </div>
+
+        <section id="image-editor-view" class="hidden" aria-label="图片编辑器"></section>
       </main>
 
       <footer id="statusbar">

@@ -70,6 +70,10 @@ export const listImages = (dir: string) => invoke<ImageEntry[]>("list_images", {
 
 export const readImageData = (path: string) => invoke<string>("read_image_data", { path });
 
+/** Local image as a same-origin data URL, safe to draw and export from Canvas. */
+export const readEditableImageData = (path: string) =>
+  invoke<string>("read_editable_image_data", { path });
+
 export const getThumbnail = (path: string, size: number) =>
   invoke<string>("get_thumbnail", { path, size });
 
@@ -126,8 +130,14 @@ export const takeScrollStartMode = () => invoke<boolean>("take_scroll_start_mode
 
 export const closeScreenshot = () => invoke<void>("close_screenshot");
 
-export const finishScreenshot = (action: "save" | "clipboard", png: string) =>
+export const finishScreenshot = (action: "save" | "clipboard" | "open", png: string) =>
   invoke<void>("finish_screenshot", { req: { action, png } });
+
+export type EditedImageFormat = "png" | "jpeg" | "webp";
+
+/** Encodes the canvas result with Rust's image codec and writes it to the chosen user path. */
+export const saveEditedImage = (path: string, png: string, format: EditedImageFormat) =>
+  invoke<void>("save_edited_image", { path, png, format });
 
 export interface LanShareInfo {
   url: string;

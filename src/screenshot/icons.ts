@@ -31,6 +31,9 @@ const ICONS: Record<string, string> = {
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
     '<path d="M7 10l5 5 5-5"/>' +
     '<path d="M12 15V3"/>',
+  open:
+    '<path d="M4 19V6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>' +
+    '<path d="m11 10 3 3-3 3M6 13h8"/>',
   share:
     '<circle cx="18" cy="5" r="2.5"/>' +
     '<circle cx="6" cy="12" r="2.5"/>' +

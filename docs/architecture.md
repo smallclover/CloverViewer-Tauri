@@ -34,7 +34,8 @@ Rust Tauri 命令与应用状态
 | --- | --- |
 | `src/api.ts` | 前端与 Rust 的唯一业务桥接层；定义共享数据类型，并封装 `invoke` 和 Tauri 事件。 |
 | `src/main.ts` | 主窗口组合入口：连接查看器控制器、设置/关于/菜单/窗口外观控制器，并编排加载流程。 |
-| `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格；`single-image-controller.ts` 管理单图变换和手势；`image-properties-controller.ts` 显示属性；`image-share-controller.ts` 管理当前图片的局域网分享面板。 |
+| `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格；`single-image-controller.ts` 管理单图变换和手势；`image-editor-controller.ts` 管理图片编辑会话与导出；`image-properties-controller.ts` 显示属性；`image-share-controller.ts` 管理当前图片的局域网分享面板。 |
+| `src/image-editor/` | 查看器与截图共用的标注核心：图形几何、历史快照、标注绘制与马赛克路径插值；图片编辑额外在这里维护 Canvas 马赛克采样器。 |
 | `src/screenshot.ts` | 截图页面组合入口，保留页面级 DOM、窗口事件和跨模块调度。 |
 | `src/screenshot/` | 截图领域实现：会话与历史、输入与快捷键、标注绘制、选区几何、工具栏/面板、文本输入、放大镜、导出、OCR、滚动截图、局域网分享及窗口生命周期。 |
 | `src/ui/` | 与页面外观或通用交互相关的控制器，如设置（分类 + 搜索 + 缓存维护）、关于、右键菜单、窗口标题栏和应用桥接。 |
@@ -45,11 +46,11 @@ Rust Tauri 命令与应用状态
 
 ### 主窗口数据流
 
-`main.ts` 读取配置和启动参数后创建查看器会话。目录扫描、缩略图、图片属性、配置写入等需要原生能力的操作通过 `api.ts` 进入 Rust 命令；控制器把结果映射为网格、单图视图或属性面板。设置、菜单和窗口控制器只负责自己的 UI 边界，不保存查看器的核心状态。
+`main.ts` 读取配置和启动参数后创建查看器会话。目录扫描、缩略图、图片属性、配置写入等需要原生能力的操作通过 `api.ts` 进入 Rust 命令；控制器把结果映射为网格、单图视图、图片编辑器或属性面板。图片编辑从工具栏、编辑菜单或右键菜单进入，读取可导出的 data URL，在前端 Canvas 中保持标注、裁剪和旋转状态，最后经 `save_edited_image` 写入所选格式。设置、菜单和窗口控制器只负责自己的 UI 边界，不保存查看器的核心状态。
 
 ### 截图数据流
 
-后端热键或命令创建截图窗口，并向前端发送截图刷新事件。`screenshot.ts` 将事件交给生命周期和加载模块，之后由编辑会话保存画布、选区和历史；输入、快捷键、工具栏与面板控制交互，渲染器负责画布重绘。普通截图通过导出/OCR 路径返回后端，滚动截图则由独立的会话、控制器、布局和 HUD 模块协调。
+后端热键或命令创建截图窗口，并向前端发送截图刷新事件。`screenshot.ts` 将事件交给生命周期和加载模块，之后由编辑会话保存画布、选区和历史；输入、快捷键、工具栏与面板控制交互，渲染器负责画布重绘。普通截图可复制、保存、OCR 或写入应用临时目录后在查看器中打开；滚动截图则由独立的会话、控制器、布局和 HUD 模块协调。
 
 截图坐标、图像像素与窗口缩放是高风险边界。涉及选区、拼接或导出的修改应优先复用 `src/screenshot/` 中已有的几何、布局和图像辅助模块，避免在页面入口重复换算。
 
@@ -57,7 +58,7 @@ Rust Tauri 命令与应用状态
 
 | 路径 | 职责 |
 | --- | --- |
-| `src-tauri/src/commands.rs` | Tauri 命令边界：配置、文件打开、图片查询、热键、窗口操作与临时缓存维护（`get_cache_summary` / `clear_temp_cache`）。 |
+| `src-tauri/src/commands.rs` | Tauri 命令边界：配置、文件打开、图片查询、热键、窗口操作、图片编辑的读取/保存，以及临时缓存维护（`get_cache_summary` / `clear_temp_cache`）。 |
 | `src-tauri/src/config.rs` | 应用配置的数据模型、读取与持久化。 |
 | `src-tauri/src/image_scan.rs` | 文件夹中的图像扫描与排序。 |
 | `src-tauri/src/image_info.rs` | 图像和 EXIF 信息读取。 |
@@ -82,7 +83,7 @@ Rust Tauri 命令与应用状态
 
 设置页是主窗口内的整页视图：左侧分类（应用 / 截图 / 局域网分享 / 维护）与右侧设置行由 `settings-controller.ts` 的单一 `render()` 统一渲染，搜索词同时过滤分类与设置行；每项改动立即写入配置，热键类改动需要显式「应用」。新增设置项时须同时补齐 `index.html` 的设置行、三条语言表的键与说明文案，以及 `AppConfig` 的 Rust/TypeScript 两端字段。
 
-临时缓存只涉及应用自己的目录 `%TEMP%\CloverViewer`，用于保存长截图「在查看器中打开」产生的 PNG。`get_cache_summary` 统计该目录的文件数与体积，`clear_temp_cache(older_than_hours)` 按最后修改时间删除（`0` 表示全部），并在应用启动时按配置的 `cache_cleanup_after_hours` 自动执行一次。维护逻辑只遍历该目录的普通文件：不跟随符号链接、不触碰系统 Temp 的其他内容，被占用而删除失败的文件只记录警告。
+临时缓存只涉及应用自己的目录 `%TEMP%\CloverViewer`，用于保存普通截图和长截图「在查看器中打开」产生的 PNG。`get_cache_summary` 统计该目录的文件数与体积，`clear_temp_cache(older_than_hours)` 按最后修改时间删除（`0` 表示全部），并在应用启动时按配置的 `cache_cleanup_after_hours` 自动执行一次。维护逻辑只遍历该目录的普通文件：不跟随符号链接、不触碰系统 Temp 的其他内容，被占用而删除失败的文件只记录警告。
 
 局域网分享由 `lan_share.rs` 持有单个临时 HTTP 服务状态；前端只经 `api.ts` 调用 `startLanShare`、`startImageLanShare` 和 `stopLanShare`。服务向同一局域网暴露带随机令牌的预览与下载地址，内容只保存在内存；到期、达到一次下载限制或主动停止后即失效。`AppConfig` 保存默认有效期和下载限制，截图与查看器各自的分享控制器只负责其界面状态。
 

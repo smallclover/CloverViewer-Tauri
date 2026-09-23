@@ -23,7 +23,7 @@ export function createScreenshotActionController(options: ScreenshotActionContro
     return selection && selection.w > 0 && selection.h > 0 ? selection : null;
   };
 
-  const exportImage = async (action: "save" | "clipboard") => {
+  const exportImage = async (action: "save" | "clipboard" | "open") => {
     const selection = validSelection();
     if (!selection) return;
     const png = await selectionToPngBase64({

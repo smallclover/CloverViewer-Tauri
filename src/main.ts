@@ -12,6 +12,7 @@ import { createImageSourceResolver } from "./viewer/image-source";
 import { createImagePropertiesController } from "./viewer/image-properties-controller";
 import { createImagePreviewStripController } from "./viewer/image-preview-strip-controller";
 import { createImageShareController } from "./viewer/image-share-controller";
+import { createImageEditorController } from "./viewer/image-editor-controller";
 import { createSingleImageController } from "./viewer/single-image-controller";
 import { createViewerSession } from "./viewer/viewer-session";
 import {
@@ -27,6 +28,8 @@ import {
   getThumbnail,
   listImages,
   readImageData,
+  readEditableImageData,
+  saveEditedImage,
   startImageLanShare,
   stopLanShare,
 } from "./api";
@@ -46,6 +49,7 @@ const gridView = $("grid-view");
 const grid = $("grid");
 const gridSpacer = $("grid-spacer");
 const singleView = $("single-view");
+const imageEditorView = $("image-editor-view");
 const imgStage = $("img-stage");
 const singleImg = $<HTMLImageElement>("single-img");
 const propsList = $("props-list");
@@ -70,6 +74,7 @@ const navPrev = $<HTMLButtonElement>("nav-prev");
 const navNext = $<HTMLButtonElement>("nav-next");
 const dropOverlay = $("drop-overlay");
 const toastEl = $("toast");
+const enterEditButton = $<HTMLButtonElement>("btn-enter-edit");
 
 // 标题栏菜单：同一时间只展开一个，执行菜单项或按 Esc 后收起。
 const appMenus = Array.from(document.querySelectorAll<HTMLDetailsElement>("#toolbar .app-menu"));
@@ -118,6 +123,27 @@ const imageShareController = createImageShareController({
   stopLanShare,
   translate: t,
   onClose: closeImageShare,
+});
+const imageEditor = createImageEditorController({
+  root: imageEditorView,
+  getEditableSource: readEditableImageData,
+  saveImage: saveEditedImage,
+  translate: t,
+  onClose: leaveEdit,
+  onSaved: (path) => {
+    imageSource.clear();
+    const active = viewerSession.images[viewerSession.activeIndex];
+    if (active?.path !== path || !viewerSession.currentDir) return;
+    void listImages(viewerSession.currentDir).then((refreshed) => {
+      const replacement = refreshed.find((image) => image.path === path);
+      if (!replacement) return;
+      viewerSession.images = viewerSession.images.map((image) =>
+        image.path === path ? replacement : image,
+      );
+      void imageSource.for(replacement).then((src) => (singleImg.src = src));
+    });
+  },
+  toast,
 });
 
 // ---------- 主题 ----------
@@ -222,6 +248,8 @@ function showGrid() {
   );
   gridView.classList.toggle("hidden", viewerSession.images.length === 0);
   singleView.classList.add("hidden");
+  imageEditorView.classList.add("hidden");
+  enterEditButton.disabled = true;
   gridMenu.classList.remove("hidden");
   gridDensityControl.classList.remove("hidden");
   breadcrumb.classList.remove("hidden");
@@ -278,6 +306,8 @@ function showSingle(index: number) {
   emptyState.classList.add("hidden");
   gridView.classList.add("hidden");
   singleView.classList.remove("hidden");
+  imageEditorView.classList.add("hidden");
+  enterEditButton.disabled = false;
   playEnterAnimation(singleView);
   gridMenu.classList.add("hidden");
   gridDensityControl.classList.add("hidden");
@@ -298,6 +328,38 @@ function showSingle(index: number) {
   preloadNeighbors(index);
 }
 
+async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
+  if (!entry) return;
+  const index = viewerSession.images.findIndex((image) => image.path === entry.path);
+  if (index >= 0) viewerSession.activeIndex = index;
+  closeImageShare();
+  viewerSession.propsVisible = false;
+  viewerSession.viewMode = "edit";
+  contentHeader.classList.add("hidden");
+  emptyState.classList.add("hidden");
+  gridView.classList.add("hidden");
+  singleView.classList.add("hidden");
+  gridMenu.classList.add("hidden");
+  gridDensityControl.classList.add("hidden");
+  breadcrumb.classList.add("hidden");
+  gridCount.classList.add("hidden");
+  enterEditButton.disabled = true;
+  try {
+    await imageEditor.open(entry);
+    refreshStatus();
+  } catch (error) {
+    imageEditorView.classList.add("hidden");
+    viewerSession.viewMode = "single";
+    showSingle(viewerSession.activeIndex);
+    toast(t("toast.openFailed", { msg: String(error) }), "error");
+  }
+}
+
+function leaveEdit() {
+  viewerSession.viewMode = "single";
+  showSingle(viewerSession.activeIndex);
+}
+
 // 刷新状态栏文案（语言切换时也会调用）
 function refreshStatus() {
   if (
@@ -309,6 +371,10 @@ function refreshStatus() {
     statusLeft.textContent = entry.name;
     const zoom = `${Math.round(singleImageController.displayedScale() * 100)}%`;
     statusRight.textContent = `${viewerSession.activeIndex + 1} / ${viewerSession.images.length} · ${formatDimensions(entry.width, entry.height)} · ${formatSize(entry.size)} · ${zoom}`;
+    gridCount.classList.add("hidden");
+  } else if (viewerSession.viewMode === "edit") {
+    statusLeft.textContent = t("editor.title");
+    statusRight.textContent = "";
     gridCount.classList.add("hidden");
   } else if (viewerSession.currentDir) {
     statusLeft.textContent = t("status.imageCount", { count: viewerSession.images.length });
@@ -367,9 +433,15 @@ window.addEventListener("keydown", (e) => {
   // 否则按 R 会转动背后的图、Ctrl+O 会弹出文件夹对话框。
   if (aboutController.isOpen()) return;
   if (settingsController.isOpen()) return;
+  if (e.defaultPrevented || imageEditor.isOpen()) return;
   if (e.ctrlKey && e.key.toLowerCase() === "o") {
     e.preventDefault();
     void pickFolder();
+    return;
+  }
+  if (e.ctrlKey && e.key.toLowerCase() === "e") {
+    e.preventDefault();
+    void enterEdit();
     return;
   }
   switch (e.key) {
@@ -422,6 +494,7 @@ async function pickFolder() {
 
 // ---------- 事件绑定 ----------
 $("btn-open").addEventListener("click", () => void pickFolder());
+enterEditButton.addEventListener("click", () => void enterEdit());
 propsClose.addEventListener("click", closeProps);
 const closeGridMenus = () => {
   gridSortMenu.classList.add("hidden");
@@ -492,6 +565,7 @@ createContextMenuController({
   onCopyImage: (entry) => void copyImageBitmap(entry),
   onCopyPath: (path) => void copyImagePath(path),
   onShare: openImageShare,
+  onEdit: (entry) => void enterEdit(entry),
   onProperties: (entry) => {
     const index = viewerSession.images.findIndex((image) => image.path === entry.path);
     if (
@@ -517,6 +591,7 @@ function refreshViewerTranslations() {
   if (viewerSession.viewMode === "single" && viewerSession.activeIndex >= 0) {
     imagePropertiesController.render(viewerSession.images[viewerSession.activeIndex]);
   }
+  imageEditor.refreshTranslations();
 }
 
 const settingsController = createSettingsController({

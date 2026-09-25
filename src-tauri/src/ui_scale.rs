@@ -46,7 +46,7 @@ fn lock_applied() -> std::sync::MutexGuard<'static, HashMap<String, f64>> {
 /// 宽高各算一次比例取较小者：屏幕越「矮」（如 2560x1080 带鱼屏）界面越该缩，
 /// 否则一屏塞不下几行内容。
 pub fn zoom_for_logical_size(width: f64, height: f64) -> f64 {
-    if !(width > 0.0) || !(height > 0.0) {
+    if width.is_nan() || height.is_nan() || width <= 0.0 || height <= 0.0 {
         return MAX_ZOOM;
     }
     let ratio = (width / REFERENCE_WIDTH).min(height / REFERENCE_HEIGHT);

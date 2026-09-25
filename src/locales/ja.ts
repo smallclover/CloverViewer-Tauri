@@ -154,6 +154,8 @@ export const ja = {
   "settings.checkUpdate": "更新を確認",
   "update.checking": "更新を確認中…",
   "update.latest": "最新バージョンです",
+  "update.timedOut":
+    "更新確認がタイムアウトしました。ネットワークまたはプロキシを確認して再試行してください。",
   "update.title": "新しいバージョンがあります",
   "update.versionAvailable": "更新先",
   "update.releaseNotes": "更新内容",

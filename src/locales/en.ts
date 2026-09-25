@@ -154,6 +154,7 @@ export const en = {
   "settings.checkUpdate": "Check for Updates",
   "update.checking": "Checking for updates…",
   "update.latest": "You're up to date",
+  "update.timedOut": "Update check timed out. Check your network or proxy and try again.",
   "update.title": "Update available",
   "update.versionAvailable": "Update to",
   "update.releaseNotes": "What's new",

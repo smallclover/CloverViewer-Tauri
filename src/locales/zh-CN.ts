@@ -157,6 +157,7 @@ export const zh = {
   "settings.checkUpdate": "检查更新",
   "update.checking": "正在检查更新…",
   "update.latest": "当前已是最新版本",
+  "update.timedOut": "检查更新超时，请检查网络或代理后重试。",
   "update.title": "发现新版本",
   "update.versionAvailable": "可更新至",
   "update.releaseNotes": "更新日志",

@@ -31,6 +31,9 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
+/** 更新源不可达时不能让设置页一直停在“正在检查”。 */
+const UPDATE_REQUEST_TIMEOUT_MS = 15_000;
+
 /** Owns settings form persistence, hotkey registration, and the update dialog. */
 export function createSettingsController(options: SettingsControllerOptions) {
   const overlay = element("settings-overlay");
@@ -211,7 +214,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     checkUpdateButton.disabled = true;
     options.toast(options.translate("update.checking"), "info");
     try {
-      const update = await check();
+      const update = await check({ timeout: UPDATE_REQUEST_TIMEOUT_MS });
       if (!update) {
         options.toast(options.translate("update.latest"), "success");
         return;
@@ -221,24 +224,33 @@ export function createSettingsController(options: SettingsControllerOptions) {
       let contentLength = 0;
       let lastPercent = -1;
       options.toast(options.translate("update.downloading", { percent: 0 }), "info");
-      await update.downloadAndInstall((event) => {
-        if (event.event === "Started") contentLength = event.data.contentLength ?? 0;
-        else if (event.event === "Progress") {
-          downloaded += event.data.chunkLength;
-          if (contentLength > 0) {
-            const percent = Math.min(100, Math.floor((downloaded / contentLength) * 100));
-            if (percent !== lastPercent) {
-              lastPercent = percent;
-              options.toast(options.translate("update.downloading", { percent }), "info");
+      await update.downloadAndInstall(
+        (event) => {
+          if (event.event === "Started") contentLength = event.data.contentLength ?? 0;
+          else if (event.event === "Progress") {
+            downloaded += event.data.chunkLength;
+            if (contentLength > 0) {
+              const percent = Math.min(100, Math.floor((downloaded / contentLength) * 100));
+              if (percent !== lastPercent) {
+                lastPercent = percent;
+                options.toast(options.translate("update.downloading", { percent }), "info");
+              }
             }
           }
-        }
-      });
+        },
+        { timeout: UPDATE_REQUEST_TIMEOUT_MS },
+      );
       options.toast(options.translate("update.installing"), "success");
       await relaunch();
     } catch (error) {
       console.warn("检查更新失败", error);
-      options.toast(options.translate("update.failed", { msg: String(error) }), "error");
+      const message = String(error);
+      options.toast(
+        /timed?\s*out/i.test(message)
+          ? options.translate("update.timedOut")
+          : options.translate("update.failed", { msg: message }),
+        "error",
+      );
     } finally {
       checkingForUpdate = false;
       checkUpdateButton.disabled = false;

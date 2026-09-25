@@ -29,6 +29,9 @@ use tauri::{
     WebviewWindowBuilder,
 };
 
+/// 截图覆盖窗的窗口标签（跨模块共用：界面缩放、滚动截图定位等）。
+pub const WINDOW_LABEL: &str = "screenshot";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ScreenData {
     /// 该屏在虚拟桌面中的物理坐标（左上角）
@@ -149,7 +152,7 @@ pub fn take_scroll_start_mode(store: State<'_, ScreenshotStore>) -> bool {
 /// 关闭截图窗口（前端 Esc 时调用）—— 仅隐藏窗口（不销毁），保留供下次复用。
 #[tauri::command]
 pub fn close_screenshot(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("screenshot") {
+    if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         // 先让前端清掉画面（移除 body.ready），避免下次 show 时闪旧截图
         let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
@@ -260,7 +263,7 @@ pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
         // 本应用自己的顶层窗口，枚举时跳过
         let own: Vec<HWND> = {
             let mut v = Vec::new();
-            for label in ["screenshot", "main"] {
+            for label in [WINDOW_LABEL, "main"] {
                 if let Some(w) = app.get_webview_window(label) {
                     if let Ok(hwnd) = w.hwnd() {
                         // Tauri 的 hwnd() 来自 windows 0.61.3，而本函数 use 的是 0.62.2，
@@ -395,7 +398,7 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
         other => return Err(format!("未知动作: {other}")),
     }
 
-    if let Some(w) = app.get_webview_window("screenshot") {
+    if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         // 同上：隐藏前清画面，避免下次复用时闪旧截图
         let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
@@ -429,7 +432,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
         );
 
         // 已在截图状态（截图窗口可见）时忽略再次触发，避免重新截屏/重开窗口导致闪屏。
-        if let Some(w) = app.get_webview_window("screenshot") {
+        if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
             if w.is_visible().unwrap_or(false) {
                 return;
             }
@@ -468,7 +471,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
         // Alt+S 时 set_position/set_size（物理像素）+ show。
         // 位置 bug 的真正根因是前端 canvas CSS 不拉伸（已修），set_position(PhysicalPosition)
         // 本身行为正常 —— 之前误删缓存导致每次 cold start WebView2 1-3s。
-        let win = if let Some(w) = app.get_webview_window("screenshot") {
+        let win = if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
             let _ = w.set_position(PhysicalPosition::new(data.min_x, data.min_y));
             let _ = w.set_size(PhysicalSize::new(data.total_width, data.total_height));
             w
@@ -486,7 +489,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
 
             match WebviewWindowBuilder::new(
                 &app,
-                "screenshot",
+                WINDOW_LABEL,
                 WebviewUrl::App("screenshot.html".into()),
             )
             .title("screenshot")
@@ -511,6 +514,10 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
                 }
             }
         };
+
+        // 界面密度跟随所在显示器：覆盖窗可能出现在与上次不同的屏幕上（分辨率不同），
+        // 每次捕获都按当前屏幕对齐一次缩放（值没变时是空操作）。
+        crate::ui_scale::apply(&win);
 
         // Windows 无边框窗口自带不可见 DWM resize border：set_position 设的是【外框】，
         // 内容(webview/content)会相对外框内缩若干像素（本例左 9px/上 5px），导致内容
@@ -570,7 +577,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
 /// 这样能避免 WebView2 冷启动的白色闪屏/卡死窗口被置顶挡住整个屏幕。
 #[tauri::command]
 pub fn screenshot_ui_ready(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("screenshot") {
+    if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         let _ = w.show();
         let _ = w.set_focus();
     }

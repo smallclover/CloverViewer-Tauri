@@ -21,6 +21,7 @@ mod screenshot;
 pub mod scroll_capture;
 mod startup;
 mod thumbnails;
+mod ui_scale;
 
 use config::ConfigStore;
 use tauri::{
@@ -31,6 +32,13 @@ use tauri::{
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const MAIN_WINDOW: &str = "main";
+
+/// 需要跟随屏幕调整界面密度的窗口。
+///
+/// 只有主查看器和截图浮层有完整的界面层（工具栏、面板、网格）。
+fn uses_ui_scale(label: &str) -> bool {
+    label == MAIN_WINDOW || label == screenshot::WINDOW_LABEL
+}
 
 /// 启动阶段要告诉用户的提示（目前只有热键冲突）。
 ///
@@ -198,6 +206,8 @@ pub fn run() {
                         }
                     }
                 }
+                // 界面密度跟随所在显示器（1080p 逻辑分辨率下比 2K/4K 显得大一号）。
+                ui_scale::apply(&win);
             }
 
             // 注册全局截图热键（直接进入截图模式）
@@ -320,7 +330,39 @@ pub fn run() {
 
             Ok(())
         })
+        // 页面（重新）加载后重新对齐界面密度：WebView2 的缩放按站点记忆，
+        // 首次导航到真实页面、以及 dev 模式整页刷新，都可能把它丢回 1.0。
+        .on_page_load(|webview, payload| {
+            if payload.event() != tauri::webview::PageLoadEvent::Finished {
+                return;
+            }
+            let label = webview.label().to_string();
+            if !uses_ui_scale(&label) {
+                return;
+            }
+            let app = webview.window().app_handle().clone();
+            if let Some(window) = app.get_webview_window(&label) {
+                ui_scale::forget(&label);
+                ui_scale::apply(&window);
+            }
+        })
         .on_window_event(|window, event| {
+            // 界面密度跟随窗口所在显示器：换屏（分辨率或缩放不同）后要重算。
+            if uses_ui_scale(window.label()) {
+                match event {
+                    tauri::WindowEvent::Moved(_)
+                    | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                        if let Some(target) = window.app_handle().get_webview_window(window.label())
+                        {
+                            ui_scale::apply(&target);
+                        }
+                    }
+                    // 销毁后重建 = 全新 WebView（缩放回到 1.0），旧记录必须丢掉。
+                    tauri::WindowEvent::Destroyed => ui_scale::forget(window.label()),
+                    _ => {}
+                }
+            }
+
             if window.label() != MAIN_WINDOW {
                 return;
             }

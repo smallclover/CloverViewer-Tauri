@@ -69,9 +69,16 @@ Rust Tauri 命令与应用状态
 | `src-tauri/src/scroll_capture/` | 滚动截图领域：平台交互、帧匹配、位移计算、拼接、预览、会话和 Tauri 桥接。 |
 | `src-tauri/src/mcp/` | MCP 截图服务：传输、工具协议、截图产物存储和捕获逻辑。 |
 | `src-tauri/src/startup.rs` | 开机启动设置。 |
+| `src-tauri/src/ui_scale.rs` | 按显示器逻辑分辨率自动设置 WebView 缩放，让不同分辨率屏幕上的界面密度一致。 |
 | `src-tauri/capabilities/` | Tauri 能力声明，限定 WebView 可调用的插件能力。 |
 
 `lib.rs` 是后端的装配点，不应承载图像算法、配置细节或协议处理。新的原生能力应先放入对应领域模块，再由 `commands.rs` 或专用桥接模块公开给前端。
+
+## 界面密度
+
+前端全部是固定 px 尺寸，同一套界面在逻辑分辨率较小的屏幕上会显得「大一号」。`ui_scale.rs` 按窗口所在显示器的逻辑分辨率（物理像素 / scale_factor）算出缩放比：2K（2560x1440）及以上维持 `1.0`，更小的屏幕按比例缩小，下限 `0.8`（1080p 一档），步进 `0.05`。缩放经 `WebviewWindow::set_zoom` 写入，是浏览器页面缩放语义：重排布局、同屏容纳更多内容，并按设备像素重新栅格化。
+
+生效范围只包括主查看器和截图覆盖窗（`uses_ui_scale`）。触发点是窗口创建/截图窗口每次复用、换屏（`Moved` / `ScaleFactorChanged`）和页面加载完成；`ui_scale.rs` 会记住每个窗口最近一次写入的值，值未变时不触碰 WebView。新增其它界面窗口时，在 `uses_ui_scale` 里登记，并在创建后调用一次 `ui_scale::apply`。
 
 ## 配置、类型与跨端契约
 

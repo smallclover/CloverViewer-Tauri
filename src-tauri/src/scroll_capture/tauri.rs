@@ -138,7 +138,7 @@ struct TauriHost {
 impl TauriHost {
     fn screenshot_window(&self) -> Option<tauri::WebviewWindow> {
         use tauri::Manager;
-        self.app.get_webview_window("screenshot")
+        self.app.get_webview_window(crate::screenshot::WINDOW_LABEL)
     }
 
     /// 滚动结束后把结果 HUD 确实带回最前面。

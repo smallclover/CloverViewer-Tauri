@@ -94,7 +94,8 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Launch on startup**: writes `HKCU\...\Run` registry; `--startup` argument silently starts into tray
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
-*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / LAN sharing / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the three global hotkeys, magnifier, minimize to tray, launch on startup, software updates and LAN-sharing rules
+*   **Desktop pet**: Displays a Live2D character with idle, blink, periodic nod, and mouse-follow behavior; it can be dragged, scaled from 60% to 200% in Settings, and automatically hides during screenshots.
+*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / LAN sharing / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the desktop pet and its scale, the three global hotkeys, magnifier, minimize to tray, launch on startup, software updates and LAN-sharing rules
 *   **Temporary cache management**: Settings → Cache shows the file count and size of temporary long screenshots in `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand
 
 ## 🖼️ Supported Formats
@@ -178,7 +179,7 @@ npm run tauri build
 
 ### Is CloverViewer free? Can I use it commercially?
 
-Yes. It is free and open source under the [MIT license](LICENSE): personal use, internal company use and derivative work are all fine as long as the copyright notice is kept.
+The code owned by this repository is free and open source under the [MIT license](LICENSE): personal use, internal company use and derivative work are all fine as long as the copyright notice is kept. The Live2D components and character assets bundled with the desktop pet have separate terms; see the [third-party notices](THIRD_PARTY_NOTICES.md) before public distribution.
 
 ### Which Windows versions are supported?
 
@@ -224,4 +225,4 @@ User-visible changes for each release live in [CHANGELOG.md](./CHANGELOG.md).
 
 ## 📄 License
 
-[MIT License](LICENSE)
+Repository-owned code: [MIT License](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for the terms that apply to bundled components and desktop-pet assets.

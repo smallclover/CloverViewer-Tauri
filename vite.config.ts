@@ -20,6 +20,7 @@ export default defineConfig({
       input: {
         main: resolve(root, "index.html"),
         screenshot: resolve(root, "screenshot.html"),
+        desktopPet: resolve(root, "desktop-pet.html"),
       },
     },
   },

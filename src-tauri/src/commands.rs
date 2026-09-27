@@ -22,8 +22,53 @@ pub fn set_config(store: State<'_, ConfigStore>, config: Config) {
     if new_config.window_size.is_none() {
         new_config.window_size = current.window_size;
     }
+    // 桌宠窗口由专用命令同步管理；普通设置保存不应以一个稍旧的前端快照覆盖它。
+    new_config.desktop_pet_enabled = current.desktop_pet_enabled;
+    new_config.desktop_pet_scale = current.desktop_pet_scale;
     store.replace(new_config.clone());
     crate::config::save_config(&new_config);
+}
+
+/// 启用或隐藏独立桌宠窗口。单独提供此命令，确保设置切换与窗口状态同步。
+#[tauri::command]
+pub fn set_desktop_pet_enabled(
+    app: tauri::AppHandle,
+    store: State<'_, ConfigStore>,
+    enabled: bool,
+) -> Result<(), String> {
+    crate::desktop_pet::set_enabled(&app, &store, enabled)
+}
+
+/// 改变桌宠缩放比例并立即应用到已显示的独立窗口。
+#[tauri::command]
+pub fn set_desktop_pet_scale(
+    app: tauri::AppHandle,
+    store: State<'_, ConfigStore>,
+    scale: u16,
+) -> Result<(), String> {
+    crate::desktop_pet::set_scale(&app, &store, scale)
+}
+
+/// 读取虚拟桌面中的全局鼠标物理坐标，供独立桌宠窗口驱动视线。
+#[tauri::command]
+pub fn get_desktop_pet_cursor_position() -> Option<crate::screenshot::CursorPosition> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::POINT;
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+        let mut point = POINT { x: 0, y: 0 };
+        unsafe { GetCursorPos(&mut point) }
+            .ok()
+            .map(|_| crate::screenshot::CursorPosition {
+                x: point.x,
+                y: point.y,
+            })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
+    }
 }
 
 /// 长截图在查看器中打开时的临时文件目录。只对这个应用自己创建的目录做维护，

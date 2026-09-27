@@ -9,6 +9,7 @@
 
 mod commands;
 mod config;
+mod desktop_pet;
 mod image_info;
 mod image_scan;
 mod lan_share;
@@ -35,7 +36,8 @@ const MAIN_WINDOW: &str = "main";
 
 /// 需要跟随屏幕调整界面密度的窗口。
 ///
-/// 只有主查看器和截图浮层有完整的界面层（工具栏、面板、网格）。
+/// 只有主查看器和截图浮层有完整的界面层（工具栏、面板、网格）。桌宠是纯角色窗口，
+/// 缩放它只会让角色忽大忽小，因此排除在外。
 fn uses_ui_scale(label: &str) -> bool {
     label == MAIN_WINDOW || label == screenshot::WINDOW_LABEL
 }
@@ -108,6 +110,7 @@ pub fn run() {
     let startup_size = config.window_size;
     let launch_on_startup = config.launch_on_startup;
     let cache_cleanup_after_hours = config.cache_cleanup_after_hours;
+    let desktop_pet_enabled = config.desktop_pet_enabled;
     // --startup：由开机自启触发，启动后隐藏到托盘（不显示主窗口）
     let start_in_background = std::env::args().any(|a| a == "--startup");
 
@@ -127,6 +130,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
+            commands::set_desktop_pet_enabled,
+            commands::set_desktop_pet_scale,
+            commands::get_desktop_pet_cursor_position,
             commands::get_cache_summary,
             commands::clear_temp_cache,
             commands::set_launch_on_startup,
@@ -326,6 +332,14 @@ pub fn run() {
             } else if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
                 let _ = win.show();
                 let _ = win.set_focus();
+            }
+
+            if desktop_pet_enabled {
+                if let Err(error) =
+                    desktop_pet::set_enabled(app.handle(), &app.state::<ConfigStore>(), true)
+                {
+                    tracing::warn!("恢复桌宠窗口失败: {error}");
+                }
             }
 
             Ok(())

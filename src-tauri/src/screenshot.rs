@@ -157,6 +157,7 @@ pub fn close_screenshot(app: AppHandle) {
         let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
     }
+    crate::desktop_pet::restore_after_screenshot(&app);
 }
 
 /// 复制纯文本到剪贴板（放大镜取色 Ctrl+C 用）
@@ -403,6 +404,9 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
         let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
     }
+    // 桌宠自身用这个事件触发一次短促庆祝，不影响截图保存/复制的完成时机。
+    let _ = app.emit("desktop-pet-celebrate", ());
+    crate::desktop_pet::restore_after_screenshot(&app);
     Ok(())
 }
 
@@ -451,12 +455,16 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             *cap = true;
         }
 
+        // 桌宠独立成窗；截屏前先隐藏，保证它不会落入用户的捕获结果。
+        crate::desktop_pet::hide_for_screenshot(&app);
+
         let data = match capture_all() {
             Ok(d) => d,
             Err(e) => {
                 tracing::error!("截屏失败: {e}");
                 let store = app.state::<ScreenshotStore>();
                 *store.capturing.lock().unwrap() = false;
+                crate::desktop_pet::restore_after_screenshot(&app);
                 return;
             }
         };

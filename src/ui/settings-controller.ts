@@ -1,14 +1,16 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import {
+  type AppConfig,
   clearTempCache,
   formatSize,
   getCacheSummary,
   setConfig,
+  setDesktopPetEnabled,
+  setDesktopPetScale,
   setLaunchOnStartup,
   setScrollCaptureHotkey,
   setShowScreenshotHotkey,
-  type AppConfig,
 } from "../api";
 import type { Lang } from "../i18n";
 import { playEnterAnimation, setAnimatedVisibility, type ToastKind } from "./presentation";
@@ -54,6 +56,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const magnifier = element<HTMLInputElement>("set-magnifier");
   const experimentalAutoScroll = element<HTMLInputElement>("set-experimental-auto-scroll");
   const minimize = element<HTMLInputElement>("set-minimize");
+  const desktopPet = element<HTMLInputElement>("set-desktop-pet");
+  const desktopPetScale = element<HTMLInputElement>("set-desktop-pet-scale");
+  const desktopPetScaleValue = element("set-desktop-pet-scale-value");
   const autostart = element<HTMLInputElement>("set-autostart");
   const cacheRetention = element<HTMLSelectElement>("set-cache-retention");
   const lanShareDuration = element<HTMLSelectElement>("set-lan-share-duration");
@@ -177,6 +182,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
     magnifier.checked = config.magnifier_enabled;
     experimentalAutoScroll.checked = config.experimental_auto_scroll;
     minimize.checked = config.minimize_on_close;
+    desktopPet.checked = config.desktop_pet_enabled;
+    desktopPetScale.value = String(config.desktop_pet_scale);
+    desktopPetScaleValue.textContent = `${config.desktop_pet_scale}%`;
     autostart.checked = config.launch_on_startup;
     cacheRetention.value = String(config.cache_cleanup_after_hours ?? 168);
     lanShareDuration.value = String(config.lan_share_duration_seconds ?? 600);
@@ -306,6 +314,42 @@ export function createSettingsController(options: SettingsControllerOptions) {
     save({ experimental_auto_scroll: experimentalAutoScroll.checked }),
   );
   minimize.addEventListener("change", () => save({ minimize_on_close: minimize.checked }));
+  desktopPet.addEventListener("change", () => {
+    const enabled = desktopPet.checked;
+    void setDesktopPetEnabled(enabled)
+      .then(() => {
+        const current = options.getConfig();
+        if (current) options.setCurrentConfig({ ...current, desktop_pet_enabled: enabled });
+        options.toast(
+          options.translate(enabled ? "toast.desktopPetOn" : "toast.desktopPetOff"),
+          "success",
+        );
+      })
+      .catch((error) => {
+        desktopPet.checked = !enabled;
+        options.toast(options.translate("toast.desktopPetFailed", { msg: String(error) }), "error");
+      });
+  });
+  desktopPetScale.addEventListener("input", () => {
+    desktopPetScaleValue.textContent = `${desktopPetScale.value}%`;
+  });
+  desktopPetScale.addEventListener("change", () => {
+    const scale = Number(desktopPetScale.value);
+    void setDesktopPetScale(scale)
+      .then(() => {
+        const current = options.getConfig();
+        if (current) options.setCurrentConfig({ ...current, desktop_pet_scale: scale });
+        options.toast(options.translate("toast.saved"), "success");
+      })
+      .catch((error) => {
+        const current = options.getConfig();
+        if (current) {
+          desktopPetScale.value = String(current.desktop_pet_scale);
+          desktopPetScaleValue.textContent = `${current.desktop_pet_scale}%`;
+        }
+        options.toast(options.translate("toast.saveFailed", { msg: String(error) }), "error");
+      });
+  });
   autostart.addEventListener("change", () => {
     save({ launch_on_startup: autostart.checked }, true);
     void setLaunchOnStartup(autostart.checked)

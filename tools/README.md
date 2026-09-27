@@ -30,3 +30,11 @@ node tools/scroll-ui-geometry-check.cjs    # 浮层落位：面板/HUD 会不会
 
 > 两个脚本都是「打印 + 目视判断」的形式，刻意没有做成断言式测试：它们要回答的是
 > 「在真实多屏几何下会落到哪」，而具体数值随环境变化。
+
+## Live2D 模型包校验
+
+```powershell
+node tools/verify-live2d-pet-model.mjs public/pet-model/clover-girl-2 clovergirl-2_v1.model3.json
+```
+
+检查当前 `clovergirl-2_v1` 模型定义引用的模型、纹理、物理和动作文件是否已完整导出。

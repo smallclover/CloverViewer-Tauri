@@ -209,6 +209,23 @@
                   </div>
                   <input id="set-minimize" type="checkbox" />
                 </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-desktop-pet" data-i18n="settings.desktopPet">桌面小宠物</label>
+                    <span class="setting-desc" data-i18n="settings.desktopPet.desc">显示四叶草小伙伴；可按住角色拖动，截图时会自动隐藏。</span>
+                  </div>
+                  <input id="set-desktop-pet" type="checkbox" />
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-desktop-pet-scale" data-i18n="settings.desktopPetScale">桌宠缩放</label>
+                    <span class="setting-desc" data-i18n="settings.desktopPetScale.desc">拖动后松开即可立即生效，适合按屏幕分辨率调整。</span>
+                  </div>
+                  <div class="zoom-row">
+                    <input id="set-desktop-pet-scale" type="range" min="60" max="200" step="5" value="100" />
+                    <output class="setting-value" id="set-desktop-pet-scale-value" for="set-desktop-pet-scale">100%</output>
+                  </div>
+                </div>
               </div>
             </section>
 

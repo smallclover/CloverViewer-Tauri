@@ -1,4 +1,4 @@
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export interface ImageEntry {
   path: string;
@@ -30,6 +30,10 @@ export interface AppConfig {
   /** 默认关闭；开启后滚动截图面板才显示“自动滚动（试验）”。 */
   experimental_auto_scroll: boolean;
   screenshot_hides_main_window: boolean;
+  /** 是否显示独立透明窗口中的桌面小宠物。 */
+  desktop_pet_enabled: boolean;
+  /** 桌宠相对于 360×540 标准窗口的缩放百分比（60–200）。 */
+  desktop_pet_scale: number;
   launch_on_startup: boolean;
   /** 0 = 不自动清理；其它值为临时截图最长保留小时数。 */
   cache_cleanup_after_hours: number;
@@ -44,6 +48,18 @@ export interface AppConfig {
 export const getConfig = () => invoke<AppConfig>("get_config");
 
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
+
+/** 显示或隐藏桌面小宠物，并把偏好写入应用配置。 */
+export const setDesktopPetEnabled = (enabled: boolean) =>
+  invoke<void>("set_desktop_pet_enabled", { enabled });
+
+/** 保存桌宠缩放比例，并在桌宠已创建时立即调整窗口。 */
+export const setDesktopPetScale = (scale: number) =>
+  invoke<void>("set_desktop_pet_scale", { scale });
+
+/** 当前系统鼠标的虚拟桌面物理坐标；桌宠用它驱动视线跟随。 */
+export const getDesktopPetCursorPosition = () =>
+  invoke<{ x: number; y: number } | null>("get_desktop_pet_cursor_position");
 
 export interface CacheSummary {
   files: number;

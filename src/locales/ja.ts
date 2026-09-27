@@ -147,6 +147,12 @@ export const ja = {
   "settings.cacheClear": "今すぐ削除",
   "settings.minimize": "閉じたときにトレイに最小化",
   "settings.minimize.desc": "閉じるときは終了せず、トレイに常駐します。",
+  "settings.desktopPet": "デスクトップペット",
+  "settings.desktopPet.desc":
+    "クローバーの仲間を表示します。ドラッグで移動でき、キャプチャ中は自動で隠れます。",
+  "settings.desktopPetScale": "ペットの拡大率",
+  "settings.desktopPetScale.desc":
+    "スライダーを離すと反映されます。60% から 200% の範囲で選べます。",
   "settings.autostart": "起動時に自動起動",
   "settings.autostart.desc": "サインイン後に CloverViewer を自動起動します。",
   "settings.update": "ソフトウェア更新",
@@ -183,6 +189,9 @@ export const ja = {
   "toast.hotkeyFailed": "ホットキーの設定に失敗しました: {msg}",
   "toast.colorHotkeySet": "カラーコピーのホットキーを {key} に設定しました",
   "toast.saved": "保存しました",
+  "toast.desktopPetOn": "デスクトップペットを表示しました",
+  "toast.desktopPetOff": "デスクトップペットを隠しました",
+  "toast.desktopPetFailed": "デスクトップペットを切り替えられません：{msg}",
   "toast.saveFailed": "保存に失敗しました",
   "toast.cacheCleared": "{files} 個の一時ファイルを削除し、{size} を解放しました",
   "toast.cacheClearFailed": "キャッシュの削除に失敗しました: {msg}",

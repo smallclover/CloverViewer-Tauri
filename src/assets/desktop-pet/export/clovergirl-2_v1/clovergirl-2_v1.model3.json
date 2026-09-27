@@ -1,0 +1,50 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "clovergirl-2_v1.moc3",
+		"Textures": [
+			"clovergirl-2_v1.4096/texture_00.png"
+		],
+		"Physics": "clovergirl-2_v1.physics3.json",
+		"DisplayInfo": "clovergirl-2_v1.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{
+					"File": "clovergirl-2_v1.idle.motion3.json"
+				}
+			],
+			"Blink": [
+				{
+					"File": "clovergirl-2_v1.blink.motion3.json"
+				}
+			],
+			"Nod": [
+				{
+					"File": "clovergirl-2_v1.nod.motion3.json"
+				}
+			],
+			"Shake": [
+				{
+					"File": "clovergirl-2_v1.shake.motion3.json"
+				}
+			]
+		}
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": [
+				"ParamMouthOpenY"
+			]
+		}
+	]
+}

@@ -78,7 +78,7 @@ Rust Tauri 命令与应用状态
 
 前端全部是固定 px 尺寸，同一套界面在逻辑分辨率较小的屏幕上会显得「大一号」。`ui_scale.rs` 按窗口所在显示器的逻辑分辨率（物理像素 / scale_factor）算出缩放比：2K（2560x1440）及以上维持 `1.0`，更小的屏幕按比例缩小，下限 `0.8`（1080p 一档），步进 `0.05`。缩放经 `WebviewWindow::set_zoom` 写入，是浏览器页面缩放语义：重排布局、同屏容纳更多内容，并按设备像素重新栅格化。
 
-生效范围只包括主查看器和截图覆盖窗（`uses_ui_scale`）。触发点是窗口创建/截图窗口每次复用、换屏（`Moved` / `ScaleFactorChanged`）和页面加载完成；`ui_scale.rs` 会记住每个窗口最近一次写入的值，值未变时不触碰 WebView。新增其它界面窗口时，在 `uses_ui_scale` 里登记，并在创建后调用一次 `ui_scale::apply`。
+生效范围只包括主查看器和截图覆盖窗（`uses_ui_scale`），桌宠是纯角色窗口，不参与。触发点是窗口创建/截图窗口每次复用、换屏（`Moved` / `ScaleFactorChanged`）和页面加载完成；`ui_scale.rs` 会记住每个窗口最近一次写入的值，值未变时不触碰 WebView。新增其它界面窗口时，在 `uses_ui_scale` 里登记，并在创建后调用一次 `ui_scale::apply`。
 
 ## 配置、类型与跨端契约
 

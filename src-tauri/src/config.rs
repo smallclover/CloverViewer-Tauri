@@ -104,6 +104,12 @@ pub struct Config {
     pub experimental_auto_scroll: bool,
     #[serde(default)]
     pub screenshot_hides_main_window: bool,
+    /// 独立透明窗口显示的四叶草桌面小宠物。默认关闭，避免升级后打扰既有用户。
+    #[serde(default)]
+    pub desktop_pet_enabled: bool,
+    /// 桌宠相对于 360×540 标准窗口的缩放百分比（60–200）。
+    #[serde(default = "default_desktop_pet_scale")]
+    pub desktop_pet_scale: u16,
     #[serde(default = "default_launch_on_startup")]
     pub launch_on_startup: bool,
     /// 长截图「在查看器中打开」时产生的临时 PNG 保留时长（小时）。
@@ -135,6 +141,9 @@ fn default_minimize_on_close() -> bool {
 fn default_magnifier_enabled() -> bool {
     true
 }
+fn default_desktop_pet_scale() -> u16 {
+    100
+}
 fn default_launch_on_startup() -> bool {
     false
 }
@@ -157,6 +166,8 @@ impl Default for Config {
             magnifier_enabled: default_magnifier_enabled(),
             experimental_auto_scroll: false,
             screenshot_hides_main_window: false,
+            desktop_pet_enabled: false,
+            desktop_pet_scale: default_desktop_pet_scale(),
             launch_on_startup: default_launch_on_startup(),
             cache_cleanup_after_hours: default_cache_cleanup_after_hours(),
             lan_share_duration_seconds: default_lan_share_duration_seconds(),

@@ -691,6 +691,37 @@ body {
   transition: opacity 0.25s;
 }
 #toast.show { opacity: 1; }
+#pet-loading-status {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(420px, calc(100% - 32px));
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 16px var(--shadow);
+  color: var(--fg);
+  font-size: 13px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.pet-loading-spinner {
+  display: inline-block;
+  color: var(--accent);
+  animation: pet-loading-spin 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-loading-spinner { animation: none; }
+}
+
+@keyframes pet-loading-spin { to { transform: rotate(360deg); } }
 .toast-ic {
   display: inline-flex;
   align-items: center;
@@ -740,30 +771,12 @@ body {
   z-index: 300;
 }
 
-/* 左栏：返回查看器 + 搜索 + 分组导航 */
+/* 左栏：搜索 + 分组导航 */
 .settings-nav {
   display: flex;
   flex-direction: column;
   padding: 16px 14px 20px;
 }
-.settings-back {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  align-self: flex-start;
-  margin-bottom: 16px;
-  padding: 6px 8px 6px 4px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--fg-dim);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-}
-.settings-back .ic { width: 15px; height: 15px; }
-.settings-back:hover { background: var(--bg-hover); color: var(--fg); }
-
 .settings-search { position: relative; margin-bottom: 20px; }
 .settings-search .ic {
   position: absolute;
@@ -998,25 +1011,6 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-}
-
-.about-close {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  z-index: 3;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--fg-dim);
-  font-size: 14px;
-  cursor: pointer;
-}
-.about-close:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
 }
 
 .about-wrap {
@@ -1312,7 +1306,28 @@ body {
 /* ---------- 标题栏菜单 ----------
    三个应用级入口收进标题栏：文件（打开）、编辑（设置）、帮助（关于）。
    这样内容区不再为三枚按钮永久让出一整列空间。 */
-#titlebar { position: relative; z-index: 60; }
+#titlebar { position: relative; z-index: 400; }
+#titlebar .page-navigation {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-left: 1px;
+}
+.page-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+.page-nav-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.page-nav-btn:disabled { color: color-mix(in srgb, var(--fg-dim) 45%, transparent); cursor: default; }
+.page-nav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 #titlebar #toolbar {
   position: static;
   display: flex;
@@ -1562,10 +1577,8 @@ body {
 /* 设置分类、行项目和图标按钮都获得一致而克制的状态反馈。
    导航项不再做横向位移：新版是紧凑列表，位移会带动整列图标抖动。 */
 .settings-nav button,
-.settings-back,
 .setting-row,
-#grid-menu button,
-.about-close {
+#grid-menu button {
   transition: background var(--motion-fast) ease, color var(--motion-fast) ease,
     transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) ease;
 }

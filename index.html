@@ -9,6 +9,14 @@
     <div id="app">
       <div id="titlebar">
         <span class="titlebar-title"><img class="tb-logo" src="/logo.png" alt="CloverViewer" /> CloverViewer</span>
+        <nav class="page-navigation" aria-label="页面导航">
+          <button id="page-back" class="page-nav-btn" type="button" disabled data-i18n-title="nav.back" data-i18n-aria-label="nav.back" title="后退" aria-label="后退">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button id="page-forward" class="page-nav-btn" type="button" disabled data-i18n-title="nav.forward" data-i18n-aria-label="nav.forward" title="前进" aria-label="前进">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </nav>
         <nav id="toolbar" aria-label="应用菜单">
           <details class="app-menu">
             <summary data-i18n="menu.file">文件</summary>
@@ -122,6 +130,10 @@
       <div id="context-menu" class="hidden"></div>
       <div id="drop-overlay" class="hidden" data-i18n="drop.open">松开以打开</div>
       <div id="toast" class="hidden"></div>
+      <div id="pet-loading-status" class="hidden" role="status" aria-live="polite">
+        <span class="pet-loading-spinner" aria-hidden="true">✦</span>
+        <span id="pet-loading-status-text" data-i18n="pet.loading">正在加载桌宠，首次打开可能需要一点时间…</span>
+      </div>
 
       <div id="update-overlay" class="hidden">
         <section id="update-panel" role="dialog" aria-modal="true" aria-labelledby="update-title">
@@ -143,11 +155,6 @@
       <div id="settings-overlay" class="hidden">
         <div id="settings-panel" role="dialog" aria-modal="true">
           <nav class="settings-nav" aria-label="设置分类">
-            <button id="settings-back" class="settings-back" type="button">
-              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-              <span data-i18n="settings.back">返回查看器</span>
-            </button>
-
             <div class="settings-search">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <input id="settings-search" type="search" spellcheck="false" autocomplete="off" placeholder="搜索设置…" data-i18n-placeholder="settings.search" />
@@ -413,11 +420,9 @@
         </div>
       </div>
 
-      <!-- 关于页：全屏整页（非弹窗）。top 让出 38px 标题栏高度，
-           使无边框窗口在关于页打开时仍可拖动/最小化/关闭。 -->
+      <!-- 关于页：全屏整页。页面切换统一交给标题栏的前进 / 后退按钮。 -->
       <div id="about-overlay" class="hidden">
         <div id="about-panel" role="dialog" aria-modal="true">
-          <button id="about-close" class="about-close" data-i18n-title="settings.close">✕</button>
           <div class="about-wrap">
             <aside class="about-left">
               <img class="about-logo" src="/logo.png" alt="CloverViewer" />

@@ -110,7 +110,6 @@ pub fn run() {
     let startup_size = config.window_size;
     let launch_on_startup = config.launch_on_startup;
     let cache_cleanup_after_hours = config.cache_cleanup_after_hours;
-    let desktop_pet_enabled = config.desktop_pet_enabled;
     // --startup：由开机自启触发，启动后隐藏到托盘（不显示主窗口）
     let start_in_background = std::env::args().any(|a| a == "--startup");
 
@@ -122,6 +121,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(ConfigStore::new(config))
+        .manage(desktop_pet::DesktopPetSwitchState::default())
         .manage(thumbnails::ThumbnailStore::new(512))
         .manage(screenshot::ScreenshotStore::new())
         .manage(lan_share::LanShareStore::new())
@@ -332,14 +332,6 @@ pub fn run() {
             } else if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
                 let _ = win.show();
                 let _ = win.set_focus();
-            }
-
-            if desktop_pet_enabled {
-                if let Err(error) =
-                    desktop_pet::set_enabled(app.handle(), &app.state::<ConfigStore>(), true)
-                {
-                    tracing::warn!("恢复桌宠窗口失败: {error}");
-                }
             }
 
             Ok(())

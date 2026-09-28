@@ -15,7 +15,6 @@ interface ContextMenuControllerOptions {
   onShare: (entry: ImageEntry) => void;
   onEdit: (entry: ImageEntry) => void;
   onProperties: (entry: ImageEntry) => void;
-  onBackToGrid: () => void;
   translate: (key: string) => string;
 }
 
@@ -52,10 +51,7 @@ export function createContextMenuController(options: ContextMenuControllerOption
   const actionsFor = (entry: ImageEntry, index?: number): ContextItem[] => {
     const leadingActions: ContextItem[] =
       index === undefined
-        ? [
-            { label: options.translate("ctx.backToGrid"), action: options.onBackToGrid },
-            "separator",
-          ]
+        ? []
         : [
             { label: options.translate("ctx.view"), action: () => options.onView(index) },
             "separator",

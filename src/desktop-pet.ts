@@ -1,15 +1,46 @@
 import "./desktop-pet.css";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getConfig, getDesktopPetCursorPosition } from "./api";
+import {
+  getConfig,
+  getDesktopPetCursorPosition,
+  listenDesktopPetStatusRequest,
+  reportDesktopPetLoadStatus,
+} from "./api";
 import { applyI18n, setLang } from "./i18n";
 import { Live2DPetRenderer } from "./pet/live2d-renderer";
 
 const pet = document.getElementById("pet") as HTMLElement;
 const live2dHost = document.getElementById("pet-live2d") as HTMLElement;
-const renderer = new Live2DPetRenderer();
 const isTauriWindow = "__TAURI_INTERNALS__" in window;
 const desktopWindow = isTauriWindow ? getCurrentWindow() : undefined;
+const sessionId = crypto.randomUUID();
+let loadFinished = false;
+let loadFailed = false;
+
+const reportLoadStatus = (state: "started" | "ready" | "failed") => {
+  return desktopWindow
+    ? reportDesktopPetLoadStatus({ state, sessionId }).catch(() => undefined)
+    : Promise.resolve();
+};
+
+const failLoad = () => {
+  if (loadFailed) return;
+  loadFailed = true;
+  loadFinished = true;
+  // Closing a failed secondary window permits a later off/on retry to create it afresh.
+  void reportLoadStatus("failed").finally(() => {
+    void desktopWindow?.close().catch(() => undefined);
+  });
+};
+
+const renderer = new Live2DPetRenderer(() => {
+  if (loadFinished) return;
+  loadFinished = true;
+  pet.classList.add("is-ready");
+  void desktopWindow?.setIgnoreCursorEvents(false).catch(() => undefined);
+  void reportLoadStatus("ready");
+}, failLoad);
 
 function celebrate() {
   pet.classList.remove("is-celebrating");
@@ -21,6 +52,13 @@ function celebrate() {
 // A plain browser preview has no Tauri IPC bridge; keep the default locale and
 // animation there while the production window receives its real IPC events.
 if (desktopWindow) {
+  void listenDesktopPetStatusRequest(() => {
+    void reportLoadStatus("started").then(() => {
+      if (loadFailed) return reportLoadStatus("failed");
+      if (loadFinished) return reportLoadStatus("ready");
+    });
+  }).catch(() => undefined);
+
   pet.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
 
@@ -65,18 +103,24 @@ if (desktopWindow) {
   window.setInterval(() => void updateGaze(), 100);
 }
 
-void renderer
-  .mount(live2dHost)
-  .then((isLive2D) => {
-    if (!isLive2D) return;
-    pet.classList.add("is-live2d");
-    // Rust starts this transparent window in click-through mode. Turn input on
-    // only once a visible character is ready, so a failed model can never block
-    // clicks and drags in the viewer below it.
-    void desktopWindow?.setIgnoreCursorEvents(false).catch(() => undefined);
-    window.requestAnimationFrame(() => renderer.refreshLayout());
-  })
-  .catch(() => renderer.destroy());
+const initialStatus = reportLoadStatus("started");
+// Let the small loading bubble paint before parsing the Cubism core and texture.
+window.setTimeout(() => {
+  void initialStatus
+    .then(() => renderer.mount(live2dHost))
+    .then((isLive2D) => {
+      if (!isLive2D) {
+        failLoad();
+        return;
+      }
+      pet.classList.add("is-live2d");
+      window.requestAnimationFrame(() => renderer.refreshLayout());
+    })
+    .catch(() => {
+      renderer.destroy();
+      failLoad();
+    });
+}, 80);
 
 document.addEventListener("visibilitychange", () => {
   renderer.setPaused(document.hidden);

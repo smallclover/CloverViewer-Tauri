@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export interface ImageEntry {
   path: string;
@@ -60,6 +61,27 @@ export const setDesktopPetScale = (scale: number) =>
 /** 当前系统鼠标的虚拟桌面物理坐标；桌宠用它驱动视线跟随。 */
 export const getDesktopPetCursorPosition = () =>
   invoke<{ x: number; y: number } | null>("get_desktop_pet_cursor_position");
+
+export interface DesktopPetLoadStatus {
+  state: "started" | "ready" | "failed";
+  sessionId: string;
+}
+
+/** 桌宠窗口向主窗口报告实际的模型加载状态。 */
+export const reportDesktopPetLoadStatus = (status: DesktopPetLoadStatus) =>
+  emitTo("main", "desktop-pet-load-status", status);
+
+export const listenDesktopPetLoadStatus = (
+  handler: (status: DesktopPetLoadStatus) => void,
+): Promise<UnlistenFn> =>
+  listen<DesktopPetLoadStatus>("desktop-pet-load-status", (event) => handler(event.payload));
+
+/** Ask an already-running pet window to replay its current loading state. */
+export const requestDesktopPetLoadStatus = () =>
+  emitTo("desktop-pet", "desktop-pet-status-request", {});
+
+export const listenDesktopPetStatusRequest = (handler: () => void): Promise<UnlistenFn> =>
+  listen("desktop-pet-status-request", handler);
 
 export interface CacheSummary {
   files: number;

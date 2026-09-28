@@ -7,6 +7,10 @@
   </head>
   <body>
     <main id="pet" aria-live="polite">
+      <div id="pet-loading-bubble" role="status">
+        <span class="pet-loading-spinner" aria-hidden="true">✦</span>
+        <span data-i18n="pet.loadingShort">正在唤醒桌宠…</span>
+      </div>
       <div id="pet-live2d" aria-hidden="true"></div>
     </main>
     <script type="module" src="/src/desktop-pet.ts"></script>

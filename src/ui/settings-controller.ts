@@ -6,7 +6,6 @@ import {
   formatSize,
   getCacheSummary,
   setConfig,
-  setDesktopPetEnabled,
   setDesktopPetScale,
   setLaunchOnStartup,
   setScrollCaptureHotkey,
@@ -23,6 +22,7 @@ interface SettingsControllerOptions {
   applyI18n: () => void;
   refreshViewerTranslations: () => void;
   refreshImagePreviewStrip: () => void;
+  setDesktopPetEnabled: (enabled: boolean) => Promise<void>;
   translate: (key: string, vars?: Record<string, string | number>) => string;
   toast: (message: string, kind?: ToastKind) => void;
 }
@@ -40,7 +40,6 @@ const UPDATE_REQUEST_TIMEOUT_MS = 15_000;
 export function createSettingsController(options: SettingsControllerOptions) {
   const overlay = element("settings-overlay");
   const button = element("btn-settings");
-  const backButton = element<HTMLButtonElement>("settings-back");
   const search = element<HTMLInputElement>("settings-search");
   const searchEmpty = element("settings-nav-empty");
   const currentTabTitle = element("settings-current-tab");
@@ -265,14 +264,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
     }
   };
 
-  button.addEventListener("click", () => {
-    if (overlay.classList.contains("is-visible")) close();
-    else open();
-  });
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => selectTab(tabOf(tab)));
   });
-  backButton.addEventListener("click", () => close());
   search.addEventListener("input", () => render());
   search.addEventListener("keydown", (event) => {
     // Esc 先清空搜索词，不要顺手把整个设置页关掉。
@@ -316,19 +310,10 @@ export function createSettingsController(options: SettingsControllerOptions) {
   minimize.addEventListener("change", () => save({ minimize_on_close: minimize.checked }));
   desktopPet.addEventListener("change", () => {
     const enabled = desktopPet.checked;
-    void setDesktopPetEnabled(enabled)
-      .then(() => {
-        const current = options.getConfig();
-        if (current) options.setCurrentConfig({ ...current, desktop_pet_enabled: enabled });
-        options.toast(
-          options.translate(enabled ? "toast.desktopPetOn" : "toast.desktopPetOff"),
-          "success",
-        );
-      })
-      .catch((error) => {
-        desktopPet.checked = !enabled;
-        options.toast(options.translate("toast.desktopPetFailed", { msg: String(error) }), "error");
-      });
+    void options.setDesktopPetEnabled(enabled).catch((error) => {
+      desktopPet.checked = options.getConfig()?.desktop_pet_enabled ?? !enabled;
+      options.toast(options.translate("toast.desktopPetFailed", { msg: String(error) }), "error");
+    });
   });
   desktopPetScale.addEventListener("input", () => {
     desktopPetScaleValue.textContent = `${desktopPetScale.value}%`;
@@ -466,6 +451,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
   });
 
   return {
+    open,
+    close,
     isOpen: () => !overlay.classList.contains("hidden"),
     closeIfOpen: () => {
       if (overlay.classList.contains("hidden")) return false;

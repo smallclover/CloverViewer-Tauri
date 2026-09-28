@@ -3,6 +3,10 @@
 //! 窗口与主查看器解耦，截图前会临时隐藏，因此不会被捕获进图片。
 
 use crate::config::{save_config, ConfigStore};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
 use tauri::{
     AppHandle, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
@@ -13,6 +17,15 @@ const MIN_SCALE: u16 = 60;
 const MAX_SCALE: u16 = 200;
 const BASE_WIDTH: f64 = 360.0;
 const BASE_HEIGHT: f64 = 540.0;
+
+/// 允许“关闭”越过仍在创建 WebView 的“开启”（包括前端超时取消），
+/// 并防止过期请求稍后重新显示桌宠。
+#[derive(Default)]
+pub struct DesktopPetSwitchState {
+    generation: AtomicU64,
+    creation: Mutex<()>,
+    commit: Mutex<()>,
+}
 
 fn normalize_scale(scale: u16) -> u16 {
     scale.clamp(MIN_SCALE, MAX_SCALE)
@@ -57,32 +70,57 @@ fn create_window(app: &AppHandle, scale: u16) -> Result<WebviewWindow, String> {
     // 在 Live2D 资源完成加载前，透明窗口必须穿透鼠标。否则渲染失败或窗口
     // 尚未显示角色时，会留下一块看不见但会拦截主窗口操作的区域；前端只会在
     // 成功挂载角色后才把鼠标事件交给桌宠，用于拖动窗口。
-    let _ = window.set_ignore_cursor_events(true);
+    if let Err(error) = window.set_ignore_cursor_events(true) {
+        let _ = window.close();
+        return Err(format!("桌宠窗口无法启用鼠标穿透: {error}"));
+    }
     Ok(window)
 }
 
-fn window(app: &AppHandle, scale: u16) -> Result<WebviewWindow, String> {
+fn window(
+    app: &AppHandle,
+    scale: u16,
+    state: &DesktopPetSwitchState,
+) -> Result<WebviewWindow, String> {
+    let _creation = state.creation.lock().map_err(|error| error.to_string())?;
     app.get_webview_window(WINDOW_LABEL)
         .map(Ok)
         .unwrap_or_else(|| create_window(app, scale))
 }
 
-pub fn set_enabled(app: &AppHandle, store: &ConfigStore, enabled: bool) -> Result<(), String> {
-    let mut config = (*store.snapshot()).clone();
-    config.desktop_pet_enabled = enabled;
-    store.replace(config.clone());
-    save_config(&config);
+pub fn set_enabled(
+    app: &AppHandle,
+    store: &ConfigStore,
+    state: &DesktopPetSwitchState,
+    enabled: bool,
+) -> Result<(), String> {
+    let generation = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let pet_window = if enabled {
+        let scale = store.snapshot().desktop_pet_scale;
+        Some(window(app, scale, state)?)
+    } else {
+        None
+    };
 
-    let window = window(app, config.desktop_pet_scale)?;
-    if enabled {
+    let _commit = state.commit.lock().map_err(|error| error.to_string())?;
+    if state.generation.load(Ordering::SeqCst) != generation {
+        return Ok(());
+    }
+
+    if let Some(window) = pet_window {
         window
             .show()
             .map_err(|error| format!("显示桌宠失败: {error}"))?;
-    } else {
+    } else if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
         window
             .hide()
             .map_err(|error| format!("隐藏桌宠失败: {error}"))?;
     }
+
+    let mut config = (*store.snapshot()).clone();
+    config.desktop_pet_enabled = enabled;
+    store.replace(config.clone());
+    save_config(&config);
     Ok(())
 }
 
@@ -121,7 +159,8 @@ pub fn set_scale(app: &AppHandle, store: &ConfigStore, scale: u16) -> Result<(),
 
 pub fn restore_after_screenshot(app: &AppHandle) {
     if app.state::<ConfigStore>().snapshot().desktop_pet_enabled {
-        if let Ok(window) = window(app, app.state::<ConfigStore>().snapshot().desktop_pet_scale) {
+        // 截图只恢复此前存在的桌宠；不要在截图结束的主线程上创建 WebView。
+        if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
             let _ = window.show();
         }
     }

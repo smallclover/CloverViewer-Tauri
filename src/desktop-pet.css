@@ -12,6 +12,39 @@ html, body, #pet { width: 100%; height: 100%; margin: 0; overflow: hidden; backg
 
 #pet.is-dragging { cursor: grabbing; }
 
+#pet-loading-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 26%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid rgba(64, 130, 86, .35);
+  border-radius: 20px;
+  background: rgba(250, 255, 250, .94);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .13);
+  color: #245438;
+  font: 13px/1.4 sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+#pet.is-ready #pet-loading-bubble { display: none; }
+
+.pet-loading-spinner {
+  display: inline-block;
+  color: #469961;
+  animation: pet-loading-spin 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-loading-spinner { animation: none; }
+}
+
+@keyframes pet-loading-spin { to { transform: rotate(360deg); } }
+
 #pet::after {
   position: absolute;
   right: 48px;

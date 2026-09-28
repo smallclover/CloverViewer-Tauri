@@ -29,14 +29,16 @@ pub fn set_config(store: State<'_, ConfigStore>, config: Config) {
     crate::config::save_config(&new_config);
 }
 
-/// 启用或隐藏独立桌宠窗口。单独提供此命令，确保设置切换与窗口状态同步。
+/// 启用或隐藏独立桌宠窗口。窗口创建可能等待 WebView2 的主线程回调，
+/// 因此必须作为异步命令执行，不能从主线程同步等待其完成。
 #[tauri::command]
-pub fn set_desktop_pet_enabled(
+pub async fn set_desktop_pet_enabled(
     app: tauri::AppHandle,
     store: State<'_, ConfigStore>,
+    switch: State<'_, crate::desktop_pet::DesktopPetSwitchState>,
     enabled: bool,
 ) -> Result<(), String> {
-    crate::desktop_pet::set_enabled(&app, &store, enabled)
+    crate::desktop_pet::set_enabled(&app, &store, &switch, enabled)
 }
 
 /// 改变桌宠缩放比例并立即应用到已显示的独立窗口。

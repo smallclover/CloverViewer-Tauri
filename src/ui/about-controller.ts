@@ -55,8 +55,6 @@ export function createAboutController(options: {
   };
   const close = () => setAnimatedVisibility(overlay, false, 220);
 
-  element("btn-about").addEventListener("click", open);
-  element("about-close").addEventListener("click", close);
   for (const [id, url] of aboutLinks) {
     element(id).addEventListener("click", (event) => {
       event.preventDefault();
@@ -65,6 +63,8 @@ export function createAboutController(options: {
   }
 
   return {
+    open,
+    close,
     isOpen: () => !overlay.classList.contains("hidden"),
     closeIfOpen: () => {
       if (overlay.classList.contains("hidden")) return false;

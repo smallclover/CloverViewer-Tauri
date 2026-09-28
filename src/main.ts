@@ -5,7 +5,9 @@ import { createToast, playEnterAnimation } from "./ui/presentation";
 import { createAboutController } from "./ui/about-controller";
 import { createContextMenuController } from "./ui/context-menu-controller";
 import { bindFileDrop, bindOpenImageBridge, showStartupNotices } from "./ui/app-bridges";
+import { createPageNavigationController } from "./ui/page-navigation-controller";
 import { createSettingsController } from "./ui/settings-controller";
+import { createDesktopPetController } from "./ui/desktop-pet-controller";
 import { bindWindowChrome } from "./ui/window-chrome";
 import { createGridController } from "./viewer/grid-controller";
 import { createImageSourceResolver } from "./viewer/image-source";
@@ -101,6 +103,17 @@ document.addEventListener("keydown", (event) => {
 });
 
 const toast = createToast(toastEl);
+const desktopPetController = createDesktopPetController({
+  status: $("pet-loading-status"),
+  statusText: $("pet-loading-status-text"),
+  getConfig: () => config,
+  setCurrentConfig: (next) => {
+    config = next;
+    $<HTMLInputElement>("set-desktop-pet").checked = next.desktop_pet_enabled;
+  },
+  translate: t,
+  toast,
+});
 const singleImageController = createSingleImageController({
   stage: imgStage,
   image: singleImg,
@@ -179,7 +192,7 @@ async function openDirectory(dir: string) {
     if (entries.length === 0) {
       toast(t("toast.noImages"));
     }
-    showGrid();
+    pageNavigation.resetViewer();
     refreshStatus();
   } catch (e) {
     toast(t("toast.openFailed", { msg: String(e) }), "error");
@@ -200,7 +213,7 @@ async function openFileOrFolder(path: string) {
   const fileName = normalized.slice(lastSlash + 1);
   await openDirectory(dir);
   const idx = viewerSession.images.findIndex((img) => img.name === fileName);
-  if (idx >= 0) showSingle(idx);
+  if (idx >= 0) openImageDetails(idx);
 }
 
 // ---------- 网格视图（窗口化虚拟滚动） ----------
@@ -219,14 +232,14 @@ const gridController = createGridController({
   imageSource,
   getThumbnail,
   translate: t,
-  onSelect: showSingle,
+  onSelect: openImageDetails,
 });
 const imagePreviewStripController = createImagePreviewStripController({
   strip: imagePreviewStrip,
   session: viewerSession,
   imageSource,
   getThumbnail,
-  onSelect: showSingle,
+  onSelect: openImageDetails,
 });
 
 function applyImagePreviewStripState() {
@@ -286,7 +299,7 @@ function closeImageShare() {
 function openImageShare(entry: ImageEntry) {
   const index = viewerSession.images.findIndex((image) => image.path === entry.path);
   if (index >= 0 && (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)) {
-    showSingle(index);
+    openImageDetails(index);
   }
   viewerSession.propsVisible = false;
   applyPropsState();
@@ -326,6 +339,12 @@ function showSingle(index: number) {
   applyImagePreviewStripState();
   refreshStatus();
   preloadNeighbors(index);
+}
+
+/** Opens an image from a browsing surface and makes the grid returnable via titlebar history. */
+function openImageDetails(index: number) {
+  if (index < 0 || index >= viewerSession.images.length) return;
+  pageNavigation.showImage(index);
 }
 
 async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
@@ -414,6 +433,7 @@ function navigate(delta: number) {
   // 不循环：到首/尾就不再切换（首尾按钮置灰）
   if (next < 0 || next > viewerSession.images.length - 1) return;
   showSingle(next);
+  pageNavigation.replaceCurrentImage(next);
 }
 
 // 更新单图左右切图按钮的置灰状态（首张禁用上一张，末张禁用下一张）
@@ -452,12 +472,14 @@ window.addEventListener("keydown", (e) => {
       if (viewerSession.viewMode === "single") navigate(1);
       break;
     case "Escape":
-      if (viewerSession.viewMode === "single") showGrid();
+      if (viewerSession.viewMode === "single") pageNavigation.back();
       break;
     case "Tab":
       e.preventDefault();
-      if (viewerSession.viewMode === "single") showGrid();
-      else if (viewerSession.images.length > 0) showSingle(Math.max(viewerSession.activeIndex, 0));
+      if (viewerSession.viewMode === "single") pageNavigation.back();
+      else if (viewerSession.images.length > 0) {
+        openImageDetails(Math.max(viewerSession.activeIndex, 0));
+      }
       break;
     case "0":
       if (viewerSession.viewMode === "single") {
@@ -561,7 +583,7 @@ createContextMenuController({
   isSingleView: () => viewerSession.viewMode === "single",
   getImageAt: (index) => viewerSession.images[index],
   getActiveImage: () => viewerSession.images[viewerSession.activeIndex],
-  onView: showSingle,
+  onView: openImageDetails,
   onCopyImage: (entry) => void copyImageBitmap(entry),
   onCopyPath: (path) => void copyImagePath(path),
   onShare: openImageShare,
@@ -572,12 +594,11 @@ createContextMenuController({
       index >= 0 &&
       (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)
     ) {
-      showSingle(index);
+      openImageDetails(index);
     }
     viewerSession.propsVisible = true;
     applyPropsState();
   },
-  onBackToGrid: showGrid,
   translate: t,
 });
 
@@ -604,17 +625,40 @@ const settingsController = createSettingsController({
   applyI18n: () => applyI18n(document),
   refreshViewerTranslations,
   refreshImagePreviewStrip: applyImagePreviewStripState,
+  setDesktopPetEnabled: desktopPetController.setEnabled,
   translate: t,
   toast,
 });
 // ---------- 关于页 ----------
 const aboutController = createAboutController({ toast });
+const pageNavigation = createPageNavigationController({
+  showViewer: (imageIndex) => {
+    aboutController.close();
+    settingsController.close();
+    if (imageIndex === null) showGrid();
+    else showSingle(imageIndex);
+  },
+  showSettings: () => {
+    aboutController.close();
+    settingsController.open();
+  },
+  showAbout: () => {
+    settingsController.close();
+    aboutController.open();
+  },
+});
 
+document.getElementById("btn-settings")?.addEventListener("click", () => {
+  pageNavigation.showSettings();
+});
+document.getElementById("btn-about")?.addEventListener("click", () => {
+  pageNavigation.showAbout();
+});
 window.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (settingsController.dismissUpdateIfOpen()) return;
-  if (aboutController.closeIfOpen()) return;
-  settingsController.closeIfOpen();
+  if (imageEditor.isOpen()) return;
+  if (pageNavigation.back()) event.preventDefault();
 });
 
 // ---------- 启动 ----------
@@ -629,6 +673,11 @@ window.addEventListener("keydown", (event) => {
   }
   applyI18n(document);
   refreshStatus();
+  if (config?.desktop_pet_enabled) {
+    void desktopPetController.setEnabled(true).catch((error) => {
+      toast(t("toast.desktopPetFailed", { msg: String(error) }), "error");
+    });
+  }
   void bindOpenImageBridge(openFileOrFolder, t, toast);
   void showStartupNotices(t, toast);
   // 记住上次的语言仅作展示；无目录状态由用户操作进入

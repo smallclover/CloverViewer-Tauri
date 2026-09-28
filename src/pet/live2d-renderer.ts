@@ -101,6 +101,12 @@ export class Live2DPetRenderer {
   private nextNodAt = 0;
   private gazeTarget?: { x: number; y: number };
   private gaze = { x: 0, y: 0 };
+  private firstFrameRendered = false;
+
+  constructor(
+    private readonly onFirstFrame?: () => void,
+    private readonly onRenderFailure?: () => void,
+  ) {}
 
   async mount(host: HTMLElement): Promise<boolean> {
     const definition = await loadModelDefinition();
@@ -230,7 +236,17 @@ export class Live2DPetRenderer {
     if (this.paused || this.frameHandle || !this.model) return;
     this.frameHandle = window.requestAnimationFrame((now) => {
       this.frameHandle = undefined;
-      this.draw(now);
+      try {
+        this.draw(now);
+      } catch {
+        this.destroy();
+        this.onRenderFailure?.();
+        return;
+      }
+      if (!this.firstFrameRendered) {
+        this.firstFrameRendered = true;
+        this.onFirstFrame?.();
+      }
       this.requestFrame();
     });
   }

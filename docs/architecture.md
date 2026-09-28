@@ -26,6 +26,7 @@ Rust Tauri 命令与应用状态
 | `src-tauri/src/main.rs` | 进程入口。默认启动 GUI；`--mcp` 启动 stdio MCP 服务；`--mcp-http` 启动仅本机监听、需 Bearer Token 的 HTTP MCP 服务。 |
 | `src-tauri/src/lib.rs` | 组装 Tauri 应用：管理状态、注册命令、插件、全局热键、托盘、单实例和窗口生命周期。 |
 | `index.html` / `src/main.ts` | 主查看器窗口的页面骨架和前端入口。 |
+| `desktop-pet.html` / `src/desktop-pet.ts` | 独立透明桌宠窗口；加载 Live2D 模型并在首帧绘制后报告就绪。 |
 | `screenshot.html` / `src/screenshot.ts` | 截图窗口的页面骨架和组合入口。 |
 
 ## 前端目录
@@ -39,6 +40,7 @@ Rust Tauri 命令与应用状态
 | `src/screenshot.ts` | 截图页面组合入口，保留页面级 DOM、窗口事件和跨模块调度。 |
 | `src/screenshot/` | 截图领域实现：会话与历史、输入与快捷键、标注绘制、选区几何、工具栏/面板、文本输入、放大镜、导出、OCR、滚动截图、局域网分享及窗口生命周期。 |
 | `src/ui/` | 与页面外观或通用交互相关的控制器，如设置（分类 + 搜索 + 缓存维护）、关于、右键菜单、窗口标题栏和应用桥接。 |
+| `src/ui/desktop-pet-controller.ts` | 主窗口的桌宠启停编排与加载状态提示；首帧事件到达前保持提示，慢加载时更新文案。 |
 | `src/locales/` | 各语言的静态翻译表。新增文案须同步更新所有语言表。 |
 | `src/i18n.ts` | 语言选择、插值、页面翻译应用；不承载具体翻译数据。 |
 | `src/styles.css` | 全局设计 token 与页面/组件样式。 |
@@ -60,6 +62,7 @@ Rust Tauri 命令与应用状态
 | --- | --- |
 | `src-tauri/src/commands.rs` | Tauri 命令边界：配置、文件打开、图片查询、热键、窗口操作、图片编辑的读取/保存，以及临时缓存维护（`get_cache_summary` / `clear_temp_cache`）。 |
 | `src-tauri/src/config.rs` | 应用配置的数据模型、读取与持久化。 |
+| `src-tauri/src/desktop_pet.rs` | 桌宠透明窗口的创建、显隐和缩放；首次创建由主窗口前端在首屏显示后触发。启停命令异步执行，过期请求不能重新显示窗口或覆盖开关状态。 |
 | `src-tauri/src/image_scan.rs` | 文件夹中的图像扫描与排序。 |
 | `src-tauri/src/image_info.rs` | 图像和 EXIF 信息读取。 |
 | `src-tauri/src/thumbnails.rs` | 缩略图生成、缓存与读取。 |

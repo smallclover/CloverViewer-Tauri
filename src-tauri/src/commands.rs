@@ -300,6 +300,52 @@ pub fn open_url(url: String) -> Result<(), String> {
     }
 }
 
+/// 只接受现有文件路径，打开其父文件夹；不把文件路径交给 ShellExecute 执行。
+#[tauri::command]
+pub fn open_containing_folder(path: String) -> Result<(), String> {
+    let file = Path::new(&path);
+    if !file.is_absolute() || !file.is_file() {
+        return Err("图片文件不存在".into());
+    }
+    let folder = file.parent().ok_or("无法确定图片所在文件夹")?;
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let wide: Vec<u16> = folder
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let op: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        let hinstance = unsafe {
+            ShellExecuteW(
+                None,
+                PCWSTR(op.as_ptr()),
+                PCWSTR(wide.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        };
+        let code = hinstance.0 as isize;
+        if code <= 32 {
+            return Err(format!("打开文件夹失败（ShellExecuteW 返回 {code}）"));
+        }
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = folder;
+        Err("当前平台未实现".into())
+    }
+}
+
 /// 扫描目录下所有受支持的图片（不递归）
 #[tauri::command]
 pub fn list_images(dir: String) -> Result<Vec<ImageEntry>, String> {

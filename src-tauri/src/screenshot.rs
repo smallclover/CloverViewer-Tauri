@@ -151,13 +151,16 @@ pub fn take_scroll_start_mode(store: State<'_, ScreenshotStore>) -> bool {
 
 /// 关闭截图窗口（前端 Esc 时调用）—— 仅隐藏窗口（不销毁），保留供下次复用。
 #[tauri::command]
-pub fn close_screenshot(app: AppHandle) {
+pub fn close_screenshot(app: AppHandle, completed: Option<bool>) {
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         // 先让前端清掉画面（移除 body.ready），避免下次 show 时闪旧截图
         let _ = w.emit("screenshot-clear", ());
         let _ = w.hide();
     }
     crate::desktop_pet::restore_after_screenshot(&app);
+    if completed.unwrap_or(false) {
+        let _ = app.emit("desktop-pet-celebrate", ());
+    }
 }
 
 /// 复制纯文本到剪贴板（放大镜取色 Ctrl+C 用）
@@ -334,13 +337,17 @@ pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
 }
 
 /// 前端导出完成后的收尾请求：PNG 已由前端 Canvas 合成（裁剪 + 标注），
-/// Rust 侧只负责「落盘」或「写剪贴板」，然后隐藏截图窗口。
+/// Rust 侧负责「落盘」或「写剪贴板」；普通复制/保存可延后隐藏，让前端先显示确认。
 #[derive(Debug, Deserialize)]
 pub struct FinishRequest {
     /// "save" | "clipboard" | "open"
     pub action: String,
     /// 前端 `canvas.toBlob` 导出的 PNG（base64，可带 data: 前缀）
     pub png: String,
+    /// OCR 成功时随临时图片交给查看器；普通导出不携带文字。
+    pub ocr_text: Option<String>,
+    /// 复制或保存成功后，先让前端显示短提示，再由前端关闭截图窗口。
+    pub defer_close: Option<bool>,
 }
 
 #[tauri::command]
@@ -377,7 +384,10 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
                     let _ = main.unminimize();
                     let _ = main.set_focus();
                 }
-                let _ = app.emit("open-image", serde_json::json!({ "path": path }));
+                let _ = app.emit(
+                    "open-image",
+                    serde_json::json!({ "path": path, "ocr_text": req.ocr_text }),
+                );
             }
         }
         "clipboard" => {
@@ -399,14 +409,10 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
         other => return Err(format!("未知动作: {other}")),
     }
 
-    if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
-        // 同上：隐藏前清画面，避免下次复用时闪旧截图
-        let _ = w.emit("screenshot-clear", ());
-        let _ = w.hide();
+    if req.defer_close == Some(true) && matches!(req.action.as_str(), "save" | "clipboard") {
+        return Ok(());
     }
-    // 桌宠自身用这个事件触发一次短促庆祝，不影响截图保存/复制的完成时机。
-    let _ = app.emit("desktop-pet-celebrate", ());
-    crate::desktop_pet::restore_after_screenshot(&app);
+    close_screenshot(app, Some(true));
     Ok(())
 }
 
@@ -523,9 +529,13 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             }
         };
 
-        // 界面密度跟随所在显示器：覆盖窗可能出现在与上次不同的屏幕上（分辨率不同），
-        // 每次捕获都按当前屏幕对齐一次缩放（值没变时是空操作）。
-        crate::ui_scale::apply(&win);
+        // 截图窗覆盖整个虚拟桌面，不能用它的左上角判断用户操作的是哪块屏幕。
+        // 改按热键触发时的鼠标所在屏幕缩放，让工具栏、面板和放大镜与当前屏幕同密度。
+        if let Some(cursor) = data.cursor.as_ref() {
+            crate::ui_scale::apply_for_physical_point(&win, &app, cursor.x, cursor.y);
+        } else {
+            crate::ui_scale::apply(&win);
+        }
 
         // Windows 无边框窗口自带不可见 DWM resize border：set_position 设的是【外框】，
         // 内容(webview/content)会相对外框内缩若干像素（本例左 9px/上 5px），导致内容

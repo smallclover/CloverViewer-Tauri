@@ -122,6 +122,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(ConfigStore::new(config))
         .manage(desktop_pet::DesktopPetSwitchState::default())
+        .manage(desktop_pet::DesktopPetMenuState::default())
         .manage(thumbnails::ThumbnailStore::new(512))
         .manage(screenshot::ScreenshotStore::new())
         .manage(lan_share::LanShareStore::new())
@@ -133,6 +134,7 @@ pub fn run() {
             commands::set_desktop_pet_enabled,
             commands::set_desktop_pet_scale,
             commands::get_desktop_pet_cursor_position,
+            desktop_pet::show_desktop_pet_menu,
             commands::get_cache_summary,
             commands::clear_temp_cache,
             commands::set_launch_on_startup,
@@ -144,6 +146,7 @@ pub fn run() {
             commands::save_edited_image,
             commands::get_app_info,
             commands::open_url,
+            commands::open_containing_folder,
             thumbnails::get_thumbnail,
             image_info::get_image_info,
             screenshot::get_screenshot_data,
@@ -169,6 +172,12 @@ pub fn run() {
             take_startup_notices,
         ])
         .setup(move |app| {
+            match app.path().app_cache_dir() {
+                Ok(dir) => app
+                    .state::<thumbnails::ThumbnailStore>()
+                    .configure_disk_cache(dir.join("thumbnail-v1")),
+                Err(error) => tracing::warn!("无法定位缩略图磁盘缓存目录: {error}"),
+            }
             // 只在启动时清一次，避免用户当前正在查看的临时长截图被后台删掉。
             if cache_cleanup_after_hours > 0 {
                 match commands::clear_temp_cache(cache_cleanup_after_hours) {
@@ -348,7 +357,7 @@ pub fn run() {
             }
             let app = webview.window().app_handle().clone();
             if let Some(window) = app.get_webview_window(&label) {
-                ui_scale::forget(&label);
+                ui_scale::forget_applied(&label);
                 ui_scale::apply(&window);
             }
         })

@@ -1,0 +1,156 @@
+/* ============ 滚动截图：开始面板 / 进度与结果 HUD ============
+   两者都定位在**选区之外**：捕获期间选区内的画布必须保持全透明
+   （透出真实窗口，屏幕像素捕获才不会把 UI 画进长图里）。 */
+#scroll-panel,
+#scroll-hud {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  gap: 7px;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  background: var(--s-panel-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--s-popup-border);
+  border-radius: 10px;
+  box-shadow: var(--s-shadow);
+  color: var(--s-fg);
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+#scroll-hud {
+  width: min(460px, calc(100vw - 20px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden auto;
+  /* 结果缩略图加载后会把 HUD 撑高；限制在当前屏幕内，避免底部操作区落出视口。 */
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  /* body 默认是框选十字；结果缩略图只是预览，不应继承该鼠标样式。 */
+  cursor: default;
+}
+#scroll-panel.open,
+#scroll-hud.open {
+  display: flex;
+}
+/* 后端采帧的瞬间：HUD 压在捕获区上时必须让开（否则可能被截进长图），
+   抓完立刻恢复 —— 每帧只隐藏 ~120ms。 */
+#scroll-hud.hud-hidden {
+  visibility: hidden;
+}
+/* 自动滚动时的选区聚焦光晕：对齐 Computer Use 的聚焦态——整圈柔和地泛绿，
+   不画描边/灯带。光晕基准面与捕获边缘重合，内外两侧都会自然散开。 */
+#scroll-selection-glow {
+  position: absolute;
+  display: none;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+#scroll-selection-glow::before,
+#scroll-selection-glow::after {
+  position: absolute;
+  box-sizing: border-box;
+  content: "";
+  border-radius: 14px;
+  background: transparent;
+}
+/* 主光层无描边，靠大面积外扩与内扩阴影形成柔和的聚焦面。 */
+#scroll-selection-glow::before {
+  /* 容器本身向四周扩了 50px，因此这里正好回到实际捕获边缘。 */
+  inset: 50px;
+  box-shadow:
+    0 0 16px 4px rgba(117, 255, 165, 0.29),
+    0 0 46px 14px rgba(64, 230, 121, 0.19),
+    0 0 84px 25px rgba(42, 183, 92, 0.09),
+    inset 0 0 30px 8px rgba(117, 255, 165, 0.31),
+    inset 0 0 76px 20px rgba(64, 230, 121, 0.13);
+  filter: blur(3px);
+  opacity: 0.8;
+  animation: scroll-focus-breathe 4.8s ease-in-out infinite;
+}
+/* 辅光从内侧缓慢浮动，增加“被聚焦”的空间感，而不是沿边追逐。 */
+#scroll-selection-glow::after {
+  inset: 50px;
+  box-shadow:
+    -12px -4px 38px 8px rgba(155, 255, 190, 0.13),
+    17px 10px 50px 11px rgba(58, 224, 116, 0.14),
+    0 18px 64px 14px rgba(86, 243, 141, 0.08),
+    inset -10px -5px 52px 14px rgba(155, 255, 190, 0.17),
+    inset 12px 10px 66px 18px rgba(58, 224, 116, 0.13);
+  filter: blur(9px);
+  opacity: 0.62;
+  animation: scroll-focus-drift 7.4s ease-in-out infinite alternate;
+}
+#scroll-selection-glow.on { display: block; }
+/* 不支持系统级捕获排除时，后端仅在 BitBlt 的瞬间挂上这个类。 */
+#scroll-selection-glow.capture-hidden { visibility: hidden; }
+@keyframes scroll-focus-breathe {
+  0%, 100% { opacity: 0.42; transform: scale(0.985); }
+  46% { opacity: 0.9; transform: scale(1.01); }
+  58% { opacity: 0.62; transform: scale(0.997); }
+}
+@keyframes scroll-focus-drift {
+  0% { opacity: 0.3; transform: translate(-4px, 2px) scale(0.99); }
+  100% { opacity: 0.7; transform: translate(5px, -3px) scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #scroll-selection-glow::before,
+  #scroll-selection-glow::after { animation: none; }
+}
+.sh-title {
+  font-weight: 600;
+  color: var(--s-panel-title);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.sh-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sh-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--s-toolbar-border);
+  border-radius: 999px;
+  color: var(--s-fg-dim);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.sh-badge.ok { color: var(--s-accent); }
+.sh-badge.warn { color: #d8a13a; }
+.sh-badge.recording { color: #e46467; }
+.sh-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.sh-metric {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--s-toolbar-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--s-panel-bg) 84%, #000 16%);
+}
+.sh-metric-label {
+  overflow: hidden;
+  color: var(--s-fg-dim);
+  font-size: 10px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sh-metric-value {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--s-panel-title);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

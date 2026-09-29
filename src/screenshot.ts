@@ -1,3 +1,5 @@
+import "./styles/screenshot.css";
+
 import {
   closeScreenshot,
   copyText,
@@ -12,7 +14,7 @@ import {
 } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
 import { createToolbar } from "./screenshot/toolbar";
-import { createHelpPanel, createOcrPanel } from "./screenshot/panels";
+import { createHelpPanel } from "./screenshot/panels";
 import { createMagnifierRenderer } from "./screenshot/magnifier";
 import { createTextInputController } from "./screenshot/text-input";
 import { createEditorCanvasRenderer } from "./screenshot/editor-renderer";
@@ -175,16 +177,10 @@ function updateHelpBox() {
 /** 截图窗打开瞬间的鼠标位置。初始时还没有 mousemove，也要把提示放在当前屏。 */
 let initialCursorPos: Pt | null = null;
 
-// ---------- OCR 结果面板 ----------
-const ocrUi = createOcrPanel(uiLayer, (text) => {
-  if (text) void copyText(text);
-});
-const ocrPanel = ocrUi.element;
 editorUi = createEditorUiController({
   root,
   toolbarUi,
   helpPanel,
-  ocrUi,
   getSelection: () => editorSession.selection,
   getAnchor: () => editorInput?.getFrameState().lastMousePos ?? initialCursorPos,
   toCssBox,
@@ -194,10 +190,6 @@ editorUi = createEditorUiController({
   getCopyColorHotkey: () => copyColorHotkey,
   getMagnifierActive: () => magnifierActive,
 });
-function showOcrPanel(text: string, isError = false) {
-  editorUi.showOcr(text, isError);
-}
-
 // ============================================================
 // 几何工具
 // ============================================================
@@ -254,13 +246,19 @@ screenshotActions = createScreenshotActionController({
   getShapes: () => editorSession.shapes,
   drawShape: editorRenderer.drawShape,
   translate: t,
-  showOcr: showOcrPanel,
+  setOcrBusy: (busy) => {
+    toolbarUi.ocrButton.disabled = busy;
+    const label = t(busy ? "shot.ocrRecognizing" : "shot.ocr");
+    toolbarUi.ocrButton.title = label;
+    toolbarUi.ocrButton.setAttribute("aria-label", label);
+  },
+  setActionBusy: toolbarUi.setActionBusy,
+  showNotice: showScreenshotNotice,
   showLanShare: (info) => {
     const selection = editorSession.selection;
     if (!selection) return;
     lanSharePanel.show(info, (size) => placeScrollOverlay(toCssBox(selection), rootBoxCss(), size));
   },
-  showError: (message) => showScrollNotice(message, true),
 });
 
 function render() {
@@ -477,7 +475,7 @@ scrollController = createScrollCaptureController({
   root,
   toolbar,
   helpBox,
-  clearOcr: ctx0ClearOcr,
+  hideFloatingPanels,
   closePopups,
   getSelection: () => editorSession.selection,
   getBounds: () => ({ minX, minY }),
@@ -563,16 +561,30 @@ async function finishScrollAction(action: "save" | "clipboard" | "open") {
  *  截图窗**没有**主窗口那套 toast —— 结果态的失败原因必须有地方显示，
  *  否则「保存失败」对用户来说就是一次无声的点击。 */
 let scrollNoticeTimer: number | undefined;
-function showScrollNotice(text: string, isError = false) {
+function showScreenshotNotice(text: string, kind: "progress" | "success" | "error" | "info") {
   scrollNotice.textContent = text;
-  scrollNotice.classList.toggle("err", isError);
+  scrollNotice.classList.toggle("err", kind === "error");
+  scrollNotice.classList.toggle("progress", kind === "progress");
+  scrollNotice.classList.toggle("success", kind === "success");
+  scrollNotice.setAttribute("role", kind === "error" ? "alert" : "status");
   scrollNotice.classList.add("on");
   scrollPositioner.positionNotice();
   if (scrollNoticeTimer !== undefined) window.clearTimeout(scrollNoticeTimer);
-  scrollNoticeTimer = window.setTimeout(
-    () => scrollNotice.classList.remove("on"),
-    isError ? 6000 : 2200,
-  );
+  scrollNoticeTimer =
+    kind === "progress"
+      ? undefined
+      : window.setTimeout(
+          () => scrollNotice.classList.remove("on"),
+          kind === "error" ? 6000 : 2200,
+        );
+}
+function showScrollNotice(text: string, isError = false) {
+  showScreenshotNotice(text, isError ? "error" : "info");
+}
+function clearScreenshotNotice() {
+  if (scrollNoticeTimer !== undefined) window.clearTimeout(scrollNoticeTimer);
+  scrollNoticeTimer = undefined;
+  scrollNotice.classList.remove("on", "err", "progress", "success");
 }
 
 function syncScrollUi() {
@@ -649,9 +661,8 @@ function renderScrollOverlay() {
   });
 }
 
-/** OCR 面板在滚动模式里要让位（否则会压在选区上/干扰视线） */
-function ctx0ClearOcr() {
-  ocrPanel.style.display = "none";
+/** 切换到滚动模式时收起普通截图的浮层。 */
+function hideFloatingPanels() {
   lanSharePanel.hide();
 }
 
@@ -663,13 +674,14 @@ window.addEventListener("mousemove", editorInput.onMouseMove);
 window.addEventListener("mouseup", editorInput.onMouseUp);
 
 function resetScreenshotSession() {
+  screenshotActions.reset();
+  clearScreenshotNotice();
   root.querySelectorAll(":scope > img").forEach((element) => {
     element.remove();
   });
   editorSession.reset();
   for (const button of toolBtns.values()) button.classList.toggle("active", false);
   textInput.classList.remove("editing");
-  ocrPanel.style.display = "none";
   lanSharePanel.hide();
   screens = [];
   editorInput.reset();
@@ -757,7 +769,7 @@ async function refreshConfig() {
 }
 
 // 截图窗口 UI 主题：与主窗口一致，跟随 config.theme（dark / light / system），
-// 由 screenshot.html 里 :root[data-theme] 变量驱动工具栏/弹窗/帮助框/OCR 面板配色。
+// 由 screenshot.html 里 :root[data-theme] 变量驱动工具栏/弹窗/帮助框配色。
 function applyTheme(theme: "dark" | "light" | "system") {
   const dark =
     theme === "dark" ||

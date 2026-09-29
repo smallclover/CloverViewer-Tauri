@@ -1,5 +1,4 @@
 import { t } from "../i18n";
-import { makeBtn } from "./icons";
 
 export interface HelpPanel {
   element: HTMLDivElement;
@@ -40,51 +39,6 @@ export function createHelpPanel(uiLayer: HTMLElement): HelpPanel {
     sync(copyColorHotkey, magnifierActive) {
       colorKey.textContent = copyColorHotkey;
       colorRow.style.display = magnifierActive ? "" : "none";
-    },
-  };
-}
-
-export interface OcrPanel {
-  element: HTMLDivElement;
-  show(text: string, isError: boolean): void;
-  hide(): void;
-}
-
-export function createOcrPanel(uiLayer: HTMLElement, onCopy: (text: string) => void): OcrPanel {
-  const element = document.createElement("div");
-  element.id = "ocr-panel";
-  element.className = "ui-interactive";
-  element.style.display = "none";
-  const header = document.createElement("div");
-  header.className = "ocr-header";
-  const title = document.createElement("span");
-  title.className = "ocr-title";
-  title.dataset.i18n = "shot.ocrTitle";
-  title.textContent = t("shot.ocrTitle");
-  const body = document.createElement("div");
-  body.className = "ocr-body";
-  const copy = makeBtn("copy", "shot.copyAll");
-  copy.addEventListener("click", (event) => {
-    event.stopPropagation();
-    onCopy(body.textContent || "");
-  });
-  const close = makeBtn("cancel", "shot.close");
-  close.addEventListener("click", (event) => {
-    event.stopPropagation();
-    element.style.display = "none";
-  });
-  header.append(title, copy, close);
-  element.append(header, body);
-  uiLayer.appendChild(element);
-  return {
-    element,
-    show(text, isError) {
-      body.textContent = text;
-      body.classList.toggle("error", isError);
-      element.style.display = "flex";
-    },
-    hide() {
-      element.style.display = "none";
     },
   };
 }

@@ -1,4 +1,4 @@
-import type { HelpPanel, OcrPanel } from "./panels";
+import type { HelpPanel } from "./panels";
 import { placeSelectionOverlay } from "./overlay-layout";
 import type { Pt, Rect } from "./geometry";
 import type { ToolbarUi } from "./toolbar";
@@ -14,7 +14,6 @@ interface EditorUiControllerOptions {
   root: HTMLElement;
   toolbarUi: ToolbarUi;
   helpPanel: HelpPanel;
-  ocrUi: OcrPanel;
   getSelection: () => Rect | null;
   getAnchor: () => Pt | null;
   toCssBox: (rect: Rect) => CssBox;
@@ -27,7 +26,7 @@ interface EditorUiControllerOptions {
 
 /** Coordinates editor-only floating UI; canvas rendering and editor state stay outside. */
 export function createEditorUiController(options: EditorUiControllerOptions) {
-  const { toolbarUi, helpPanel, ocrUi } = options;
+  const { toolbarUi, helpPanel } = options;
   const { toolbar, colorBtn, widthBtn, colorPopup, widthPopup } = toolbarUi;
   const closePopups = () => toolbarUi.closePopups();
   const updateHelp = () =>
@@ -63,22 +62,6 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
       : "";
   };
 
-  const positionOcr = () => {
-    const selection = options.getSelection();
-    if (!selection) return;
-    const point = placeSelectionOverlay(
-      options.toCssBox(selection),
-      options.rootBox(),
-      { w: 320, h: 220 },
-      "start",
-    );
-    const panel = ocrUi.element;
-    panel.style.left = `${point.x}px`;
-    panel.style.top = `${point.y}px`;
-    panel.style.width = "320px";
-    panel.style.height = "220px";
-  };
-
   const sync = () => {
     const selection = options.getSelection();
     if (selection) {
@@ -93,12 +76,6 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
       toolbar.style.top = `${point.y}px`;
     } else toolbar.style.display = "none";
     positionHelp();
-    if (selection && ocrUi.element.style.display !== "none") positionOcr();
-  };
-
-  const showOcr = (text: string, isError = false) => {
-    ocrUi.show(text, isError);
-    positionOcr();
   };
 
   const openPopup = (button: HTMLElement, popup: HTMLElement, offset: number) => {
@@ -132,5 +109,5 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
     closePopups();
   });
 
-  return { closePopups, updateHelp, sync, showOcr, hideOcr: ocrUi.hide };
+  return { closePopups, updateHelp, sync };
 }

@@ -1,0 +1,68 @@
+/* ============ 文本输入 ============ */
+#text-input {
+  position: absolute;
+  min-width: 60px;
+  min-height: 28px;
+  background: transparent;
+  border: 1px dashed #6fd07e;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  color: var(--s-fg);
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.2;
+  padding: 0;
+  caret-color: #6fd07e;
+  display: none;
+  pointer-events: auto;
+}
+#text-input.editing {
+  display: block;
+}
+
+/* ============ 帮助框（快捷键提示） ============
+   与滚动截图面板共用视觉语言：面板底色、圆角、边框、阴影和间距保持一致。
+   由 screenshot.ts 的 HELP_ITEMS 生成 DOM，文案走 i18n。 */
+#help-box {
+  position: absolute;
+  left: 12px;
+  bottom: auto;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(4, auto);
+  gap: 4px 16px;
+  padding: 11px 12px;
+  background: var(--s-panel-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--s-popup-border);
+  border-radius: 10px;
+  box-shadow: var(--s-shadow);
+  color: var(--s-fg);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  white-space: nowrap;
+  /* 工具栏落到左下角时由 render() 抬高避让，用 transform 不触发重排 */
+  transition: transform 0.12s ease;
+}
+#help-box .hint {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+#help-box kbd {
+  flex: none;
+  box-sizing: border-box;
+  min-width: 46px;
+  padding: 1px 6px;
+  border: 1px solid var(--s-kbd-border);
+  border-radius: 4px;
+  background: var(--s-kbd-bg);
+  color: var(--s-fg);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}

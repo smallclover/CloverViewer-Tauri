@@ -1,6 +1,7 @@
 require("./grid-layout.test.cjs");
 require("./image-sort.test.cjs");
 require("./image-source.test.cjs");
+require("./thumbnail-loader.test.cjs");
 require("./screenshot-geometry.test.cjs");
 require("./screenshot-history.test.cjs");
 require("./screenshot-mosaic.test.cjs");

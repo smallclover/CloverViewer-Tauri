@@ -1,9 +1,9 @@
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { takeStartupNotices } from "../api";
+import { listenOpenImage, takeStartupNotices, type OpenImagePayload } from "../api";
 import { setAnimatedVisibility, type ToastKind } from "./presentation";
 
-type Toast = (message: string, kind?: ToastKind) => void;
+type Toast = (message: string, kind?: ToastKind, persistent?: boolean) => void;
+type ProgressToast = Toast & { hide: () => void };
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
 /** Binds Tauri drag/drop payloads to the main viewer's file-opening flow. */
@@ -26,16 +26,18 @@ export function bindFileDrop(
 
 /** Opens a screenshot that the backend has materialized as a temporary image file. */
 export async function bindOpenImageBridge(
-  openPath: (path: string) => Promise<void>,
+  openPath: (payload: OpenImagePayload) => Promise<void>,
   translate: Translate,
-  toast: Toast,
+  toast: ProgressToast,
 ): Promise<void> {
-  await listen<{ path: string }>("open-image", async (event) => {
-    const path = event.payload?.path;
-    if (!path) return;
+  await listenOpenImage(async (payload) => {
+    if (!payload?.path) return;
+    const isOcr = payload.ocr_text !== undefined;
+    if (isOcr) toast(translate("toast.openingOcr"), "progress", true);
     try {
-      await openPath(path);
-      toast(translate("toast.opened"), "success");
+      await openPath(payload);
+      if (isOcr) toast.hide();
+      else toast(translate("toast.opened"), "success");
     } catch (error) {
       toast(String(error), "error");
     }

@@ -35,6 +35,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
 
 /** 更新源不可达时不能让设置页一直停在“正在检查”。 */
 const UPDATE_REQUEST_TIMEOUT_MS = 15_000;
+const UPDATE_NETWORK_ERROR = /timed?\s*out|network|fetch|connect|dns|resolve|socket|request/i;
 
 /** Owns settings form persistence, hotkey registration, and the update dialog. */
 export function createSettingsController(options: SettingsControllerOptions) {
@@ -219,6 +220,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     if (checkingForUpdate) return;
     checkingForUpdate = true;
     checkUpdateButton.disabled = true;
+    checkUpdateButton.textContent = options.translate("settings.checkingUpdate");
     options.toast(options.translate("update.checking"), "info");
     try {
       const update = await check({ timeout: UPDATE_REQUEST_TIMEOUT_MS });
@@ -253,14 +255,15 @@ export function createSettingsController(options: SettingsControllerOptions) {
       console.warn("检查更新失败", error);
       const message = String(error);
       options.toast(
-        /timed?\s*out/i.test(message)
-          ? options.translate("update.timedOut")
+        UPDATE_NETWORK_ERROR.test(message)
+          ? options.translate("update.networkUnavailable")
           : options.translate("update.failed", { msg: message }),
         "error",
       );
     } finally {
       checkingForUpdate = false;
       checkUpdateButton.disabled = false;
+      checkUpdateButton.textContent = options.translate("settings.checkUpdate");
     }
   };
 

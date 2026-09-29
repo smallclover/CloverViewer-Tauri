@@ -1,0 +1,8 @@
+/* Screenshot-window style entrypoint. Keep imports ordered to preserve the cascade. */
+@import "./screenshot/base.css";
+@import "./screenshot/toolbar.css";
+@import "./screenshot/editor-ui.css";
+@import "./screenshot/share.css";
+@import "./screenshot/scroll-focus.css";
+@import "./screenshot/scroll-panel.css";
+@import "./screenshot/notice.css";

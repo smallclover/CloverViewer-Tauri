@@ -6,8 +6,9 @@ import {
   getDesktopPetCursorPosition,
   listenDesktopPetStatusRequest,
   reportDesktopPetLoadStatus,
+  showDesktopPetMenu,
 } from "./api";
-import { applyI18n, setLang } from "./i18n";
+import { applyI18n, getLang, setLang, t } from "./i18n";
 import { Live2DPetRenderer } from "./pet/live2d-renderer";
 
 const pet = document.getElementById("pet") as HTMLElement;
@@ -52,6 +53,37 @@ function celebrate() {
 // A plain browser preview has no Tauri IPC bridge; keep the default locale and
 // animation there while the production window receives its real IPC events.
 if (desktopWindow) {
+  let contextMenuOpening = false;
+
+  const showContextMenu = async (x: number, y: number) => {
+    const config = await getConfig().catch(() => undefined);
+    if (config && config.language !== getLang()) {
+      setLang(config.language);
+      applyI18n();
+    }
+    await showDesktopPetMenu(
+      {
+        screenshot: t("pet.menu.screenshot"),
+        scrollScreenshot: t("pet.menu.scrollScreenshot"),
+        mainWindow: t("pet.menu.mainWindow"),
+        quit: t("pet.menu.quit"),
+      },
+      x,
+      y,
+    );
+  };
+
+  pet.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    if (contextMenuOpening) return;
+    contextMenuOpening = true;
+    void showContextMenu(event.clientX, event.clientY)
+      .catch((error) => console.error("桌宠菜单无法打开", error))
+      .finally(() => {
+        contextMenuOpening = false;
+      });
+  });
+
   void listenDesktopPetStatusRequest(() => {
     void reportLoadStatus("started").then(() => {
       if (loadFailed) return reportLoadStatus("failed");

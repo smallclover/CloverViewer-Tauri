@@ -1,0 +1,47 @@
+/* 覆盖窗里的一次性提示（成功 / 失败）。截图窗没有主窗口那套 toast，
+   而结果态的失败原因必须有地方显示 —— 否则「保存失败」是一次无声的点击。 */
+#scroll-notice {
+  position: absolute;
+  display: none;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 9px 12px;
+  border: 1px solid var(--s-popup-border);
+  border-radius: 8px;
+  background: var(--s-panel-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: var(--s-shadow);
+  color: var(--s-fg);
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-all;
+}
+#scroll-notice.on { display: block; }
+#scroll-notice.err { color: var(--s-error); border-color: var(--s-error); }
+#scroll-notice.progress::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid color-mix(in srgb, var(--s-accent) 35%, transparent);
+  border-top-color: var(--s-accent);
+  border-radius: 50%;
+  animation: screenshot-notice-spin .8s linear infinite;
+}
+#scroll-notice.success::before {
+  content: "✓";
+  margin-right: 7px;
+  color: var(--s-accent);
+  font-weight: 700;
+}
+@keyframes screenshot-notice-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #scroll-notice.progress::before { animation: none; }
+}
+.sh-check input {
+  margin: 0;
+  cursor: pointer;
+}

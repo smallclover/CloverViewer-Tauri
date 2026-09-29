@@ -1,0 +1,146 @@
+/* 设置与工作区采用同一套整页两栏，不再弹出居中的旧对话框。
+   具体的导航、分组卡片等组件样式统一定义在下方「设置页」区块。 */
+#settings-overlay {
+  inset: 38px 0 0 56px;
+  display: block;
+  background: var(--bg);
+}
+#settings-panel {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg-panel);
+}
+.settings-nav {
+  grid-row: 1 / span 2;
+  border-right: 1px solid var(--border);
+  background: var(--glass);
+}
+.settings-header { grid-column: 2; background: transparent; backdrop-filter: none; }
+.settings-body { grid-column: 2; overflow-y: auto; }
+
+/* ---------- 拖放遮罩 / Toast ---------- */
+#drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  background: rgba(78, 168, 92, 0.35);
+  border: 3px dashed var(--accent);
+  pointer-events: none;
+}
+
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  z-index: 1000; /* 高于设置面板(300),保证改动提示能盖在遮罩之上 */
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px var(--shadow);
+  color: var(--fg);
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+#toast.show { opacity: 1; }
+#pet-loading-status {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(420px, calc(100% - 32px));
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 16px var(--shadow);
+  color: var(--fg);
+  font-size: 13px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.pet-loading-spinner {
+  display: inline-block;
+  color: var(--accent);
+  animation: pet-loading-spin 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-loading-spinner { animation: none; }
+}
+
+@keyframes pet-loading-spin { to { transform: rotate(360deg); } }
+.toast-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 7px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex: none;
+}
+.toast-ic.success { background: #2f8f4e; }
+.toast-ic.error { background: #d64545; }
+.toast-ic.progress {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-top-color: var(--accent);
+  animation: toast-progress-spin .8s linear infinite;
+}
+@keyframes toast-progress-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .toast-ic.progress { animation: none; }
+}
+
+/* ---------- 自定义右键菜单 ---------- */
+#context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 150px;
+  padding: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--shadow);
+}
+.ctx-item {
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctx-item:hover { background: var(--bg-hover); }
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}

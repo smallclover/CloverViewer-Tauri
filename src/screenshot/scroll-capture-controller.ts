@@ -15,7 +15,7 @@ interface ScrollCaptureControllerOptions {
   root: HTMLElement;
   toolbar: HTMLElement;
   helpBox: HTMLElement;
-  clearOcr: () => void;
+  hideFloatingPanels: () => void;
   closePopups: () => void;
   getSelection: () => Rect | null;
   getBounds: () => { minX: number; minY: number };
@@ -63,7 +63,7 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
     if (inScroll) {
       options.helpBox.style.display = "none";
       options.closePopups();
-      options.clearOcr();
+      options.hideFloatingPanels();
     } else options.helpBox.style.display = "";
 
     panel.panel.classList.toggle("open", state.phase === "armed" && !!selection);

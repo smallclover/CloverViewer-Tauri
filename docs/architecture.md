@@ -26,7 +26,7 @@ Rust Tauri 命令与应用状态
 | `src-tauri/src/main.rs` | 进程入口。默认启动 GUI；`--mcp` 启动 stdio MCP 服务；`--mcp-http` 启动仅本机监听、需 Bearer Token 的 HTTP MCP 服务。 |
 | `src-tauri/src/lib.rs` | 组装 Tauri 应用：管理状态、注册命令、插件、全局热键、托盘、单实例和窗口生命周期。 |
 | `index.html` / `src/main.ts` | 主查看器窗口的页面骨架和前端入口。 |
-| `desktop-pet.html` / `src/desktop-pet.ts` | 独立透明桌宠窗口；加载 Live2D 模型并在首帧绘制后报告就绪。 |
+| `desktop-pet.html` / `src/desktop-pet.ts` | 独立透明桌宠窗口；加载 Live2D 模型并在首帧绘制后报告就绪。右键显示截图、滚动截图、主界面和退出菜单。 |
 | `screenshot.html` / `src/screenshot.ts` | 截图窗口的页面骨架和组合入口。 |
 
 ## 前端目录
@@ -35,7 +35,7 @@ Rust Tauri 命令与应用状态
 | --- | --- |
 | `src/api.ts` | 前端与 Rust 的唯一业务桥接层；定义共享数据类型，并封装 `invoke` 和 Tauri 事件。 |
 | `src/main.ts` | 主窗口组合入口：连接查看器控制器、设置/关于/菜单/窗口外观控制器，并编排加载流程。 |
-| `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格；`single-image-controller.ts` 管理单图变换和手势；`image-editor-controller.ts` 管理图片编辑会话与导出；`image-properties-controller.ts` 显示属性；`image-share-controller.ts` 管理当前图片的局域网分享面板。 |
+| `src/viewer/` | 查看器领域。`viewer-session.ts` 保存目录、图片与视图状态；`grid-controller.ts` 管理缩略图网格，`thumbnail-loader.ts` 限制缩略图并发、合并请求并缓存近期结果；`single-image-controller.ts` 管理单图变换和手势；`image-editor-controller.ts` 管理图片编辑会话与导出；`image-properties-controller.ts` 显示属性；`image-share-controller.ts` 管理当前图片的局域网分享面板。 |
 | `src/image-editor/` | 查看器与截图共用的标注核心：图形几何、历史快照、标注绘制与马赛克路径插值；图片编辑额外在这里维护 Canvas 马赛克采样器。 |
 | `src/screenshot.ts` | 截图页面组合入口，保留页面级 DOM、窗口事件和跨模块调度。 |
 | `src/screenshot/` | 截图领域实现：会话与历史、输入与快捷键、标注绘制、选区几何、工具栏/面板、文本输入、放大镜、导出、OCR、滚动截图、局域网分享及窗口生命周期。 |
@@ -43,7 +43,7 @@ Rust Tauri 命令与应用状态
 | `src/ui/desktop-pet-controller.ts` | 主窗口的桌宠启停编排与加载状态提示；首帧事件到达前保持提示，慢加载时更新文案。 |
 | `src/locales/` | 各语言的静态翻译表。新增文案须同步更新所有语言表。 |
 | `src/i18n.ts` | 语言选择、插值、页面翻译应用；不承载具体翻译数据。 |
-| `src/styles.css` | 全局设计 token 与页面/组件样式。 |
+| `src/styles.css` / `src/styles/` | 样式入口与按职责拆分的样式：主窗口的基础 token、查看器、设置、浮层、工作区与动效；截图窗口由 `styles/screenshot.css` 及其基础、工具栏、编辑 UI、分享、滚动截图和提示子模块组成。 |
 | `src/version.ts` | 由构建流程使用的版本信息。 |
 
 ### 主窗口数据流
@@ -52,7 +52,7 @@ Rust Tauri 命令与应用状态
 
 ### 截图数据流
 
-后端热键或命令创建截图窗口，并向前端发送截图刷新事件。`screenshot.ts` 将事件交给生命周期和加载模块，之后由编辑会话保存画布、选区和历史；输入、快捷键、工具栏与面板控制交互，渲染器负责画布重绘。普通截图可复制、保存、OCR 或写入应用临时目录后在查看器中打开；滚动截图则由独立的会话、控制器、布局和 HUD 模块协调。
+后端热键或命令创建截图窗口，并向前端发送截图刷新事件。`screenshot.ts` 将事件交给生命周期和加载模块，之后由编辑会话保存画布、选区和历史；输入、快捷键、工具栏与面板控制交互，渲染器负责画布重绘。普通截图可复制、保存或写入应用临时目录后在查看器中打开；复制、保存先得到后端成功结果，再短暂显示截图内确认并关闭，失败时保留选区。OCR 成功后也会将原选区写入临时目录并在查看器打开，识别文字显示在与属性、分享互斥的侧栏中；识别与主窗口加载之间用连续的进度提示衔接。滚动截图则由独立的会话、控制器、布局和 HUD 模块协调。
 
 截图坐标、图像像素与窗口缩放是高风险边界。涉及选区、拼接或导出的修改应优先复用 `src/screenshot/` 中已有的几何、布局和图像辅助模块，避免在页面入口重复换算。
 
@@ -62,10 +62,10 @@ Rust Tauri 命令与应用状态
 | --- | --- |
 | `src-tauri/src/commands.rs` | Tauri 命令边界：配置、文件打开、图片查询、热键、窗口操作、图片编辑的读取/保存，以及临时缓存维护（`get_cache_summary` / `clear_temp_cache`）。 |
 | `src-tauri/src/config.rs` | 应用配置的数据模型、读取与持久化。 |
-| `src-tauri/src/desktop_pet.rs` | 桌宠透明窗口的创建、显隐和缩放；首次创建由主窗口前端在首屏显示后触发。启停命令异步执行，过期请求不能重新显示窗口或覆盖开关状态。 |
+| `src-tauri/src/desktop_pet.rs` | 桌宠透明窗口的创建、显隐、缩放与右键菜单动作；首次创建由主窗口前端在首屏显示后触发。启停命令异步执行，过期请求不能重新显示窗口或覆盖开关状态。 |
 | `src-tauri/src/image_scan.rs` | 文件夹中的图像扫描与排序。 |
 | `src-tauri/src/image_info.rs` | 图像和 EXIF 信息读取。 |
-| `src-tauri/src/thumbnails.rs` | 缩略图生成、缓存与读取。 |
+| `src-tauri/src/thumbnails.rs` | 缩略图生成、内存缓存与有上限的应用专属磁盘缓存。 |
 | `src-tauri/src/screenshot.rs` | 常规屏幕捕获、截图窗口和导出相关的原生实现。 |
 | `src-tauri/src/lan_share.rs` | 临时、令牌保护的局域网图片分享服务与二维码生成。 |
 | `src-tauri/src/ocr.rs` | Windows OCR 调用与结果转换。 |
@@ -93,7 +93,7 @@ Rust Tauri 命令与应用状态
 
 设置页是主窗口内的整页视图：左侧分类（应用 / 截图 / 局域网分享 / 维护）与右侧设置行由 `settings-controller.ts` 的单一 `render()` 统一渲染，搜索词同时过滤分类与设置行；每项改动立即写入配置，热键类改动需要显式「应用」。新增设置项时须同时补齐 `index.html` 的设置行、三条语言表的键与说明文案，以及 `AppConfig` 的 Rust/TypeScript 两端字段。
 
-临时缓存只涉及应用自己的目录 `%TEMP%\CloverViewer`，用于保存普通截图和长截图「在查看器中打开」产生的 PNG。`get_cache_summary` 统计该目录的文件数与体积，`clear_temp_cache(older_than_hours)` 按最后修改时间删除（`0` 表示全部），并在应用启动时按配置的 `cache_cleanup_after_hours` 自动执行一次。维护逻辑只遍历该目录的普通文件：不跟随符号链接、不触碰系统 Temp 的其他内容，被占用而删除失败的文件只记录警告。
+临时截图缓存只涉及应用自己的目录 `%TEMP%\CloverViewer`，用于保存普通截图和长截图「在查看器中打开」产生的 PNG。`get_cache_summary` 统计该目录的文件数与体积，`clear_temp_cache(older_than_hours)` 按最后修改时间删除（`0` 表示全部），并在应用启动时按配置的 `cache_cleanup_after_hours` 自动执行一次。维护逻辑只遍历该目录的普通文件：不跟随符号链接、不触碰系统 Temp 的其他内容，被占用而删除失败的文件只记录警告。缩略图另存于 Tauri 的应用缓存目录，最多保留 512 项或 128 MiB；缓存键包含原图路径、尺寸、文件大小和修改时间，因此原图更新后会自动生成新缩略图，旧项再按容量淘汰。
 
 局域网分享由 `lan_share.rs` 持有单个临时 HTTP 服务状态；前端只经 `api.ts` 调用 `startLanShare`、`startImageLanShare` 和 `stopLanShare`。服务向同一局域网暴露带随机令牌的预览与下载地址，内容只保存在内存；到期、达到一次下载限制或主动停止后即失效。`AppConfig` 保存默认有效期和下载限制，截图与查看器各自的分享控制器只负责其界面状态。
 

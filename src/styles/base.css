@@ -1,0 +1,139 @@
+/* CloverViewer-Tauri 基础主题：跟随系统明暗 */
+
+:root {
+  --bg: #1e1f24;
+  --bg-panel: #26272d;
+  --bg-hover: #33353d;
+  --border: #3a3c44;
+  --fg: #e6e6ea;
+  --fg-dim: #9a9ca6;
+  --accent: #4ea85c;
+  --accent-hover: #3f8f4e;
+  --accent-soft: rgba(78, 168, 92, 0.14);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --glass: rgba(38, 39, 45, 0.82);
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f5f7;
+  --bg-panel: #ffffff;
+  --bg-hover: #e8e8ec;
+  --border: #d9d9df;
+  --fg: #26272d;
+  --fg-dim: #6e707a;
+  --accent: #3d8a49;
+  --accent-hover: #337a3e;
+  --accent-soft: rgba(61, 138, 73, 0.12);
+  --shadow: rgba(0, 0, 0, 0.15);
+  --glass: rgba(255, 255, 255, 0.82);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* 统一 WebView 滚动条：保留稳定槽位，但弱化原生轨道的厚重感。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg-dim) 58%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 3px solid transparent;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--fg-dim) 58%, transparent);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--fg) 62%, var(--accent));
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--accent);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+  user-select: none;
+}
+/* 背景做一丝绿色氛围渐变,更有层次(Mica 感) */
+body {
+  background:
+    radial-gradient(120vw 70vh at 15% -12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+    radial-gradient(100vw 60vh at 95% 110%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 55%),
+    var(--bg);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.hidden { display: none !important; }
+.spacer { flex: 1; }
+
+/* ---------- 自定义标题栏（无边框窗口） ---------- */
+#titlebar {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 6px;
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(1.1);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.titlebar-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: 0.2px;
+}
+.titlebar-title img { width: 18px; height: 18px; border-radius: 5px; display: block; object-fit: cover; box-shadow: 0 1px 3px var(--shadow); }
+.titlebar-spacer { flex: 1; height: 100%; }
+.titlebar-controls { display: flex; gap: 3px; }
+.titlebar-btn {
+  width: 42px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+.titlebar-btn .ic { width: 16px; height: 16px; }
+.titlebar-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.titlebar-btn:active { transform: scale(0.92); }
+#win-close:hover { background: #e81123; color: #fff; }
+
+/* ---------- 无边框窗口缩放把手 ---------- */
+.resize-handle {
+  position: fixed;
+  z-index: 50;
+  background: transparent;
+}
+.rh-s { left: 0; right: 0; bottom: 0; height: 5px; cursor: ns-resize; }
+.rh-e { top: 0; bottom: 0; right: 0; width: 5px; cursor: ew-resize; }
+.rh-w { top: 0; bottom: 0; left: 0; width: 5px; cursor: ew-resize; }
+.rh-se { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.rh-sw { left: 0; bottom: 0; width: 14px; height: 14px; cursor: nesw-resize; }

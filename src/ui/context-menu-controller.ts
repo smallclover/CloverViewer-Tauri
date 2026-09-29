@@ -13,6 +13,8 @@ interface ContextMenuControllerOptions {
   onCopyImage: (entry: ImageEntry) => void;
   onCopyPath: (path: string) => void;
   onShare: (entry: ImageEntry) => void;
+  hasOcrResult: (path: string) => boolean;
+  onOcrResult: (entry: ImageEntry) => void;
   onEdit: (entry: ImageEntry) => void;
   onProperties: (entry: ImageEntry) => void;
   translate: (key: string) => string;
@@ -64,6 +66,9 @@ export function createContextMenuController(options: ContextMenuControllerOption
       "separator",
       { label: options.translate("ctx.share"), action: () => options.onShare(entry) },
       "separator",
+      ...(options.hasOcrResult(entry.path)
+        ? [{ label: options.translate("ctx.ocrResult"), action: () => options.onOcrResult(entry) }]
+        : []),
       {
         label: options.translate("ctx.properties"),
         action: () => options.onProperties(entry),

@@ -19,11 +19,13 @@ export interface ToolbarOptions {
 export interface ToolbarUi {
   toolbar: HTMLDivElement;
   toolBtns: Map<Tool, HTMLButtonElement>;
+  ocrButton: HTMLButtonElement;
   colorBtn: HTMLButtonElement;
   widthBtn: HTMLButtonElement;
   colorPopup: HTMLDivElement;
   widthPopup: HTMLDivElement;
   closePopups(): void;
+  setActionBusy(busy: boolean): void;
   syncColor(color: string): void;
   syncStrokeWidth(width: number): void;
 }
@@ -173,6 +175,9 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
     colorPopup.classList.remove("open");
     widthPopup.classList.remove("open");
   }
+  function setActionBusy(busy: boolean) {
+    for (const button of [ocr, copy, save, share, open]) button.disabled = busy;
+  }
   function syncColor(color: string) {
     colorSwatch.style.background = color;
     native.value = color;
@@ -190,11 +195,13 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
   return {
     toolbar,
     toolBtns,
+    ocrButton: ocr,
     colorBtn,
     widthBtn,
     colorPopup,
     widthPopup,
     closePopups,
+    setActionBusy,
     syncColor,
     syncStrokeWidth,
   };

@@ -1,0 +1,111 @@
+/* 截图窗口 UI 主题变量 —— 跟随应用设置里的主题（config.theme），
+   由 screenshot.ts 读到后写入 <html data-theme> 切换。默认暗色。 */
+:root {
+  --s-toolbar-bg: rgba(28, 30, 36, 0.72);
+  --s-toolbar-border: rgba(255, 255, 255, 0.12);
+  --s-fg: #e6e6ea;
+  --s-fg-dim: #9a9ca6;
+  --s-btn-hover-bg: rgba(255, 255, 255, 0.12);
+  --s-btn-hover-fg: #ffffff;
+  --s-accent: #4ea85c;
+  --s-accent-shadow: rgba(78, 168, 92, 0.5);
+  --s-popup-bg: rgba(28, 30, 36, 0.92);
+  --s-popup-border: rgba(255, 255, 255, 0.12);
+  --s-row-hover-bg: rgba(255, 255, 255, 0.1);
+  --s-divider: rgba(255, 255, 255, 0.14);
+  --s-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --s-border-soft: rgba(255, 255, 255, 0.35);
+  --s-help-bg: rgba(0, 0, 0, 0.55);
+  --s-kbd-bg: rgba(255, 255, 255, 0.14);
+  --s-kbd-border: rgba(255, 255, 255, 0.2);
+  --s-panel-bg: rgba(28, 30, 36, 0.94);
+  --s-panel-header-bg: rgba(255, 255, 255, 0.05);
+  --s-panel-title: #cfd1d8;
+  --s-error: #ff8a8a;
+}
+:root[data-theme="light"] {
+  --s-toolbar-bg: rgba(255, 255, 255, 0.82);
+  --s-toolbar-border: rgba(0, 0, 0, 0.14);
+  --s-fg: #26272d;
+  --s-fg-dim: #6e707a;
+  --s-btn-hover-bg: rgba(0, 0, 0, 0.08);
+  --s-btn-hover-fg: #111111;
+  --s-accent: #3d8a49;
+  --s-accent-shadow: rgba(61, 138, 73, 0.4);
+  --s-popup-bg: rgba(255, 255, 255, 0.96);
+  --s-popup-border: rgba(0, 0, 0, 0.14);
+  --s-row-hover-bg: rgba(0, 0, 0, 0.07);
+  --s-divider: rgba(0, 0, 0, 0.15);
+  --s-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  --s-border-soft: rgba(0, 0, 0, 0.3);
+  --s-help-bg: rgba(255, 255, 255, 0.86);
+  --s-kbd-bg: rgba(0, 0, 0, 0.07);
+  --s-kbd-border: rgba(0, 0, 0, 0.18);
+  --s-panel-bg: rgba(255, 255, 255, 0.97);
+  --s-panel-header-bg: rgba(0, 0, 0, 0.04);
+  --s-panel-title: #6e707a;
+  --s-error: #d64545;
+}
+
+/* 初始化前隐藏：避免 CSS/JS 未就绪时 HTML 骨架裸渲染（元素挤在左上角）。
+   loadScreenshot() 完成后由 JS 加 .ready 显示。 */
+body {
+  opacity: 0;
+}
+body.ready {
+  opacity: 1;
+  transition: opacity 60ms linear;
+}
+/* 透明窗口要求 html/body 全部透明，否则 Windows 上 wry 会渲染白底 */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+#screenshot-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* 不透明深色铺底：多屏高度不同时，较矮屏那一列下方是"无屏幕"空白，
+     若保持透明会透出活桌面，看起来像没截到。铺一层深色后，空白/边缘
+     细缝都统一显示为深色，不再露馅。 */
+  background: #14161c;
+}
+/* 只作用于**直接子** img（标注图层用到的位图）。子选择器是必须的：
+   滚动截图的结果缩略预览是 #scroll-hud 里的 <img>，若这里写成后代选择器，
+   ID 选择器的权重会压过 `.sh-preview`，把预览变成 absolute 而与按钮叠在一起。 */
+#screenshot-root > img {
+  position: absolute;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+#overlay-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* canvas 是 replaced element：absolute + inset:0 不会拉伸它，
+     会用 attribute（物理像素）当 CSS 尺寸 → dpr≠1 时 canvas 比 viewport
+     大 dpr 倍，绘制与鼠标错位。必须显式 width/height 100%。 */
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+/* UI 层默认不拦截鼠标，具体控件自行开启 pointer-events */
+#ui-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ui-interactive {
+  pointer-events: auto;
+  /* 页面底层默认是用于框选的十字；任何浮层面板的空白处都应是普通指针。
+     各按钮、标签、文本区会在自己的规则中覆写为 pointer / text。 */
+  cursor: default;
+}

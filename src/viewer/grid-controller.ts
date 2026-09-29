@@ -10,6 +10,7 @@ import {
 } from "./grid-layout";
 import type { createImageSourceResolver } from "./image-source";
 import { sortImagesByModified } from "./image-sort";
+import { createThumbnailLoader } from "./thumbnail-loader";
 import type { createViewerSession } from "./viewer-session";
 
 interface GridControllerOptions {
@@ -43,6 +44,7 @@ export function createGridController(options: GridControllerOptions) {
   let sectionForImage: GridSection[] = [];
   const renderedCells = new Map<number, HTMLElement>();
   const sectionHeadings: HTMLElement[] = [];
+  const thumbnailLoader = createThumbnailLoader({ load: options.getThumbnail });
   let scrollFrame = 0;
 
   const thumbnailSize = () => thumbnailPixelSize(cellWidth);
@@ -126,6 +128,14 @@ export function createGridController(options: GridControllerOptions) {
       );
       for (let index = from; index < to; index += 1) needed.add(index);
     }
+    const size = thumbnailSize();
+    thumbnailLoader.retain(
+      new Set(
+        [...needed].map((index) =>
+          thumbnailLoader.keyFor(options.session.images[index].path, size),
+        ),
+      ),
+    );
     for (const [index, element] of renderedCells) {
       if (!needed.has(index)) {
         element.remove();
@@ -134,14 +144,14 @@ export function createGridController(options: GridControllerOptions) {
     }
     for (const index of needed) {
       if (!renderedCells.has(index)) {
-        const element = createCell(index);
+        const element = createCell(index, size);
         renderedCells.set(index, element);
         options.grid.appendChild(element);
       }
     }
   };
 
-  const createCell = (index: number) => {
+  const createCell = (index: number, size: number) => {
     const entry = options.session.images[index];
     const cell = document.createElement("div");
     cell.className = `cell${index === options.session.activeIndex ? " active" : ""}`;
@@ -165,13 +175,15 @@ export function createGridController(options: GridControllerOptions) {
     cell.append(thumb);
     cell.addEventListener("click", () => options.onSelect(index));
 
-    void options
-      .getThumbnail(entry.path, thumbnailSize())
+    void thumbnailLoader
+      .load(entry.path, size)
       .then((dataUrl) => {
+        if (!dataUrl || renderedCells.get(index) !== cell) return;
         image.src = dataUrl;
       })
       .catch(() => {
         void options.imageSource.for(entry).then((source) => {
+          if (renderedCells.get(index) !== cell) return;
           image.src = source;
         });
       });
@@ -258,6 +270,8 @@ export function createGridController(options: GridControllerOptions) {
     setThumbSize,
     toggleSort,
     cycleSize,
+    clearThumbnails: thumbnailLoader.clear,
+    pauseThumbnails: () => thumbnailLoader.retain(new Set()),
     updateActive,
   };
 }

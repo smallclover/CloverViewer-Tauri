@@ -14,6 +14,7 @@ import { createImageSourceResolver } from "./viewer/image-source";
 import { createImagePropertiesController } from "./viewer/image-properties-controller";
 import { createImagePreviewStripController } from "./viewer/image-preview-strip-controller";
 import { createImageShareController } from "./viewer/image-share-controller";
+import { createImageOcrController } from "./viewer/image-ocr-controller";
 import { createImageEditorController } from "./viewer/image-editor-controller";
 import { createSingleImageController } from "./viewer/single-image-controller";
 import { createViewerSession } from "./viewer/viewer-session";
@@ -29,6 +30,7 @@ import {
   getImageInfo,
   getThumbnail,
   listImages,
+  openContainingFolder,
   readImageData,
   readEditableImageData,
   saveEditedImage,
@@ -58,6 +60,7 @@ const propsList = $("props-list");
 const propsPanel = $("props-panel");
 const propsClose = $<HTMLButtonElement>("props-close");
 const imageSharePanel = $("image-share-panel");
+const imageOcrPanel = $("image-ocr-panel");
 const breadcrumb = $("breadcrumb");
 const gridMenu = $("grid-menu");
 const gridSort = $<HTMLButtonElement>("grid-sort");
@@ -127,6 +130,8 @@ const imagePropertiesController = createImagePropertiesController({
   getImageInfo,
   formatDimensions,
   formatSize,
+  openContainingFolder,
+  onOpenFolderError: (error) => toast(t("toast.openFolderFailed", { msg: String(error) }), "error"),
   translate: t,
 });
 const imageShareController = createImageShareController({
@@ -137,6 +142,13 @@ const imageShareController = createImageShareController({
   translate: t,
   onClose: closeImageShare,
 });
+const imageOcrController = createImageOcrController({
+  panel: imageOcrPanel,
+  copyText,
+  translate: t,
+  toast,
+  onClose: closeImageOcr,
+});
 const imageEditor = createImageEditorController({
   root: imageEditorView,
   getEditableSource: readEditableImageData,
@@ -145,6 +157,7 @@ const imageEditor = createImageEditorController({
   onClose: leaveEdit,
   onSaved: (path) => {
     imageSource.clear();
+    gridController.clearThumbnails();
     const active = viewerSession.images[viewerSession.activeIndex];
     if (active?.path !== path || !viewerSession.currentDir) return;
     void listImages(viewerSession.currentDir).then((refreshed) => {
@@ -188,6 +201,7 @@ async function openDirectory(dir: string) {
     viewerSession.setDirectory(dir, entries);
     gridController.sortCurrentImages();
     imageSource.clear();
+    gridController.clearThumbnails();
     renderBreadcrumb();
     if (entries.length === 0) {
       toast(t("toast.noImages"));
@@ -252,6 +266,7 @@ function applyImagePreviewStripState() {
 
 function showGrid() {
   closeImageShare();
+  closeImageOcr();
   viewerSession.viewMode = "grid";
   // 初始空态不需要这条上下文栏；一旦用户选定目录（即使目录里没有图片）就恢复。
   contentHeader.classList.remove("hidden");
@@ -296,11 +311,21 @@ function closeImageShare() {
   }
 }
 
+function closeImageOcr() {
+  if (!imageOcrController.isOpen()) return;
+  imageOcrController.close();
+  if (viewerSession.viewMode === "single") {
+    singleImageController.applyTransform();
+    refreshStatus();
+  }
+}
+
 function openImageShare(entry: ImageEntry) {
   const index = viewerSession.images.findIndex((image) => image.path === entry.path);
   if (index >= 0 && (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)) {
     openImageDetails(index);
   }
+  closeImageOcr();
   viewerSession.propsVisible = false;
   applyPropsState();
   imageSharePanel.classList.remove("collapsed");
@@ -309,11 +334,28 @@ function openImageShare(entry: ImageEntry) {
   refreshStatus();
 }
 
+function openImageOcr(entry: ImageEntry) {
+  if (!imageOcrController.hasResult(entry.path)) return;
+  const index = viewerSession.images.findIndex((image) => image.path === entry.path);
+  if (index < 0) return;
+  if (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index) {
+    openImageDetails(index);
+  }
+  closeImageShare();
+  viewerSession.propsVisible = false;
+  applyPropsState();
+  imageOcrController.open(entry);
+  singleImageController.applyTransform();
+  refreshStatus();
+}
+
 // ---------- 单图视图 ----------
 function showSingle(index: number) {
   if (index < 0 || index >= viewerSession.images.length) return;
+  gridController.pauseThumbnails();
   viewerSession.activeIndex = index;
   closeImageShare();
+  closeImageOcr();
   viewerSession.viewMode = "single";
   contentHeader.classList.add("hidden");
   emptyState.classList.add("hidden");
@@ -349,9 +391,11 @@ function openImageDetails(index: number) {
 
 async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
   if (!entry) return;
+  gridController.pauseThumbnails();
   const index = viewerSession.images.findIndex((image) => image.path === entry.path);
   if (index >= 0) viewerSession.activeIndex = index;
   closeImageShare();
+  closeImageOcr();
   viewerSession.propsVisible = false;
   viewerSession.viewMode = "edit";
   contentHeader.classList.add("hidden");
@@ -587,6 +631,8 @@ createContextMenuController({
   onCopyImage: (entry) => void copyImageBitmap(entry),
   onCopyPath: (path) => void copyImagePath(path),
   onShare: openImageShare,
+  hasOcrResult: imageOcrController.hasResult,
+  onOcrResult: openImageOcr,
   onEdit: (entry) => void enterEdit(entry),
   onProperties: (entry) => {
     const index = viewerSession.images.findIndex((image) => image.path === entry.path);
@@ -596,6 +642,8 @@ createContextMenuController({
     ) {
       openImageDetails(index);
     }
+    closeImageShare();
+    closeImageOcr();
     viewerSession.propsVisible = true;
     applyPropsState();
   },
@@ -613,6 +661,7 @@ function refreshViewerTranslations() {
     imagePropertiesController.render(viewerSession.images[viewerSession.activeIndex]);
   }
   imageEditor.refreshTranslations();
+  imageOcrController.refreshTranslations();
 }
 
 const settingsController = createSettingsController({
@@ -678,7 +727,25 @@ window.addEventListener("keydown", (event) => {
       toast(t("toast.desktopPetFailed", { msg: String(error) }), "error");
     });
   }
-  void bindOpenImageBridge(openFileOrFolder, t, toast);
+  void bindOpenImageBridge(
+    async (payload) => {
+      await openFileOrFolder(payload.path);
+      if (payload.ocr_text === undefined) return;
+      const normalized = payload.path.replace(/\\/g, "/").toLowerCase();
+      const entry = viewerSession.images.find(
+        (image) => image.path.replace(/\\/g, "/").toLowerCase() === normalized,
+      );
+      if (!entry) throw new Error(t("toast.openFailed", { msg: payload.path }));
+      imageOcrController.setResult(entry.path, payload.ocr_text);
+      openImageOcr(entry);
+      await singleImg.decode();
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    },
+    t,
+    toast,
+  );
   void showStartupNotices(t, toast);
   // 记住上次的语言仅作展示；无目录状态由用户操作进入
 })();

@@ -40,12 +40,12 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 ### 🖼️ Image Viewer
 
 *   **Dual view modes**: grid view (thumbnails) and single-image view (large image)
-*   **Large folders stay smooth**: virtualized grid scrolling plus an LRU thumbnail cache, so folders with thousands of images keep scrolling fluidly
+*   **Large folders stay smooth**: virtualized grid scrolling with bounded thumbnail concurrency, request deduplication, and caching; queued work that leaves the visible range is skipped
 *   **Folder browsing**: opening a folder loads all images automatically
 *   **Quick navigation**: ←/→ to switch, with preloading of adjacent images
 *   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity
 *   **Drag & drop open**: drag images or a folder directly into the window
-*   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens)
+*   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens), with an option to open the containing folder
 *   **Right-click menu**: copy image, copy path, view, edit image
 *   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
@@ -61,7 +61,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
 *   **Export**: Enter to copy to clipboard / save to Desktop; the toolbar can open a regular screenshot directly in the viewer
 *   **LAN sharing**: after annotating, create a temporary link and QR code for devices on the same network to preview or download the screenshot
-*   **OCR text recognition**: based on the native Windows UWP OCR engine (`Windows.Media.Ocr`), multi-language (Chinese/English/Japanese), with grayscale + 2× nearest-neighbor upscaling preprocessing
+*   **OCR text recognition**: based on the native Windows UWP OCR engine (`Windows.Media.Ocr`), multi-language (Chinese/English/Japanese), with grayscale + 2× nearest-neighbor upscaling preprocessing; opens the captured image and copyable, temporarily editable text in the viewer
 
 ### 🤖 MCP Server (New)
 
@@ -94,7 +94,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Launch on startup**: writes `HKCU\...\Run` registry; `--startup` argument silently starts into tray
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
-*   **Desktop pet**: Displays a Live2D character with idle, blink, periodic nod, and mouse-follow behavior; it can be dragged, scaled from 60% to 200% in Settings, and automatically hides during screenshots.
+*   **Desktop pet**: Displays a Live2D character with idle, blink, periodic nod, and mouse-follow behavior; it can be dragged, scaled from 60% to 200% in Settings, and automatically hides during screenshots. Right-click for screenshot, scrolling capture, main window, or quit.
 *   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / LAN sharing / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the desktop pet and its scale, the three global hotkeys, magnifier, minimize to tray, launch on startup, software updates and LAN-sharing rules
 *   **Temporary cache management**: Settings → Cache shows the file count and size of temporary long screenshots in `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand
 

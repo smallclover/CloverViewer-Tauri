@@ -8,8 +8,9 @@ use std::sync::{
     Mutex,
 };
 use tauri::{
-    AppHandle, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder,
+    menu::{ContextMenu, Menu, MenuItem},
+    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl,
+    WebviewWindow, WebviewWindowBuilder,
 };
 
 pub const WINDOW_LABEL: &str = "desktop-pet";
@@ -17,6 +18,84 @@ const MIN_SCALE: u16 = 60;
 const MAX_SCALE: u16 = 200;
 const BASE_WIDTH: f64 = 360.0;
 const BASE_HEIGHT: f64 = 540.0;
+
+#[derive(serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopPetMenuLabels {
+    screenshot: String,
+    scroll_screenshot: String,
+    main_window: String,
+    quit: String,
+}
+
+struct NativePetMenu {
+    labels: DesktopPetMenuLabels,
+    menu: Menu<tauri::Wry>,
+}
+
+#[derive(Default)]
+pub struct DesktopPetMenuState {
+    menu: Mutex<Option<NativePetMenu>>,
+}
+
+fn create_context_menu(
+    app: &AppHandle,
+    labels: &DesktopPetMenuLabels,
+) -> Result<Menu<tauri::Wry>, String> {
+    let screenshot = MenuItem::with_id(
+        app,
+        "pet-screenshot",
+        &labels.screenshot,
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let scroll = MenuItem::with_id(
+        app,
+        "pet-scroll-screenshot",
+        &labels.scroll_screenshot,
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let main = MenuItem::with_id(
+        app,
+        "pet-show-main",
+        &labels.main_window,
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let quit = MenuItem::with_id(app, "pet-quit", &labels.quit, true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    Menu::with_items(app, &[&screenshot, &scroll, &main, &quit]).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn show_desktop_pet_menu(
+    app: AppHandle,
+    state: State<'_, DesktopPetMenuState>,
+    labels: DesktopPetMenuLabels,
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    let webview_window = app
+        .get_webview_window(WINDOW_LABEL)
+        .ok_or_else(|| "桌宠窗口不存在".to_string())?;
+    let window = webview_window.as_ref().window();
+    let menu = {
+        let mut cached = state.menu.lock().map_err(|error| error.to_string())?;
+        if cached.as_ref().is_none_or(|entry| entry.labels != labels) {
+            *cached = Some(NativePetMenu {
+                menu: create_context_menu(&app, &labels)?,
+                labels,
+            });
+        }
+        cached.as_ref().unwrap().menu.clone()
+    };
+    menu.popup_at(window, LogicalPosition::new(x, y))
+        .map_err(|error| error.to_string())
+}
 
 /// 允许“关闭”越过仍在创建 WebView 的“开启”（包括前端超时取消），
 /// 并防止过期请求稍后重新显示桌宠。
@@ -57,6 +136,15 @@ fn create_window(app: &AppHandle, scale: u16) -> Result<WebviewWindow, String> {
     .visible(false)
     .build()
     .map_err(|error| format!("创建桌宠窗口失败: {error}"))?;
+
+    let menu_app = app.clone();
+    window.on_menu_event(move |_window, event| match event.id.as_ref() {
+        "pet-screenshot" => crate::screenshot::start_screenshot(&menu_app),
+        "pet-scroll-screenshot" => crate::screenshot::start_scroll_screenshot(&menu_app),
+        "pet-show-main" => crate::show_main_window(&menu_app),
+        "pet-quit" => menu_app.exit(0),
+        _ => {}
+    });
 
     // 首次显示在主屏右下角；之后用户可直接拖动角色移动窗口。
     if let Ok(Some(monitor)) = app.primary_monitor() {

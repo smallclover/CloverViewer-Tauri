@@ -1,4 +1,4 @@
-export type ToastKind = "success" | "error" | "info";
+export type ToastKind = "success" | "error" | "info" | "progress";
 
 const visibilityTimers = new WeakMap<HTMLElement, number>();
 
@@ -31,11 +31,22 @@ export function playEnterAnimation(el: HTMLElement, className = "view-enter") {
 
 export function createToast(toastEl: HTMLElement) {
   let toastTimer: number | undefined;
+  let hideTimer: number | undefined;
 
-  return (message: string, kind: ToastKind = "info") => {
+  const hide = () => {
+    if (toastTimer !== undefined) window.clearTimeout(toastTimer);
+    toastEl.classList.remove("show");
+    hideTimer = window.setTimeout(() => {
+      if (!toastEl.classList.contains("show")) toastEl.classList.add("hidden");
+    }, 180);
+  };
+  const show = (message: string, kind: ToastKind = "info", persistent = false) => {
+    if (toastTimer !== undefined) window.clearTimeout(toastTimer);
+    if (hideTimer !== undefined) window.clearTimeout(hideTimer);
     toastEl.textContent = "";
+    toastEl.setAttribute("role", kind === "error" ? "alert" : "status");
     const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "";
-    if (icon) {
+    if (icon || kind === "progress") {
       const iconElement = document.createElement("span");
       iconElement.className = `toast-ic ${kind}`;
       iconElement.textContent = icon;
@@ -45,12 +56,8 @@ export function createToast(toastEl: HTMLElement) {
     toastEl.classList.remove("hidden", "show");
     void toastEl.offsetWidth;
     toastEl.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => {
-      toastEl.classList.remove("show");
-      window.setTimeout(() => {
-        if (!toastEl.classList.contains("show")) toastEl.classList.add("hidden");
-      }, 180);
-    }, 2200);
+    toastTimer = persistent ? undefined : window.setTimeout(hide, 2200);
   };
+  show.hide = hide;
+  return show;
 }

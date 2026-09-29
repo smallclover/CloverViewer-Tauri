@@ -62,6 +62,17 @@ export const setDesktopPetScale = (scale: number) =>
 export const getDesktopPetCursorPosition = () =>
   invoke<{ x: number; y: number } | null>("get_desktop_pet_cursor_position");
 
+export interface DesktopPetMenuLabels {
+  screenshot: string;
+  scrollScreenshot: string;
+  mainWindow: string;
+  quit: string;
+}
+
+/** 在桌宠窗口的右键位置弹出由 Rust 直接处理点击事件的原生菜单。 */
+export const showDesktopPetMenu = (labels: DesktopPetMenuLabels, x: number, y: number) =>
+  invoke<void>("show_desktop_pet_menu", { labels, x, y });
+
 export interface DesktopPetLoadStatus {
   state: "started" | "ready" | "failed";
   sessionId: string;
@@ -166,10 +177,27 @@ export const screenshotUiReady = () => invoke<void>("screenshot_ui_ready");
 /** 本次是否以「滚动截图模式」启动覆盖窗（取走即清，一次性） */
 export const takeScrollStartMode = () => invoke<boolean>("take_scroll_start_mode");
 
-export const closeScreenshot = () => invoke<void>("close_screenshot");
+export const closeScreenshot = (completed = false) =>
+  invoke<void>("close_screenshot", { completed });
 
-export const finishScreenshot = (action: "save" | "clipboard" | "open", png: string) =>
-  invoke<void>("finish_screenshot", { req: { action, png } });
+export const finishScreenshot = (
+  action: "save" | "clipboard" | "open",
+  png: string,
+  ocrText?: string,
+  deferClose = false,
+) =>
+  invoke<void>("finish_screenshot", {
+    req: { action, png, ocr_text: ocrText, defer_close: deferClose },
+  });
+
+export interface OpenImagePayload {
+  path: string;
+  ocr_text?: string;
+}
+
+export const listenOpenImage = (
+  handler: (payload: OpenImagePayload) => void,
+): Promise<UnlistenFn> => listen<OpenImagePayload>("open-image", (event) => handler(event.payload));
 
 export type EditedImageFormat = "png" | "jpeg" | "webp";
 
@@ -221,6 +249,10 @@ export const takeStartupNotices = () => invoke<StartupNotice[]>("take_startup_no
 
 /** 用系统默认浏览器打开 https 链接（后端限制只放行 https://） */
 export const openUrl = (url: string) => invoke<void>("open_url", { url });
+
+/** 在文件管理器中打开图片所在的文件夹。 */
+export const openContainingFolder = (path: string) =>
+  invoke<void>("open_containing_folder", { path });
 
 export const ocrImage = (png: string) => invoke<string>("ocr_image", { png });
 

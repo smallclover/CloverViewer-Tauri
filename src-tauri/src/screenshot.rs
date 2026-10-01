@@ -9,8 +9,7 @@
 //!   按 physical 单位消费、外加 OS relayout race，窗口外框偏离 + 内部 viewport 不对齐。
 //!   builder 上 `position`/`inner_size` 是 logical，wry 内部按窗口所在 monitor 的 scale
 //!   自动换算成 raw pixel 调 SetWindowPos，定位最稳。
-//! - 每次 Alt+S 销毁旧窗口重新 build。首次 WebView2 启动 200-500ms 不可避免，但彻底消除
-//!   位置 race 与 stash 缓存带来的 stale-state bug。
+//! - 主界面首帧后预建隐藏 WebView，首次 Alt+S 不再承担窗口冷启动；关闭时隐藏复用。
 //! - 截屏完成 → 写 store → `emit("screenshot-refresh")`，前端监听后清状态 + 重载截图。
 //! - `capturing` 互斥锁避免重叠 Alt+S。
 //!
@@ -19,68 +18,25 @@
 //!   **虚拟桌面物理像素**（raw PIXELS），与 `Cursor::position()` 同坐标系统。
 //! - Tauri 2 builder 的 `.position(x, y)` 是 logical 像素；换算：logical = physical / scale。
 
+pub use crate::screenshot_capture::CursorPosition;
+use crate::screenshot_capture::{capture_all, CapturedScreenshot, ScreenshotData};
 use base64::Engine;
-use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-use image::{ExtendedColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
-    WebviewWindowBuilder,
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
 };
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State};
 
 /// 截图覆盖窗的窗口标签（跨模块共用：界面缩放、滚动截图定位等）。
 pub const WINDOW_LABEL: &str = "screenshot";
 
-#[derive(Debug, Clone, Serialize)]
-pub struct ScreenData {
-    /// 该屏在虚拟桌面中的物理坐标（左上角）
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    /// 截屏 PNG data URL
-    pub data_url: String,
-}
-
-/// 每个 monitor 的原始 xcap 元数据（物理像素 + scale factor + primary）。
-/// 暴露给前端仅用于 console.info 排查多屏混合 DPI / 跨屏坐标偏移问题，
-/// 不参与运行逻辑。运行时零开销（只在 `get_screenshot_data` 里走一次 clone）。
-#[derive(Debug, Clone, Serialize)]
-pub struct MonitorInfo {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    pub img_width: u32,
-    pub img_height: u32,
-    pub scale_factor: f32,
-    pub is_primary: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ScreenshotData {
-    /// 虚拟桌面包围盒（物理像素）
-    pub min_x: i32,
-    pub min_y: i32,
-    pub total_width: u32,
-    pub total_height: u32,
-    pub screens: Vec<ScreenData>,
-    /// 见 `MonitorInfo` 说明。
-    pub monitor_info: Vec<MonitorInfo>,
-    /// 截图触发时的鼠标虚拟桌面物理坐标；前端据此把普通截图提示放在当前显示器。
-    pub cursor: Option<CursorPosition>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct CursorPosition {
-    pub x: i32,
-    pub y: i32,
-}
-
 pub struct ScreenshotStore {
-    data: Mutex<Option<ScreenshotData>>,
+    data: Mutex<Option<CapturedScreenshot>>,
+    next_capture_id: AtomicU64,
     capturing: Mutex<bool>,
+    pub(crate) window_creation: Mutex<()>,
+    capture_started: Mutex<Option<std::time::Instant>>,
     /// 本次进入覆盖窗时的启动模式：true = 直接进「滚动截图待框选」态。
     /// 独立热键（Alt+Shift+S）置位，前端 loadScreenshot 时取走并清掉。
     scroll_start: Mutex<Option<(bool, std::time::Instant)>>,
@@ -90,7 +46,10 @@ impl ScreenshotStore {
     pub fn new() -> Self {
         Self {
             data: Mutex::new(None),
+            next_capture_id: AtomicU64::new(1),
             capturing: Mutex::new(false),
+            window_creation: Mutex::new(()),
+            capture_started: Mutex::new(None),
             scroll_start: Mutex::new(None),
         }
     }
@@ -140,7 +99,35 @@ impl ScreenshotStore {
 /// 截图窗口前端拉取截屏数据
 #[tauri::command]
 pub fn get_screenshot_data(store: State<'_, ScreenshotStore>) -> Option<ScreenshotData> {
-    store.data.lock().unwrap().clone()
+    store
+        .data
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|capture| capture.data.clone())
+}
+
+/// Binary IPC bypasses PNG compression, Base64 and JSON pixel serialization.
+#[tauri::command]
+pub async fn get_screenshot_frame(
+    app: AppHandle,
+    capture_id: u64,
+    screen_index: usize,
+) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = app.state::<ScreenshotStore>();
+        let frame = store
+            .data
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or("Screenshot session has closed")?
+            .frame(capture_id, screen_index)?;
+        // The Arc outlives the lock: copying a large frame never blocks metadata/close commands.
+        Ok(tauri::ipc::Response::new(frame.as_ref().clone()))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 /// 前端进入截图窗时询问「这次是不是以滚动截图模式启动」，取走即清（一次性）。
@@ -151,7 +138,20 @@ pub fn take_scroll_start_mode(store: State<'_, ScreenshotStore>) -> bool {
 
 /// 关闭截图窗口（前端 Esc 时调用）—— 仅隐藏窗口（不销毁），保留供下次复用。
 #[tauri::command]
-pub fn close_screenshot(app: AppHandle, completed: Option<bool>) {
+pub fn close_screenshot(app: AppHandle, completed: Option<bool>, capture_id: Option<u64>) {
+    // A preloaded/reloaded page must never pick up a previously closed screenshot.
+    let store = app.state::<ScreenshotStore>();
+    let mut capture = store.data.lock().unwrap();
+    if capture_id.is_some_and(|id| {
+        !capture
+            .as_ref()
+            .is_some_and(|capture| capture.data.capture_id == id)
+    }) {
+        return;
+    }
+    *capture = None;
+    drop(capture);
+    *store.capture_started.lock().unwrap() = None;
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         // 先让前端清掉画面（移除 body.ready），避免下次 show 时闪旧截图
         let _ = w.emit("screenshot-clear", ());
@@ -412,7 +412,7 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
     if req.defer_close == Some(true) && matches!(req.action.as_str(), "save" | "clipboard") {
         return Ok(());
     }
-    close_screenshot(app, Some(true));
+    close_screenshot(app, Some(true), None);
     Ok(())
 }
 
@@ -428,6 +428,7 @@ pub fn start_scroll_screenshot(app: &AppHandle) {
 }
 
 fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
+    let triggered = std::time::Instant::now();
     let app = app.clone();
     std::thread::spawn(move || {
         let store = app.state::<ScreenshotStore>();
@@ -460,11 +461,12 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             }
             *cap = true;
         }
+        *store.capture_started.lock().unwrap() = Some(triggered);
 
         // 桌宠独立成窗；截屏前先隐藏，保证它不会落入用户的捕获结果。
         crate::desktop_pet::hide_for_screenshot(&app);
 
-        let data = match capture_all() {
+        let capture = match capture_all(store.next_capture_id.fetch_add(1, Ordering::Relaxed)) {
             Ok(d) => d,
             Err(e) => {
                 tracing::error!("截屏失败: {e}");
@@ -474,58 +476,22 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
                 return;
             }
         };
+        let data = &capture.data;
 
-        // 写 store
-        {
-            let store = app.state::<ScreenshotStore>();
-            *store.data.lock().unwrap() = Some(data.clone());
-        }
-
-        // 窗口缓存复用：首次用 builder 创建（一次到位），之后 hide 留存、
-        // Alt+S 时 set_position/set_size（物理像素）+ show。
-        // 位置 bug 的真正根因是前端 canvas CSS 不拉伸（已修），set_position(PhysicalPosition)
-        // 本身行为正常 —— 之前误删缓存导致每次 cold start WebView2 1-3s。
-        let win = if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
-            let _ = w.set_position(PhysicalPosition::new(data.min_x, data.min_y));
-            let _ = w.set_size(PhysicalSize::new(data.total_width, data.total_height));
-            w
-        } else {
-            // 取主屏 scale —— builder 上 position/inner_size 是 logical，
-            // wry 内部按窗口所在 monitor 的 scale 反算 physical → SetWindowPos。
-            let scale = app
-                .primary_monitor()
-                .ok()
-                .flatten()
-                .map(|m| m.scale_factor())
-                .unwrap_or(1.0)
-                .max(0.5);
-            let s = scale;
-
-            match WebviewWindowBuilder::new(
-                &app,
-                WINDOW_LABEL,
-                WebviewUrl::App("screenshot.html".into()),
-            )
-            .title("screenshot")
-            .transparent(true)
-            .decorations(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .resizable(false)
-            .position(data.min_x as f64 / s, data.min_y as f64 / s)
-            .inner_size(data.total_width as f64 / s, data.total_height as f64 / s)
-            // 先隐藏创建，等前端把截图渲染好、回传 screenshot_ui_ready 再 show。
-            // 避免 WebView2 冷启动偶发白屏/卡死在始终置顶窗口上把用户锁住。
-            .visible(false)
-            .build()
-            {
-                Ok(w) => w,
-                Err(e) => {
-                    tracing::error!("创建截图窗口失败: {e}");
-                    let store = app.state::<ScreenshotStore>();
-                    *store.capturing.lock().unwrap() = false;
-                    return;
-                }
+        tracing::info!(
+            "截图捕获（原始像素）: {}ms",
+            triggered.elapsed().as_millis()
+        );
+        let win = match crate::screenshot_window::ensure_window(
+            &app,
+            Some((data.min_x, data.min_y, data.total_width, data.total_height)),
+        ) {
+            Ok(window) => window,
+            Err(error) => {
+                tracing::error!("准备截图窗口失败: {error}");
+                store.end_capture();
+                crate::desktop_pet::restore_after_screenshot(&app);
+                return;
             }
         };
 
@@ -582,6 +548,8 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
         // 以规避 WebView2 冷启动白屏/卡死导致的"始终置顶锁屏"。
 
         // 通知前端刷新：复用窗口下 main() 不会重跑，由事件触发 loadScreenshot。
+        // Keep the original buffers; metadata queries never copy image bytes.
+        *store.data.lock().unwrap() = Some(capture);
         if let Err(e) = win.emit("screenshot-refresh", ()) {
             tracing::warn!("emit screenshot-refresh 失败: {e}");
         }
@@ -594,118 +562,26 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
 /// 前端把截图渲染完成后的"就绪"回调：此时才真正显示并聚焦截图窗口。
 /// 这样能避免 WebView2 冷启动的白色闪屏/卡死窗口被置顶挡住整个屏幕。
 #[tauri::command]
-pub fn screenshot_ui_ready(app: AppHandle) {
+pub fn screenshot_ui_ready(app: AppHandle, capture_id: u64) -> bool {
+    let store = app.state::<ScreenshotStore>();
+    if !store
+        .data
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|capture| capture.data.capture_id == capture_id)
+    {
+        return false;
+    }
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
-}
-
-fn capture_all() -> Result<ScreenshotData, String> {
-    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
-
-    let mut screens = Vec::new();
-    let mut monitor_info = Vec::new();
-    let (mut min_x, mut min_y, mut max_x, mut max_y) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
-
-    for m in monitors {
-        let img = m.capture_image().map_err(|e| e.to_string())?;
-        let width = img.width();
-        let height = img.height();
-        let x = m.x().unwrap_or(0);
-        let y = m.y().unwrap_or(0);
-        let m_w = m.width().unwrap_or(0);
-        let m_h = m.height().unwrap_or(0);
-        let scale = m.scale_factor().unwrap_or(1.0);
-        let is_primary = m.is_primary().unwrap_or(false);
-        if width == 0 || height == 0 {
-            continue;
+        if w.show().is_err() {
+            return false;
         }
-
-        // PNG 用 Fast 压缩 + NoFilter：默认设置（Best/Adaptive）在 4K 屏上
-        // 单张编码要几百 ms，是 Alt+S 延迟的大头之一。
-        let mut png = Vec::new();
-        PngEncoder::new_with_quality(&mut png, CompressionType::Fast, FilterType::NoFilter)
-            .write_image(img.as_raw(), width, height, ExtendedColorType::Rgba8)
-            .map_err(|e| e.to_string())?;
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-
-        min_x = min_x.min(x);
-        min_y = min_y.min(y);
-        max_x = max_x.max(x + width as i32);
-        max_y = max_y.max(y + height as i32);
-
-        screens.push(ScreenData {
-            x,
-            y,
-            width,
-            height,
-            data_url: format!("data:image/png;base64,{b64}"),
-        });
-        monitor_info.push(MonitorInfo {
-            x,
-            y,
-            width: m_w,
-            height: m_h,
-            img_width: width,
-            img_height: height,
-            scale_factor: scale,
-            is_primary,
-        });
+        let _ = w.set_focus();
+        if let Some(started) = store.capture_started.lock().unwrap().take() {
+            tracing::info!("截图快捷键到选区显示: {}ms", started.elapsed().as_millis());
+        }
+        return true;
     }
-
-    if screens.is_empty() {
-        return Err("未检测到显示器".to_string());
-    }
-
-    // 诊断日志：每个 monitor 的原始 xcap 元数据（物理像素、scale factor、image 尺寸）。
-    // 多屏/混合 DPI 的坐标问题靠猜是修不掉的（已经返工三轮），输出到 stderr，
-    // 让用户截图发回或下一步接 tracing 都方便。release 构建下也能保留。
-    eprintln!("[screenshot] monitors (raw, all values physical px):");
-    for (i, mi) in monitor_info.iter().enumerate() {
-        eprintln!(
-            "[screenshot]   [{}] x={} y={} m.w={} m.h={} img={}x{} scale={} primary={}",
-            i,
-            mi.x,
-            mi.y,
-            mi.width,
-            mi.height,
-            mi.img_width,
-            mi.img_height,
-            mi.scale_factor,
-            mi.is_primary
-        );
-    }
-    eprintln!(
-        "[screenshot] virtual desktop: minX={} minY={} totalW={} totalH={}",
-        min_x,
-        min_y,
-        max_x - min_x,
-        max_y - min_y
-    );
-
-    #[cfg(target_os = "windows")]
-    let cursor = {
-        use windows::Win32::Foundation::POINT;
-        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
-        let mut point = POINT { x: 0, y: 0 };
-        unsafe { GetCursorPos(&mut point) }
-            .ok()
-            .map(|_| CursorPosition {
-                x: point.x,
-                y: point.y,
-            })
-    };
-    #[cfg(not(target_os = "windows"))]
-    let cursor = None;
-
-    Ok(ScreenshotData {
-        min_x,
-        min_y,
-        total_width: (max_x - min_x).max(1) as u32,
-        total_height: (max_y - min_y).max(1) as u32,
-        screens,
-        monitor_info,
-        cursor,
-    })
+    false
 }

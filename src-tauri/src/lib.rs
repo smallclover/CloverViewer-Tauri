@@ -16,6 +16,9 @@ mod lan_share;
 pub mod mcp;
 mod ocr;
 mod screenshot;
+// Public so the latency probe can benchmark the exact capture path without a visible UI.
+pub mod screenshot_capture;
+mod screenshot_window;
 /// 滚动截图（长截图）核心。
 /// `pub` 是为了让开发用探针 `src-tauri/examples/scroll_probe.rs` 复用同一套实现
 /// （兼容性探测 + 完整会话 CLI + 标尺校验）。
@@ -150,6 +153,8 @@ pub fn run() {
             thumbnails::get_thumbnail,
             image_info::get_image_info,
             screenshot::get_screenshot_data,
+            screenshot::get_screenshot_frame,
+            screenshot_window::prepare_screenshot_window,
             screenshot::take_scroll_start_mode,
             screenshot::close_screenshot,
             screenshot::finish_screenshot,

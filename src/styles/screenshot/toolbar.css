@@ -36,7 +36,7 @@
   transform: scale(0.9);
 }
 .toolbar button.active {
-  background: var(--s-accent);
+  background: var(--s-accent-solid);
   color: #fff;
   box-shadow: 0 2px 8px var(--s-accent-shadow);
 }

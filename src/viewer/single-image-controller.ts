@@ -18,6 +18,11 @@ export function createSingleImageController(options: SingleImageControllerOption
   let dragging = false;
   let dragStart = { x: 0, y: 0 };
 
+  const stopPanning = () => {
+    dragging = false;
+    options.stage.classList.remove("panning");
+  };
+
   const fitScale = () => {
     const rect = options.stage.getBoundingClientRect();
     if (!options.image.naturalWidth || !rect.width) return 1;
@@ -28,6 +33,7 @@ export function createSingleImageController(options: SingleImageControllerOption
   };
 
   const applyTransform = () => {
+    options.stage.classList.toggle("can-pan", !fitMode);
     const flip = `scale(${flipHorizontal ? -1 : 1}, ${flipVertical ? -1 : 1})`;
     const base = fitMode
       ? `translate(-50%, -50%) scale(${fitScale()})`
@@ -36,6 +42,7 @@ export function createSingleImageController(options: SingleImageControllerOption
   };
 
   const reset = () => {
+    stopPanning();
     scale = 1;
     fitMode = true;
     pan.x = 0;
@@ -56,6 +63,7 @@ export function createSingleImageController(options: SingleImageControllerOption
   };
 
   const zoomToFit = () => {
+    stopPanning();
     fitMode = true;
     applyTransform();
     options.onChange();
@@ -110,7 +118,8 @@ export function createSingleImageController(options: SingleImageControllerOption
     options.onChange();
   });
   options.stage.addEventListener("mousedown", (event) => {
-    if (!options.isActive() || fitMode) return;
+    if (event.button !== 0 || !options.isActive() || fitMode) return;
+    if ((event.target as HTMLElement).closest("button")) return;
     dragging = true;
     dragStart = { x: event.clientX - pan.x, y: event.clientY - pan.y };
     options.stage.classList.add("panning");
@@ -121,10 +130,8 @@ export function createSingleImageController(options: SingleImageControllerOption
     pan.y = event.clientY - dragStart.y;
     applyTransform();
   });
-  window.addEventListener("mouseup", () => {
-    dragging = false;
-    options.stage.classList.remove("panning");
-  });
+  window.addEventListener("mouseup", stopPanning);
+  window.addEventListener("blur", stopPanning);
   options.stage.addEventListener("dblclick", () => {
     if (fitMode) actualSize();
     else zoomToFit();

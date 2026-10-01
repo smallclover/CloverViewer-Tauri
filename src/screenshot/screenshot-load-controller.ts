@@ -1,5 +1,9 @@
 import { closeScreenshot, getScreenshotData, type ScreenshotData } from "../api";
-import { decodeScreenshotScreens, type DecodedScreenshotScreen } from "./screenshot-loader";
+import {
+  loadScreenshotScreens,
+  releaseScreenshotScreens,
+  type LoadedScreenshotScreen,
+} from "./screenshot-loader";
 
 interface ScreenshotLoadControllerOptions {
   root: HTMLElement;
@@ -7,7 +11,7 @@ interface ScreenshotLoadControllerOptions {
   resetSession: () => void;
   setBounds: (bounds: { totalW: number; totalH: number; minX: number; minY: number }) => void;
   setInitialCursor: (cursor: { x: number; y: number } | null) => void;
-  setScreens: (screens: DecodedScreenshotScreen[]) => void;
+  setScreens: (screens: LoadedScreenshotScreen[]) => void;
   render: () => void;
   restoreRunningScrollSession: () => Promise<void>;
   logLoaded: (data: ScreenshotData) => void;
@@ -15,11 +19,24 @@ interface ScreenshotLoadControllerOptions {
 
 /** Loads one screenshot-window session in the only safe order for window reuse. */
 export function createScreenshotLoadController(options: ScreenshotLoadControllerOptions) {
+  let revision = 0;
   const load = async () => {
+    const current = ++revision;
     const data = await getScreenshotData();
-    if (!data) {
-      await closeScreenshot();
-      return;
+    // Startup warmup has no capture. Keep the prepared page hidden and idle.
+    if (!data || current !== revision) return null;
+    let screens: LoadedScreenshotScreen[];
+    try {
+      screens = await loadScreenshotScreens(data);
+    } catch (error) {
+      if (current !== revision) return null;
+      console.error("Loading screenshot pixels failed", error);
+      await closeScreenshot(false, data.capture_id);
+      return null;
+    }
+    if (current !== revision) {
+      releaseScreenshotScreens(screens);
+      return null;
     }
     document.body.classList.remove("ready");
     options.resetSession();
@@ -34,11 +51,16 @@ export function createScreenshotLoadController(options: ScreenshotLoadController
     );
     options.canvas.width = data.total_width;
     options.canvas.height = data.total_height;
-    options.setScreens(await decodeScreenshotScreens(data));
+    options.setScreens(screens);
     options.logLoaded(data);
     options.render();
     await options.restoreRunningScrollSession();
+    if (current !== revision) return null;
     document.body.classList.add("ready");
+    return data.capture_id;
   };
-  return { load };
+  const cancel = () => {
+    revision++;
+  };
+  return { load, cancel };
 }

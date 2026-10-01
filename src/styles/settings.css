@@ -403,6 +403,17 @@
   opacity: 0.8;
 }
 
+/* 窄窗口里先显示完整说明，再排列控件，避免长文案被控件挤成逐字换行。 */
+@media (max-width: 900px) {
+  #settings-panel { grid-template-columns: 180px minmax(0, 1fr); }
+  #settings-panel .settings-header { padding: 26px 24px 0; }
+  .settings-body { padding: 22px 24px 30px; }
+  .setting-row { flex-wrap: wrap; justify-content: flex-start; gap: 12px; }
+  .setting-text { flex-basis: 100%; }
+  .zoom-row { max-width: 100%; }
+  .cache-action-row { flex-wrap: wrap; }
+}
+
 /* 窄窗口（主窗口最小宽度 640px）退化为单列，避免两栏被挤扁 */
 @media (max-width: 780px) {
   .about-wrap {

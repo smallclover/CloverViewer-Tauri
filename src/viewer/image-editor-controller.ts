@@ -1,5 +1,6 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import type { EditedImageFormat, ImageEntry } from "../api";
+import { createSelectControl } from "../ui/select-control";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
 import {
   cloneShape,
@@ -139,6 +140,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   });
   outputScale.title = options.translate("editor.scale");
   controls.appendChild(outputScale);
+  const selects = [width, format, outputScale].map(createSelectControl);
   controls.appendChild(document.createElement("span")).className = "image-editor-divider";
   makeButton("editor.saveAs", () => void saveAs());
   makeButton("editor.overwrite", () => void overwrite());
@@ -194,7 +196,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
     });
     color.title = options.translate("shot.color");
     width.title = options.translate("shot.width");
+    format.title = options.translate("editor.format");
     outputScale.title = options.translate("editor.scale");
+    for (const select of selects) select.refresh();
   };
 
   const displayPoint = (event: PointerEvent): Pt => {
@@ -468,6 +472,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const close = () => {
     commitTextInput();
     if (dirty && !window.confirm(options.translate("editor.discardConfirm"))) return;
+    for (const select of selects) select.close();
     options.root.classList.add("hidden");
     options.onClose();
   };

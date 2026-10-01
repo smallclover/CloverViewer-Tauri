@@ -13,6 +13,7 @@ import {
 } from "../api";
 import type { Lang } from "../i18n";
 import { playEnterAnimation, setAnimatedVisibility, type ToastKind } from "./presentation";
+import { createSelectControl } from "./select-control";
 
 interface SettingsControllerOptions {
   getConfig: () => AppConfig | null;
@@ -64,6 +65,14 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const lanShareDuration = element<HTMLSelectElement>("set-lan-share-duration");
   const lanShareDownloadLimit = element<HTMLSelectElement>("set-lan-share-download-limit");
   const cacheClearAge = element<HTMLSelectElement>("set-cache-clear-age");
+  const selects = [
+    language,
+    theme,
+    cacheRetention,
+    lanShareDuration,
+    lanShareDownloadLimit,
+    cacheClearAge,
+  ].map(createSelectControl);
   const cacheSummary = element("cache-summary");
   const clearCacheButton = element<HTMLButtonElement>("clear-cache");
   const checkUpdateButton = element<HTMLButtonElement>("check-update");
@@ -131,6 +140,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
 
     currentTabTitle.textContent = options.translate(`settings.tab.${activeTab}`);
     currentTabDesc.textContent = options.translate(`settings.tab.${activeTab}.desc`);
+    for (const select of selects) select.refresh();
   };
 
   const selectTab = (tab: string) => {
@@ -153,6 +163,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
   };
 
   const close = () => {
+    for (const select of selects) select.close();
     setAnimatedVisibility(overlay, false, 220);
     button.classList.remove("active");
     button.setAttribute("aria-pressed", "false");

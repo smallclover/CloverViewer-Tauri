@@ -97,7 +97,7 @@
   line-height: 1.42;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
 }
 .sh-detail.on { display: -webkit-box; }
 .sh-detail.warn { color: #d8a13a; }
@@ -138,13 +138,13 @@
   color: var(--s-btn-hover-fg);
 }
 .sh-btn.primary {
-  background: var(--s-accent);
+  background: var(--s-accent-solid);
   border-color: transparent;
   color: #fff;
 }
 /* 主按钮不能继承通用 hover 的灰色遮罩，否则浅色主题里会变成灰底白字、对比不足。 */
 .sh-btn.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--s-accent) 84%, #000 16%);
+  background: color-mix(in srgb, var(--s-accent-solid) 84%, #000 16%);
   border-color: transparent;
   box-shadow: 0 3px 9px var(--s-accent-shadow);
   color: #fff;
@@ -194,12 +194,12 @@
 .sh-capture-side .sh-actions .sh-btn {
   width: 100%;
   justify-content: center;
-  background: var(--s-accent);
+  background: var(--s-accent-solid);
   border-color: transparent;
   color: #fff;
 }
 .sh-capture-side .sh-actions .sh-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--s-accent) 84%, #000 16%);
+  background: color-mix(in srgb, var(--s-accent-solid) 84%, #000 16%);
   box-shadow: 0 3px 9px var(--s-accent-shadow);
   color: #fff;
 }

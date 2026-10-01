@@ -62,11 +62,11 @@
 }
 /* 主操作(打开文件夹):accent 填充 */
 .tb-btn.primary {
-  background: var(--accent);
+  background: var(--accent-solid);
   border-color: var(--accent);
   color: #fff;
 }
-.tb-btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.tb-btn.primary:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); color: #fff; }
 
 .breadcrumb {
   display: flex;
@@ -171,8 +171,9 @@
   position: relative;
   overflow: hidden;
   background: var(--bg);
-  cursor: grab;
+  cursor: default;
 }
+#img-stage.can-pan { cursor: grab; }
 #img-stage.panning { cursor: grabbing; }
 
 /* 单图左右切图按钮：常驻半透明，悬停加强，首尾置灰禁用（不循环） */
@@ -237,11 +238,13 @@
   bottom: 18px;
   left: 50%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: max-content;
   max-width: calc(100% - 28px);
   padding: 7px 9px;
-  overflow-x: auto;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   border-radius: 13px;
   background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
@@ -251,6 +254,7 @@
 }
 .image-editor-controls button,
 .image-editor-select {
+  flex: none;
   width: 32px;
   height: 32px;
   padding: 5px;
@@ -265,7 +269,7 @@
 .image-editor-controls button:hover,
 .image-editor-controls button.active { background: var(--accent-soft); border-color: var(--accent); }
 .image-editor-divider { width: 1px; height: 22px; background: var(--border); flex: none; }
-.image-editor-color { width: 32px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.image-editor-color { flex: none; width: 32px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
 .image-editor-workspace {
   position: relative;
   flex: 1;
@@ -299,6 +303,10 @@
   background: color-mix(in srgb, var(--bg-panel) 96%, transparent);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--shadow) 60%, transparent);
   font: 600 16px/1.35 "Segoe UI", system-ui, sans-serif;
+}
+
+@media (max-width: 800px) {
+  .image-editor-workspace { padding-bottom: 116px; }
 }
 
 #props-panel {

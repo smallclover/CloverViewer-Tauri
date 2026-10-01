@@ -158,13 +158,13 @@
   padding: 5px 12px;
   border: 1px solid var(--accent);
   border-radius: 6px;
-  background: var(--accent);
+  background: var(--accent-solid);
   color: #fff;
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
 }
-.update-primary-btn:hover { filter: brightness(1.08); }
+.update-primary-btn:hover { background: var(--accent-solid-hover); }
 .update-primary-btn:focus-visible, .update-actions .mini-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* 设置分类、行项目和图标按钮都获得一致而克制的状态反馈。

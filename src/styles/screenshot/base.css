@@ -1,6 +1,7 @@
 /* 截图窗口 UI 主题变量 —— 跟随应用设置里的主题（config.theme），
    由 screenshot.ts 读到后写入 <html data-theme> 切换。默认暗色。 */
 :root {
+  color-scheme: dark;
   --s-toolbar-bg: rgba(28, 30, 36, 0.72);
   --s-toolbar-border: rgba(255, 255, 255, 0.12);
   --s-fg: #e6e6ea;
@@ -8,6 +9,7 @@
   --s-btn-hover-bg: rgba(255, 255, 255, 0.12);
   --s-btn-hover-fg: #ffffff;
   --s-accent: #4ea85c;
+  --s-accent-solid: #357b41;
   --s-accent-shadow: rgba(78, 168, 92, 0.5);
   --s-popup-bg: rgba(28, 30, 36, 0.92);
   --s-popup-border: rgba(255, 255, 255, 0.12);
@@ -24,6 +26,7 @@
   --s-error: #ff8a8a;
 }
 :root[data-theme="light"] {
+  color-scheme: light;
   --s-toolbar-bg: rgba(255, 255, 255, 0.82);
   --s-toolbar-border: rgba(0, 0, 0, 0.14);
   --s-fg: #26272d;
@@ -44,7 +47,7 @@
   --s-panel-bg: rgba(255, 255, 255, 0.97);
   --s-panel-header-bg: rgba(0, 0, 0, 0.04);
   --s-panel-title: #6e707a;
-  --s-error: #d64545;
+  --s-error: #b83232;
 }
 
 /* 初始化前隐藏：避免 CSS/JS 未就绪时 HTML 骨架裸渲染（元素挤在左上角）。

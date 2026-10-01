@@ -27,7 +27,7 @@
           <details class="app-menu">
             <summary data-i18n="menu.edit">编辑</summary>
             <div class="app-menu-popover" role="menu">
-              <button id="btn-enter-edit" type="button" role="menuitem" data-i18n="toolbar.enterEdit" disabled>进入编辑模式 (Ctrl+E)</button>
+              <button id="btn-enter-edit" type="button" role="menuitem" disabled><span data-i18n="toolbar.enterEdit">进入编辑模式</span><kbd>Ctrl+E</kbd></button>
               <button id="btn-settings" type="button" role="menuitem" data-i18n="toolbar.settings">设置</button>
             </div>
           </details>
@@ -405,7 +405,7 @@
                     <span class="setting-desc" id="cache-summary" aria-live="polite"></span>
                   </div>
                   <div class="cache-action-row">
-                    <select id="set-cache-clear-age" aria-label="清理范围">
+                    <select id="set-cache-clear-age" aria-label="清理范围" data-i18n-aria-label="settings.cacheClearScope">
                       <option value="1" data-i18n="settings.cacheClear.older1h">超过 1 小时</option>
                       <option value="24" data-i18n="settings.cacheClear.older1d">超过 1 天</option>
                       <option value="168" data-i18n="settings.cacheClear.older7d">超过 7 天</option>

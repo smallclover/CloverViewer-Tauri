@@ -5,11 +5,15 @@ export type Lang = "Zh" | "En" | "Ja";
 type Dict = Record<string, string>;
 
 const DICTS: Record<Lang, Dict> = { Zh: zh, En: en, Ja: ja };
+const DOCUMENT_LANGS: Record<Lang, string> = { Zh: "zh-CN", En: "en", Ja: "ja" };
 
 let currentLang: Lang = "Zh";
 
 export function setLang(lang: Lang) {
   currentLang = DICTS[lang] ? lang : "Zh";
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = DOCUMENT_LANGS[currentLang];
+  }
 }
 
 export function getLang(): Lang {

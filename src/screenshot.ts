@@ -32,6 +32,10 @@ import { createScrollCaptureSession } from "./screenshot/scroll-capture-session"
 import { createScrollCaptureController } from "./screenshot/scroll-capture-controller";
 import { refreshScreenshotConfig, startScreenshotLifecycle } from "./screenshot/lifecycle";
 import { createScreenshotLoadController } from "./screenshot/screenshot-load-controller";
+import {
+  releaseScreenshotScreens,
+  type LoadedScreenshotScreen,
+} from "./screenshot/screenshot-loader";
 import { createEditorUiController } from "./screenshot/editor-ui-controller";
 import { createEditorSession } from "./screenshot/editor-session";
 import { createLanSharePanel } from "./screenshot/lan-share-panel";
@@ -76,7 +80,7 @@ let totalW = 0;
 let totalH = 0;
 let minX = 0;
 let minY = 0;
-let screens: { img: HTMLImageElement; x: number; y: number; w: number; h: number }[] = [];
+let screens: LoadedScreenshotScreen[] = [];
 
 const mosaicWidth = DEFAULT_MOSAIC;
 const editorSession = createEditorSession({ color: DEFAULT_COLOR, strokeWidth: DEFAULT_STROKE });
@@ -683,6 +687,7 @@ function resetScreenshotSession() {
   for (const button of toolBtns.values()) button.classList.toggle("active", false);
   textInput.classList.remove("editing");
   lanSharePanel.hide();
+  releaseScreenshotScreens(screens);
   screens = [];
   editorInput.reset();
   scrollSession.reset();
@@ -732,7 +737,7 @@ function logScreenshotLoaded(data: {
 }
 
 async function loadScreenshot() {
-  await screenshotLoadController.load();
+  return screenshotLoadController.load();
 }
 
 /** 后端会话仍在跑时，把前端切回捕获态并拉一次最新进度（事件之外的兜底查询）。
@@ -778,6 +783,7 @@ function applyTheme(theme: "dark" | "light" | "system") {
 }
 
 function clearScreenshotState() {
+  screenshotLoadController.cancel();
   resetScreenshotSession();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   document.body.classList.remove("ready");

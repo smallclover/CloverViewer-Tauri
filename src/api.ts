@@ -144,10 +144,11 @@ export interface ScreenData {
   y: number;
   width: number;
   height: number;
-  data_url: string;
 }
 
 export interface ScreenshotData {
+  /** Identifies the immutable RGBA frames belonging to this capture. */
+  capture_id: number;
   min_x: number;
   min_y: number;
   total_width: number;
@@ -171,14 +172,22 @@ export interface MonitorInfo {
 
 export const getScreenshotData = () => invoke<ScreenshotData | null>("get_screenshot_data");
 
+/** Raw RGBA bytes (top to bottom, four bytes per pixel), outside JSON/Base64. */
+export const getScreenshotFrame = (captureId: number, screenIndex: number) =>
+  invoke<ArrayBuffer | number[]>("get_screenshot_frame", { captureId, screenIndex });
+
+/** Prepare the hidden screenshot WebView without capturing the desktop or changing focus. */
+export const prepareScreenshotWindow = () => invoke<void>("prepare_screenshot_window");
+
 /** 前端把截图渲染完成后通知后端：此时才显示截图窗口（避免冷启动白屏/锁屏） */
-export const screenshotUiReady = () => invoke<void>("screenshot_ui_ready");
+export const screenshotUiReady = (captureId: number) =>
+  invoke<boolean>("screenshot_ui_ready", { captureId });
 
 /** 本次是否以「滚动截图模式」启动覆盖窗（取走即清，一次性） */
 export const takeScrollStartMode = () => invoke<boolean>("take_scroll_start_mode");
 
-export const closeScreenshot = (completed = false) =>
-  invoke<void>("close_screenshot", { completed });
+export const closeScreenshot = (completed = false, captureId?: number) =>
+  invoke<void>("close_screenshot", { completed, captureId });
 
 export const finishScreenshot = (
   action: "save" | "clipboard" | "open",

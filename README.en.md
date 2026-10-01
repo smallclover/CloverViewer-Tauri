@@ -41,9 +41,9 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 
 *   **Dual view modes**: grid view (thumbnails) and single-image view (large image)
 *   **Large folders stay smooth**: virtualized grid scrolling with bounded thumbnail concurrency, request deduplication, and caching; queued work that leaves the visible range is skipped
-*   **Folder browsing**: opening a folder loads all images automatically
+*   **Folder browsing**: opening a folder loads all images automatically; sorting and thumbnail-size controls appear only when images are available
 *   **Quick navigation**: ←/→ to switch, with preloading of adjacent images
-*   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity
+*   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity; fit-to-window uses an arrow cursor, and draggable views use a hand cursor
 *   **Drag & drop open**: drag images or a folder directly into the window
 *   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens), with an option to open the containing folder
 *   **Right-click menu**: copy image, copy path, view, edit image
@@ -53,7 +53,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 
 ### 📸 Screenshot & Annotation
 
-*   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens
+*   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background and transfers raw pixels directly to reduce selection-screen delay without losing image quality
 *   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended, while sticky headers, pinned footers and fixed sidebars are skipped. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text
 *   **Color & line width**: long-press a tool icon to open the color palette
@@ -86,8 +86,8 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 
 ### ⚙️ System Features
 
-*   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly
-*   **Light/dark theme**: follow system / dark / light
+*   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly; synchronizes the page language and adapts settings descriptions and editing controls to narrow windows
+*   **Light/dark theme**: follow system / dark / light; settings and image editing share rounded dropdown menus with mouse and keyboard selection
 *   **Title-bar menus**: File (open folder) / Edit (settings) / Help (about CloverViewer); close them by clicking elsewhere or pressing Esc
 *   **Global hotkey**: default **Alt+S** to summon the screenshot (available from tray; customizable)
 *   **System tray**: optionally minimize to tray on close

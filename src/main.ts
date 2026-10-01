@@ -31,6 +31,7 @@ import {
   getThumbnail,
   listImages,
   openContainingFolder,
+  prepareScreenshotWindow,
   readImageData,
   readEditableImageData,
   saveEditedImage,
@@ -268,18 +269,17 @@ function showGrid() {
   closeImageShare();
   closeImageOcr();
   viewerSession.viewMode = "grid";
+  const hasImages = viewerSession.images.length > 0;
+  const hasDirectory = !!viewerSession.currentDir;
   // 初始空态不需要这条上下文栏；一旦用户选定目录（即使目录里没有图片）就恢复。
-  contentHeader.classList.remove("hidden");
-  emptyState.classList.toggle(
-    "hidden",
-    viewerSession.images.length > 0 || !!viewerSession.currentDir,
-  );
-  gridView.classList.toggle("hidden", viewerSession.images.length === 0);
+  contentHeader.classList.toggle("hidden", !hasDirectory && !hasImages);
+  emptyState.classList.toggle("hidden", hasImages || hasDirectory);
+  gridView.classList.toggle("hidden", !hasImages);
   singleView.classList.add("hidden");
   imageEditorView.classList.add("hidden");
   enterEditButton.disabled = true;
-  gridMenu.classList.remove("hidden");
-  gridDensityControl.classList.remove("hidden");
+  gridMenu.classList.toggle("hidden", !hasImages);
+  gridDensityControl.classList.toggle("hidden", !hasImages);
   breadcrumb.classList.remove("hidden");
   gridCount.classList.remove("hidden");
   gridController.refreshMenu();
@@ -722,6 +722,13 @@ window.addEventListener("keydown", (event) => {
   }
   applyI18n(document);
   refreshStatus();
+  // Defer warmup until after startup. A timer also runs when --startup hides the viewer;
+  // requestAnimationFrame would stall there and leave the first tray capture cold.
+  window.setTimeout(() => {
+    void prepareScreenshotWindow().catch((error) => {
+      console.warn("Preparing screenshot window failed; will retry on capture", error);
+    });
+  }, 150);
   if (config?.desktop_pet_enabled) {
     void desktopPetController.setEnabled(true).catch((error) => {
       toast(t("toast.desktopPetFailed", { msg: String(error) }), "error");

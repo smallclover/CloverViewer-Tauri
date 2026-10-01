@@ -57,7 +57,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 .lan-share-actions button:first-child:hover:not(:disabled) {
-  background: var(--s-accent);
+  background: var(--s-accent-solid);
   border-color: var(--s-accent);
   color: #fff;
 }

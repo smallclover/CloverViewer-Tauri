@@ -176,6 +176,7 @@
   top: calc(100% + 4px);
   left: 0;
   z-index: 80;
+  width: max-content;
   min-width: 164px;
   padding: 4px;
   border: 1px solid var(--border);
@@ -189,6 +190,7 @@
   bottom: auto;
   display: flex;
   align-items: center;
+  gap: 20px;
   width: 100%;
   min-height: 30px;
   padding: 0 9px;
@@ -199,15 +201,18 @@
   font: inherit;
   font-size: 12px;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 #toolbar .app-menu-popover button:hover,
 #toolbar .app-menu-popover button.active { background: var(--accent-soft); color: var(--accent); }
 #toolbar .app-menu-popover kbd {
+  flex: none;
   margin-left: auto;
   color: var(--fg-dim);
   font: inherit;
   font-size: 11px;
+  white-space: nowrap;
 }
 /* 旧左侧导航曾把这两枚按钮绝对定位到底部；菜单内必须恢复正常流，
    否则弹出层会因没有内容高度而被压成一条细缝。 */

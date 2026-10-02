@@ -38,10 +38,10 @@
 .image-editor-controls .select-trigger {
   width: auto;
   min-width: 64px;
-  height: 32px;
-  padding: 3px 8px;
+  height: 34px;
+  padding: 4px 9px;
   gap: 9px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 .image-editor-controls .select-trigger:hover { background: var(--accent-soft); border-color: var(--accent); }
 .select-menu {

@@ -1,6 +1,8 @@
 import { t } from "../i18n";
 
 const ICONS: Record<string, string> = {
+  width:
+    '<path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="3"/><path d="M4 19h16" stroke-width="5"/>',
   rect: '<rect x="4" y="5" width="16" height="14" rx="2"/>',
   circle: '<circle cx="12" cy="12" r="7.5"/>',
   // 双向端帽（贴齐 egui paint_arrow_icon：line + end 两侧各一段短斜线）
@@ -58,7 +60,7 @@ const ICONS: Record<string, string> = {
     '<path d="M9.4 11.4 12 14l2.6-2.6"/>',
 };
 
-function svgIcon(name: string): string {
+export function svgIcon(name: string): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 }
 

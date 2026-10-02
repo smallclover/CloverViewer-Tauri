@@ -89,7 +89,7 @@ test("refresh during startup is coalesced and never runs two screenshot loads to
   assert.equal(calls.filter((call) => call === "show").length, 1);
 });
 
-function setupLoader(data, loadScreenshotScreens = async () => []) {
+function setupLoader(data, loadScreenshotScreens = async () => [], overrides = {}) {
   const calls = [];
   const classes = new Set();
   const exports = {};
@@ -113,7 +113,7 @@ function setupLoader(data, loadScreenshotScreens = async () => []) {
     root: {}, canvas: {},
     resetSession: () => calls.push("reset"),
     setBounds: () => calls.push("bounds"),
-    setInitialCursor: () => calls.push("cursor"),
+    setInitialCursor: async () => calls.push("cursor"),
     setScreens: () => calls.push("screens"),
     logLoaded: () => {},
     render: () => calls.push("render"),
@@ -121,6 +121,7 @@ function setupLoader(data, loadScreenshotScreens = async () => []) {
       assert.equal(classes.has("ready"), false);
       calls.push("restore");
     },
+    ...overrides,
   });
   return { controller, calls, classes };
 }
@@ -153,8 +154,46 @@ test("cancelled image decoding cannot overwrite the cleared session", async () =
 test("valid screenshot renders before the page is marked ready", async () => {
   const { controller, calls, classes } = setupLoader(screenshotData);
   assert.equal(await controller.load(), 1);
-  assert.deepEqual(calls, ["reset", "bounds", "cursor", "screens", "render", "restore"]);
+  assert.deepEqual(calls, ["reset", "bounds", "screens", "cursor", "render", "restore"]);
   assert.equal(classes.has("ready"), true);
+});
+
+test("initial cursor detection finishes before showing, using screenshot-local physical coordinates", async () => {
+  const detected = deferred();
+  const started = deferred();
+  const { controller, calls, classes } = setupLoader({
+    ...screenshotData, cursor: { x: -700, y: 80 },
+  }, async () => [], {
+    setInitialCursor: async (cursor) => {
+      assert.equal(cursor.x, 100);
+      assert.equal(cursor.y, 80);
+      assert.deepEqual(calls, ["reset", "bounds", "screens"]);
+      started.resolve();
+      await detected.promise;
+    },
+  });
+  const loading = controller.load();
+  await started.promise;
+  assert.equal(classes.has("ready"), false);
+  assert.equal(calls.includes("render"), false);
+  detected.resolve();
+  assert.equal(await loading, 1);
+  assert.equal(classes.has("ready"), true);
+});
+
+test("closing during initial window detection cannot show the cancelled screenshot", async () => {
+  const detected = deferred();
+  const started = deferred();
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {
+    setInitialCursor: async () => { started.resolve(); await detected.promise; },
+  });
+  const loading = controller.load();
+  await started.promise;
+  controller.cancel();
+  detected.resolve();
+  assert.equal(await loading, null);
+  assert.equal(classes.has("ready"), false);
+  assert.equal(calls.includes("render"), false);
 });
 
 test("failed pixel transfer closes only its own capture and never marks a blank frame ready", async () => {

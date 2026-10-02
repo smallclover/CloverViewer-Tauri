@@ -12,10 +12,12 @@ pub fn get_config(store: State<'_, ConfigStore>) -> Config {
 }
 
 #[tauri::command]
-pub fn set_config(store: State<'_, ConfigStore>, config: Config) {
+pub fn set_config(app: tauri::AppHandle, store: State<'_, ConfigStore>, config: Config) {
     // 窗口位置/大小由后端窗口事件维护，此处保留后端已知值，避免前端旧值覆盖
     let mut new_config = config;
     let current = store.snapshot();
+    new_config.ui_scale = crate::config::normalize_ui_scale(new_config.ui_scale);
+    let scale_changed = new_config.ui_scale != current.ui_scale;
     if new_config.window_pos.is_none() {
         new_config.window_pos = current.window_pos;
     }
@@ -27,6 +29,9 @@ pub fn set_config(store: State<'_, ConfigStore>, config: Config) {
     new_config.desktop_pet_scale = current.desktop_pet_scale;
     store.replace(new_config.clone());
     crate::config::save_config(&new_config);
+    if scale_changed {
+        crate::ui_scale::apply_all(&app);
+    }
 }
 
 /// 启用或隐藏独立桌宠窗口。窗口创建可能等待 WebView2 的主线程回调，

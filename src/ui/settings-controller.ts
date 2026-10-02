@@ -1,7 +1,6 @@
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
 import {
   type AppConfig,
+  checkAppUpdate,
   clearTempCache,
   formatSize,
   getCacheSummary,
@@ -14,6 +13,8 @@ import {
 import type { Lang } from "../i18n";
 import { playEnterAnimation, setAnimatedVisibility, type ToastKind } from "./presentation";
 import { createSelectControl } from "./select-control";
+import { createUpdateController } from "./update-controller";
+import { createUpdateStatusView } from "./update-status-view";
 
 interface SettingsControllerOptions {
   getConfig: () => AppConfig | null;
@@ -34,10 +35,6 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
-/** 更新源不可达时不能让设置页一直停在“正在检查”。 */
-const UPDATE_REQUEST_TIMEOUT_MS = 15_000;
-const UPDATE_NETWORK_ERROR = /timed?\s*out|network|fetch|connect|dns|resolve|socket|request/i;
-
 /** Owns settings form persistence, hotkey registration, and the update dialog. */
 export function createSettingsController(options: SettingsControllerOptions) {
   const overlay = element("settings-overlay");
@@ -48,6 +45,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const currentTabDesc = element("settings-current-desc");
   const language = element<HTMLSelectElement>("set-language");
   const theme = element<HTMLSelectElement>("set-theme");
+  const uiScale = element<HTMLSelectElement>("set-ui-scale");
   const zoom = element<HTMLInputElement>("set-zoom");
   const zoomValue = element("set-zoom-val");
   const imagePreviewStrip = element<HTMLInputElement>("set-image-preview-strip");
@@ -68,6 +66,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const selects = [
     language,
     theme,
+    uiScale,
     cacheRetention,
     lanShareDuration,
     lanShareDownloadLimit,
@@ -85,7 +84,6 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const navGroups = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-nav-group]"));
   const groups = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
   let activeTab = "general";
-  let checkingForUpdate = false;
   let clearingCache = false;
   let updateResolver: ((install: boolean) => void) | undefined;
 
@@ -184,6 +182,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     if (!config) return;
     language.value = config.language;
     theme.value = config.theme;
+    uiScale.value = String(config.ui_scale);
     zoom.value = String(config.zoom_sensitivity);
     zoomValue.textContent = `${config.zoom_sensitivity.toFixed(1)}×`;
     imagePreviewStrip.checked = config.image_preview_strip_enabled;
@@ -227,56 +226,22 @@ export function createSettingsController(options: SettingsControllerOptions) {
       updateResolver = resolve;
     });
   };
-  const checkForUpdate = async () => {
-    if (checkingForUpdate) return;
-    checkingForUpdate = true;
-    checkUpdateButton.disabled = true;
-    checkUpdateButton.textContent = options.translate("settings.checkingUpdate");
-    options.toast(options.translate("update.checking"), "info");
-    try {
-      const update = await check({ timeout: UPDATE_REQUEST_TIMEOUT_MS });
-      if (!update) {
-        options.toast(options.translate("update.latest"), "success");
-        return;
-      }
-      if (!(await showUpdate(update.version, update.body?.trim()))) return;
-      let downloaded = 0;
-      let contentLength = 0;
-      let lastPercent = -1;
-      options.toast(options.translate("update.downloading", { percent: 0 }), "info");
-      await update.downloadAndInstall(
-        (event) => {
-          if (event.event === "Started") contentLength = event.data.contentLength ?? 0;
-          else if (event.event === "Progress") {
-            downloaded += event.data.chunkLength;
-            if (contentLength > 0) {
-              const percent = Math.min(100, Math.floor((downloaded / contentLength) * 100));
-              if (percent !== lastPercent) {
-                lastPercent = percent;
-                options.toast(options.translate("update.downloading", { percent }), "info");
-              }
-            }
-          }
-        },
-        { timeout: UPDATE_REQUEST_TIMEOUT_MS },
-      );
-      options.toast(options.translate("update.installing"), "success");
-      await relaunch();
-    } catch (error) {
-      console.warn("检查更新失败", error);
-      const message = String(error);
-      options.toast(
-        UPDATE_NETWORK_ERROR.test(message)
-          ? options.translate("update.networkUnavailable")
-          : options.translate("update.failed", { msg: message }),
-        "error",
-      );
-    } finally {
-      checkingForUpdate = false;
-      checkUpdateButton.disabled = false;
-      checkUpdateButton.textContent = options.translate("settings.checkUpdate");
-    }
-  };
+  const updateStatus = createUpdateStatusView({
+    checkButton: checkUpdateButton,
+    translate: options.translate,
+    onRetry: () => void updater.run(),
+    onDismiss: () => updater.dismiss(),
+    isBusy: () => updater.isBusy(),
+  });
+  const updater = createUpdateController({
+    check: checkAppUpdate,
+    confirm: (update) => showUpdate(update.version, update.body?.trim()),
+    onState: updateStatus.render,
+    yieldUi: () =>
+      new Promise((resolve) => window.requestAnimationFrame(() => window.setTimeout(resolve, 0))),
+    wait: (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds)),
+  });
+  const checkForUpdate = updater.run;
 
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => selectTab(tabOf(tab)));
@@ -297,6 +262,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     save({ language: next });
     options.setLanguage(next);
     options.applyI18n();
+    updateStatus.render();
     // 文案换了语言，分组标题与描述都要跟着重算。
     render();
     if (!updateOverlay.classList.contains("hidden") && !updateNotes.dataset.hasNotes) {
@@ -309,6 +275,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
     save({ theme: next });
     options.applyTheme(next);
   });
+  uiScale.addEventListener("change", () =>
+    save({ ui_scale: Number(uiScale.value) as AppConfig["ui_scale"] }),
+  );
   zoom.addEventListener("input", () => {
     zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
   });

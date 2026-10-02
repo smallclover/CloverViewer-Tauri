@@ -1,10 +1,9 @@
 interface SingleImageControllerOptions {
   stage: HTMLElement;
-  image: HTMLImageElement;
+  getImage: () => HTMLImageElement;
   isActive: () => boolean;
   getZoomSensitivity: () => number;
   onChange: () => void;
-  playEnterAnimation: (element: HTMLElement, className?: string) => void;
 }
 
 /** Owns transform state and pointer gestures for the single-image canvas. */
@@ -24,11 +23,12 @@ export function createSingleImageController(options: SingleImageControllerOption
   };
 
   const fitScale = () => {
+    const image = options.getImage();
     const rect = options.stage.getBoundingClientRect();
-    if (!options.image.naturalWidth || !rect.width) return 1;
+    if (!image.naturalWidth || !rect.width) return 1;
     const swapped = rotation % 180 !== 0;
-    const width = swapped ? options.image.naturalHeight : options.image.naturalWidth;
-    const height = swapped ? options.image.naturalWidth : options.image.naturalHeight;
+    const width = swapped ? image.naturalHeight : image.naturalWidth;
+    const height = swapped ? image.naturalWidth : image.naturalHeight;
     return Math.min(rect.width / width, rect.height / height) * 0.88;
   };
 
@@ -38,7 +38,7 @@ export function createSingleImageController(options: SingleImageControllerOption
     const base = fitMode
       ? `translate(-50%, -50%) scale(${fitScale()})`
       : `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${scale})`;
-    options.image.style.transform = `${base} rotate(${rotation}deg) ${flip}`;
+    options.getImage().style.transform = `${base} rotate(${rotation}deg) ${flip}`;
   };
 
   const reset = () => {
@@ -88,10 +88,6 @@ export function createSingleImageController(options: SingleImageControllerOption
     options.onChange();
   };
 
-  options.image.addEventListener("load", () => {
-    applyTransform();
-    options.playEnterAnimation(options.image, "image-enter");
-  });
   window.addEventListener("resize", () => {
     if (!options.isActive()) return;
     applyTransform();

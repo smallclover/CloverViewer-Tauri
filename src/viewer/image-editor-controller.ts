@@ -1,7 +1,10 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import type { EditedImageFormat, ImageEntry } from "../api";
-import { createSelectControl } from "../ui/select-control";
+import { createEditorToolbar, type EditorTool } from "../image-editor/toolbar";
+import { createImageEditorLoader } from "./image-editor-loader";
+import { createCropOverlay } from "../image-editor/crop-overlay";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
+import { annotationFont } from "../image-editor/annotation-style";
 import {
   cloneShape,
   isShapeHit,
@@ -10,7 +13,6 @@ import {
   type Pt,
   type Rect,
   type Shape,
-  type Tool,
 } from "../image-editor/geometry";
 import { SnapshotHistory } from "../image-editor/history";
 import {
@@ -18,37 +20,10 @@ import {
   mosaicBlockSize,
 } from "../image-editor/canvas-mosaic-renderer";
 
-type EditorTool = Tool | "select" | "crop";
-
 interface EditSnapshot {
   shapes: Shape[];
   crop: Rect | null;
   rotation: number;
-}
-
-const ICONS: Record<string, string> = {
-  "editor.select": '<path d="m5 3 14 9-7 2-3 7Z"/>',
-  "editor.crop": '<path d="M5 3v13a3 3 0 0 0 3 3h13"/><path d="M19 21V8a3 3 0 0 0-3-3H3"/>',
-  "editor.rotate":
-    '<path fill="currentColor" stroke="none" d="m15.5 5.5-4.5-4.5v3.1A8 8 0 1 0 19.7 14h-2.1A6 6 0 1 1 11 6.1V10z"/>',
-  "shot.rect": '<rect x="4" y="5" width="16" height="14" rx="2"/>',
-  "shot.circle": '<circle cx="12" cy="12" r="7.5"/>',
-  "shot.arrow": '<path d="M5 19 19 5M13 5h6v6"/>',
-  "shot.pen": '<path d="M4 19Q6 7 8.5 13T12 12t3.5 1T20 5"/>',
-  "shot.mosaic":
-    '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
-  "shot.text": '<path d="M5 5V3h14v2M12 3v18"/>',
-  "editor.undo": '<path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 6 6"/>',
-  "editor.redo": '<path d="m15 7 5 5-5 5"/><path d="M20 12H10a6 6 0 0 0-6 6"/>',
-  "editor.saveAs":
-    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
-  "editor.overwrite": '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h7V3M8 21v-7h8v7"/>',
-  "editor.cancel": '<path d="m6 6 12 12M18 6 6 18"/>',
-};
-
-function iconFor(key: string) {
-  const path = ICONS[key] || "";
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
 
 interface ImageEditorControllerOptions {
@@ -75,8 +50,7 @@ function canvasPng(canvas: HTMLCanvasElement): Promise<string> {
 
 /** Owns a non-destructive, canvas-based editor for a single viewer image. */
 export function createImageEditorController(options: ImageEditorControllerOptions) {
-  const controls = document.createElement("header");
-  controls.className = "image-editor-controls";
+  const loader = createImageEditorLoader({ getSource: options.getEditableSource });
   const workspace = document.createElement("div");
   workspace.className = "image-editor-workspace";
   const canvas = document.createElement("canvas");
@@ -84,67 +58,20 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const textInput = document.createElement("textarea");
   textInput.className = "image-editor-text-input hidden";
   textInput.rows = 2;
-  workspace.append(canvas, controls, textInput);
+  workspace.append(canvas, textInput);
   options.root.replaceChildren(workspace);
-
-  const buttons = new Map<string, HTMLButtonElement>();
-  const makeButton = (key: string, action: () => void, parent = controls) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.key = key;
-    button.innerHTML = iconFor(key);
-    button.addEventListener("click", action);
-    buttons.set(key, button);
-    parent.appendChild(button);
-    return button;
-  };
-  const toolButton = (key: string, tool: EditorTool) => makeButton(key, () => setTool(tool));
-
-  toolButton("editor.select", "select");
-  toolButton("editor.crop", "crop");
-  makeButton("editor.rotate", () => rotate());
-  controls.appendChild(document.createElement("span")).className = "image-editor-divider";
-  toolButton("shot.rect", "rect");
-  toolButton("shot.circle", "circle");
-  toolButton("shot.arrow", "arrow");
-  toolButton("shot.pen", "pen");
-  toolButton("shot.mosaic", "mosaic");
-  toolButton("shot.text", "text");
-  controls.appendChild(document.createElement("span")).className = "image-editor-divider";
-  makeButton("editor.undo", () => undo());
-  makeButton("editor.redo", () => redo());
-
-  const color = document.createElement("input");
-  color.type = "color";
-  color.value = "#ff0000";
-  color.className = "image-editor-color";
-  color.title = options.translate("shot.color");
-  controls.appendChild(color);
-  const width = document.createElement("select");
-  width.className = "image-editor-select";
-  [2, 4, 6, 10].forEach((value) => {
-    width.append(new Option(`${value}px`, String(value), value === 4, value === 4));
+  const toolbar = createEditorToolbar({
+    workspace,
+    translate: options.translate,
+    setTool: (next) => setTool(next),
+    rotate: () => rotate(),
+    undo: () => undo(),
+    redo: () => redo(),
+    saveAs: () => void saveAs(),
+    overwrite: () => void overwrite(),
+    close: () => close(),
   });
-  width.title = options.translate("shot.width");
-  controls.appendChild(width);
-  const format = document.createElement("select");
-  format.className = "image-editor-select";
-  ["png", "jpeg", "webp"].forEach((value) => {
-    format.append(new Option(value.toUpperCase(), value));
-  });
-  controls.appendChild(format);
-  const outputScale = document.createElement("select");
-  outputScale.className = "image-editor-select";
-  [100, 75, 50, 25].forEach((value) => {
-    outputScale.append(new Option(`${value}%`, String(value)));
-  });
-  outputScale.title = options.translate("editor.scale");
-  controls.appendChild(outputScale);
-  const selects = [width, format, outputScale].map(createSelectControl);
-  controls.appendChild(document.createElement("span")).className = "image-editor-divider";
-  makeButton("editor.saveAs", () => void saveAs());
-  makeButton("editor.overwrite", () => void overwrite());
-  makeButton("editor.cancel", () => close());
+  const { color, sizes, format, outputScale } = toolbar;
 
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D is unavailable");
@@ -165,9 +92,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let current: Shape | null = null;
   let selectedIndex: number | null = null;
   let crop: Rect | null = null;
-  let cropStart: Pt | null = null;
   let cropSnapshot: EditSnapshot | null = null;
   let textStart: Pt | null = null;
+  let textStyle = { color: color.value, fontSize: sizes.fontSize };
   let rotation = 0;
   let activeMosaicPoint: Pt | null = null;
   let dragging = false;
@@ -189,17 +116,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     rasterizeAnnotations();
   };
 
-  const translate = () => {
-    buttons.forEach((button, key) => {
-      button.title = options.translate(key);
-      button.ariaLabel = options.translate(key);
-    });
-    color.title = options.translate("shot.color");
-    width.title = options.translate("shot.width");
-    format.title = options.translate("editor.format");
-    outputScale.title = options.translate("editor.scale");
-    for (const select of selects) select.refresh();
-  };
+  const translate = toolbar.refreshTranslations;
 
   const displayPoint = (event: PointerEvent): Pt => {
     const box = canvas.getBoundingClientRect();
@@ -253,28 +170,48 @@ export function createImageEditorController(options: ImageEditorControllerOption
     context.drawImage(sourceCanvas, 0, 0);
     context.drawImage(annotationCanvas, 0, 0);
     drawCurrent(context);
-    if (crop && crop.w > 1 && crop.h > 1) {
-      context.fillStyle = "rgba(0, 0, 0, 0.45)";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.save();
-      context.beginPath();
-      context.rect(crop.x, crop.y, crop.w, crop.h);
-      context.clip();
-      context.drawImage(sourceCanvas, 0, 0);
-      context.drawImage(annotationCanvas, 0, 0);
-      drawCurrent(context);
-      context.restore();
-      context.strokeStyle = "#3fa9f5";
-      context.lineWidth = Math.max(1, canvas.width / Math.max(canvas.clientWidth, 1));
-      context.strokeRect(crop.x, crop.y, crop.w, crop.h);
-    }
     if (selectedIndex !== null && shapes[selectedIndex]) {
       const box = shapeBBox(shapes[selectedIndex]);
       context.strokeStyle = "#3fa9f5";
       context.lineWidth = 2;
       context.strokeRect(box.x - 3, box.y - 3, box.w + 6, box.h + 6);
     }
+    cropOverlay.refreshImage();
+    toolbar.refreshHistory(history.canUndo, history.canRedo);
   };
+
+  const cropOverlay = createCropOverlay({
+    canvas,
+    workspace,
+    getCrop: () => crop,
+    isActive: () => tool === "crop",
+    onBegin: () => {
+      cropSnapshot = snapshot();
+    },
+    onChange: (next) => {
+      crop = next;
+      cropOverlay.update();
+    },
+    onEnd: (cancelled) => {
+      if (!cropSnapshot) return;
+      if (cancelled || !crop || crop.w < 2 || crop.h < 2) crop = cropSnapshot.crop;
+      else {
+        const previous = cropSnapshot.crop ?? { x: 0, y: 0, w: canvas.width, h: canvas.height };
+        if (
+          crop.x !== previous.x ||
+          crop.y !== previous.y ||
+          crop.w !== previous.w ||
+          crop.h !== previous.h
+        ) {
+          history.checkpoint(cropSnapshot);
+          dirty = true;
+        }
+      }
+      cropSnapshot = null;
+      cropOverlay.update();
+      toolbar.refreshHistory(history.canUndo, history.canRedo);
+    },
+  });
 
   const hideTextInput = () => {
     textStart = null;
@@ -285,12 +222,19 @@ export function createImageEditorController(options: ImageEditorControllerOption
     const text = textInput.value.trim();
     if (textStart && text) {
       checkpoint();
+      context.font = annotationFont(textStyle.fontSize);
+      const lines = text.split("\n");
+      const textWidth = Math.max(...lines.map((line) => context.measureText(line).width));
       shapes.push({
         tool: "text",
         start: textStart,
-        end: textStart,
-        color: color.value,
-        strokeWidth: Number(width.value),
+        end: {
+          x: textStart.x + textWidth,
+          y: textStart.y + lines.length * textStyle.fontSize * 1.2,
+        },
+        color: textStyle.color,
+        strokeWidth: sizes.strokeWidth,
+        fontSize: textStyle.fontSize,
         text,
       });
       rasterizeAnnotations();
@@ -300,18 +244,30 @@ export function createImageEditorController(options: ImageEditorControllerOption
     hideTextInput();
   };
   const beginTextInput = (point: Pt) => {
+    commitTextInput();
     const canvasBox = canvas.getBoundingClientRect();
     const workspaceBox = workspace.getBoundingClientRect();
     textStart = point;
+    textStyle = { color: color.value, fontSize: sizes.fontSize };
     textInput.value = "";
-    textInput.style.left = `${canvasBox.left - workspaceBox.left + workspace.scrollLeft + 8}px`;
-    textInput.style.top = `${canvasBox.top - workspaceBox.top + workspace.scrollTop + 8}px`;
+    textInput.style.font = annotationFont(textStyle.fontSize * (canvasBox.width / canvas.width));
+    textInput.style.lineHeight = "1.2";
+    textInput.style.color = textStyle.color;
+    const x = canvasBox.left - workspaceBox.left + point.x * (canvasBox.width / canvas.width);
+    const y = canvasBox.top - workspaceBox.top + point.y * (canvasBox.height / canvas.height);
+    const inputWidth = Math.min(260, Math.max(0, workspaceBox.width - 32));
+    textInput.style.left = `${workspace.scrollLeft + Math.max(0, Math.min(x, workspaceBox.width - inputWidth - 8))}px`;
+    textInput.style.top = `${workspace.scrollTop + Math.max(0, Math.min(y, workspaceBox.height - 74))}px`;
     textInput.classList.remove("hidden");
-    textInput.focus();
+    // The pointerdown default action must finish before the textarea owns focus.
+    window.setTimeout(() => {
+      if (textStart === point) textInput.focus({ preventScroll: true });
+    }, 0);
   };
   textInput.addEventListener("blur", commitTextInput);
   textInput.addEventListener("keydown", (event) => {
     event.stopPropagation();
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === "Escape") {
       event.preventDefault();
       hideTextInput();
@@ -322,15 +278,14 @@ export function createImageEditorController(options: ImageEditorControllerOption
   });
 
   const setTool = (next: EditorTool) => {
-    if (tool === next && next === "crop") crop = null;
+    commitTextInput();
+    cropOverlay.cancel();
     tool = next;
     canvas.style.cursor = next === "select" ? "default" : "crosshair";
     current = null;
     resetActiveMosaic();
     selectedIndex = null;
-    buttons.forEach((button, key) => {
-      button.classList.toggle("active", key === `editor.${next}` || key === `shot.${next}`);
-    });
+    toolbar.setActiveTool(next);
     render();
   };
 
@@ -358,6 +313,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const rotate = () => {
+    cropOverlay.cancel();
     checkpoint();
     transformAnnotations();
     rotation = (rotation + 90) % 360;
@@ -368,6 +324,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const undo = () => {
+    cropOverlay.cancel();
     const previous = history.undo(snapshot());
     if (!previous) return;
     restore(previous);
@@ -375,6 +332,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     render();
   };
   const redo = () => {
+    cropOverlay.cancel();
     const next = history.redo(snapshot());
     if (!next) return;
     restore(next);
@@ -470,25 +428,24 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const close = () => {
+    cropOverlay.cancel();
     commitTextInput();
     if (dirty && !window.confirm(options.translate("editor.discardConfirm"))) return;
-    for (const select of selects) select.close();
+    loader.cancel();
+    toolbar.closePanels();
     options.root.classList.add("hidden");
     options.onClose();
   };
 
   canvas.addEventListener("pointerdown", (event) => {
-    if (!image || event.button !== 0) return;
+    if (!image || event.button !== 0 || tool === "crop") return;
     const point = displayPoint(event);
-    canvas.setPointerCapture(event.pointerId);
-    if (tool === "crop") {
-      cropSnapshot = snapshot();
-      cropStart = point;
-      crop = { x: point.x, y: point.y, w: 0, h: 0 };
-      dragging = true;
-      render();
+    if (tool === "text") {
+      event.preventDefault();
+      beginTextInput(point);
       return;
     }
+    canvas.setPointerCapture(event.pointerId);
     if (tool === "select") {
       selectedIndex =
         shapes
@@ -498,16 +455,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
       render();
       return;
     }
-    if (tool === "text") {
-      beginTextInput(point);
-      return;
-    }
     current = {
       tool,
       start: point,
       end: point,
       color: color.value,
-      strokeWidth: Number(width.value),
+      strokeWidth: sizes.strokeWidth,
+      blockSize: tool === "mosaic" ? sizes.blockSize : undefined,
       points: tool === "pen" || tool === "mosaic" ? [point] : undefined,
     };
     dragging = true;
@@ -521,8 +475,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   canvas.addEventListener("pointermove", (event) => {
     if (!dragging) return;
     const point = displayPoint(event);
-    if (tool === "crop" && cropStart) crop = normRect(cropStart, point);
-    else if (current) {
+    if (current) {
       current.end = point;
       if (current.points) {
         const previous = current.points[current.points.length - 1];
@@ -547,15 +500,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     if (!dragging) return;
     dragging = false;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    if (tool === "crop") {
-      cropStart = null;
-      if (crop && (crop.w < 2 || crop.h < 2)) crop = cropSnapshot?.crop ?? null;
-      else if (cropSnapshot) {
-        history.checkpoint(cropSnapshot);
-        dirty = true;
-      }
-      cropSnapshot = null;
-    } else if (current) {
+    if (current) {
       if (current.points) {
         const point = displayPoint(event);
         const previous = current.points[current.points.length - 1];
@@ -604,19 +549,19 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
   });
 
-  const open = async (nextEntry: ImageEntry) => {
+  const open = async (nextEntry: ImageEntry, onReady: () => void) => {
+    const nextImage = await loader.load(nextEntry.path);
+    if (!nextImage) return false;
+    cropOverlay.cancel();
     entry = nextEntry;
-    options.root.classList.remove("hidden");
     translate();
-    const nextImage = new Image();
-    nextImage.src = await options.getEditableSource(nextEntry.path);
-    await nextImage.decode();
     image = nextImage;
     shapes = [];
     current = null;
     selectedIndex = null;
     crop = null;
     cropSnapshot = null;
+    dragging = false;
     hideTextInput();
     rotation = 0;
     dirty = false;
@@ -624,12 +569,19 @@ export function createImageEditorController(options: ImageEditorControllerOption
     rebuildSource();
     rasterizeAnnotations();
     setTool("select");
-    render();
+    // setTool draws the first frame while hidden; reveal it and leave the viewer in one turn.
+    onReady();
+    options.root.classList.remove("hidden");
+    toolbar.updateLayout();
+    cropOverlay.refreshImage();
+    return true;
   };
 
   return {
     open,
     close,
+    cancelPendingOpen: loader.cancel,
+    isOpening: loader.isLoading,
     isOpen: () => !options.root.classList.contains("hidden"),
     refreshTranslations: translate,
   };

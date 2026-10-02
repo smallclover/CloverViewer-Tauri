@@ -4,7 +4,7 @@
 //! 常见字段，供属性面板展示。字段为空时前端不展示该行。
 
 use serde::Serialize;
-use std::io::Cursor;
+use std::io::{BufRead, BufReader, Seek};
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct ExifInfo {
@@ -20,14 +20,19 @@ pub struct ExifInfo {
 }
 
 #[tauri::command]
-pub fn get_image_info(path: String) -> Result<ExifInfo, String> {
-    let data = std::fs::read(&path).map_err(|e| format!("读取失败: {e}"))?;
-    Ok(read_exif(&data))
+pub async fn get_image_info(path: String) -> Result<ExifInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = std::fs::File::open(&path).map_err(|e| format!("读取失败: {e}"))?;
+        // Let the EXIF reader consume the container; JPEG metadata doesn't need pixel data.
+        Ok(read_exif(&mut BufReader::new(file)))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
-fn read_exif(data: &[u8]) -> ExifInfo {
+fn read_exif(reader: &mut (impl BufRead + Seek)) -> ExifInfo {
     let mut info = ExifInfo::default();
-    let Ok(exif) = exif::Reader::new().read_from_container(&mut Cursor::new(data)) else {
+    let Ok(exif) = exif::Reader::new().read_from_container(reader) else {
         return info;
     };
 
@@ -59,4 +64,35 @@ fn read_exif(data: &[u8]) -> ExifInfo {
     };
 
     info
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn jpeg_metadata_preserves_dates_without_reading_the_large_pixel_payload() {
+        let mut tiff = b"II\x2a\x00\x08\x00\x00\x00".to_vec();
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&0x0132u16.to_le_bytes()); // DateTime
+        tiff.extend_from_slice(&2u16.to_le_bytes()); // ASCII
+        tiff.extend_from_slice(&20u32.to_le_bytes());
+        tiff.extend_from_slice(&26u32.to_le_bytes());
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+        tiff.extend_from_slice(b"2026:10:01 11:00:00\0");
+        let mut jpeg = b"\xff\xd8\xff\xe1".to_vec();
+        jpeg.extend_from_slice(&((tiff.len() + 8) as u16).to_be_bytes());
+        jpeg.extend_from_slice(b"Exif\0\0");
+        jpeg.extend_from_slice(&tiff);
+        jpeg.extend_from_slice(b"\xff\xd9");
+        jpeg.resize(2 * 1024 * 1024, 0);
+        let mut reader = Cursor::new(jpeg);
+
+        let info = read_exif(&mut reader);
+
+        assert_eq!(info.datetime, "2026-10-01 11:00:00");
+        assert!(reader.position() <= 8192);
+        assert!(info.model.is_empty());
+    }
 }

@@ -17,6 +17,7 @@ import { createImageShareController } from "./viewer/image-share-controller";
 import { createImageOcrController } from "./viewer/image-ocr-controller";
 import { createImageEditorController } from "./viewer/image-editor-controller";
 import { createSingleImageController } from "./viewer/single-image-controller";
+import { createSingleImagePresenter } from "./viewer/single-image-presenter";
 import { createViewerSession } from "./viewer/viewer-session";
 import {
   type AppConfig,
@@ -56,7 +57,7 @@ const gridSpacer = $("grid-spacer");
 const singleView = $("single-view");
 const imageEditorView = $("image-editor-view");
 const imgStage = $("img-stage");
-const singleImg = $<HTMLImageElement>("single-img");
+let singleImg = $<HTMLImageElement>("single-img");
 const propsList = $("props-list");
 const propsPanel = $("props-panel");
 const propsClose = $<HTMLButtonElement>("props-close");
@@ -120,11 +121,36 @@ const desktopPetController = createDesktopPetController({
 });
 const singleImageController = createSingleImageController({
   stage: imgStage,
-  image: singleImg,
+  getImage: () => singleImg,
   isActive: () => viewerSession.viewMode === "single",
   getZoomSensitivity: () => config?.zoom_sensitivity ?? 1,
   onChange: refreshStatus,
-  playEnterAnimation,
+});
+const singleImagePresenter = createSingleImagePresenter({
+  getImage: () => singleImg,
+  sourceFor: imageSource.for,
+  isActive: () => viewerSession.viewMode === "single",
+  onCommit: (image) => {
+    singleImg = image;
+    singleImageController.reset();
+    refreshStatus();
+  },
+  onError: (error) => {
+    const displayedIndex = viewerSession.images.findIndex(
+      (entry) => entry.path === singleImg.dataset.imagePath,
+    );
+    if (displayedIndex >= 0) {
+      viewerSession.activeIndex = displayedIndex;
+      gridController.updateActive();
+      updateNavButtons();
+      if (viewerSession.propsVisible)
+        imagePropertiesController.render(viewerSession.images[displayedIndex]);
+      applyImagePreviewStripState();
+      pageNavigation.replaceCurrentImage(displayedIndex);
+      refreshStatus();
+    }
+    toast(t("toast.openFailed", { msg: String(error) }), "error");
+  },
 });
 const imagePropertiesController = createImagePropertiesController({
   list: propsList,
@@ -158,6 +184,8 @@ const imageEditor = createImageEditorController({
   onClose: leaveEdit,
   onSaved: (path) => {
     imageSource.clear();
+    singleImagePresenter.clear();
+    imagePreviewStripController.clear();
     gridController.clearThumbnails();
     const active = viewerSession.images[viewerSession.activeIndex];
     if (active?.path !== path || !viewerSession.currentDir) return;
@@ -167,7 +195,12 @@ const imageEditor = createImageEditorController({
       viewerSession.images = viewerSession.images.map((image) =>
         image.path === path ? replacement : image,
       );
-      void imageSource.for(replacement).then((src) => (singleImg.src = src));
+      if (
+        viewerSession.viewMode === "single" &&
+        viewerSession.images[viewerSession.activeIndex]?.path === path
+      ) {
+        showSingle(viewerSession.activeIndex);
+      }
     });
   },
   toast,
@@ -197,11 +230,14 @@ function renderBreadcrumb() {
 
 // ---------- 目录加载 ----------
 async function openDirectory(dir: string) {
+  imageEditor.cancelPendingOpen();
   try {
     const entries = await listImages(dir);
     viewerSession.setDirectory(dir, entries);
     gridController.sortCurrentImages();
     imageSource.clear();
+    singleImagePresenter.clear();
+    imagePreviewStripController.clear();
     gridController.clearThumbnails();
     renderBreadcrumb();
     if (entries.length === 0) {
@@ -266,6 +302,8 @@ function applyImagePreviewStripState() {
 }
 
 function showGrid() {
+  imageEditor.cancelPendingOpen();
+  singleImagePresenter.cancel();
   closeImageShare();
   closeImageOcr();
   viewerSession.viewMode = "grid";
@@ -292,6 +330,8 @@ function showGrid() {
 function applyPropsState() {
   propsPanel.classList.toggle("collapsed", !viewerSession.propsVisible);
   if (viewerSession.viewMode === "single") {
+    const entry = viewerSession.images[viewerSession.activeIndex];
+    if (viewerSession.propsVisible && entry) imagePropertiesController.render(entry);
     singleImageController.applyTransform(); // 面板显隐改变可视区域，重算适应/平移
     refreshStatus();
   }
@@ -352,6 +392,8 @@ function openImageOcr(entry: ImageEntry) {
 // ---------- 单图视图 ----------
 function showSingle(index: number) {
   if (index < 0 || index >= viewerSession.images.length) return;
+  imageEditor.cancelPendingOpen();
+  const entering = viewerSession.viewMode !== "single" || singleView.classList.contains("hidden");
   gridController.pauseThumbnails();
   viewerSession.activeIndex = index;
   closeImageShare();
@@ -363,7 +405,7 @@ function showSingle(index: number) {
   singleView.classList.remove("hidden");
   imageEditorView.classList.add("hidden");
   enterEditButton.disabled = false;
-  playEnterAnimation(singleView);
+  if (entering) playEnterAnimation(singleView);
   gridMenu.classList.add("hidden");
   gridDensityControl.classList.add("hidden");
   breadcrumb.classList.add("hidden");
@@ -373,14 +415,12 @@ function showSingle(index: number) {
   updateNavButtons();
 
   const entry = viewerSession.images[index];
-  singleImageController.reset();
-  void imageSource.for(entry).then((src) => {
-    singleImg.src = src;
-  });
-  imagePropertiesController.render(entry);
+  const neighbors = [viewerSession.images[index - 1], viewerSession.images[index + 1]].filter(
+    (image): image is ImageEntry => !!image,
+  );
+  void singleImagePresenter.show(entry, neighbors);
   applyImagePreviewStripState();
   refreshStatus();
-  preloadNeighbors(index);
 }
 
 /** Opens an image from a browsing surface and makes the grid returnable via titlebar history. */
@@ -391,30 +431,34 @@ function openImageDetails(index: number) {
 
 async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
   if (!entry) return;
-  gridController.pauseThumbnails();
-  const index = viewerSession.images.findIndex((image) => image.path === entry.path);
-  if (index >= 0) viewerSession.activeIndex = index;
-  closeImageShare();
-  closeImageOcr();
-  viewerSession.propsVisible = false;
-  viewerSession.viewMode = "edit";
-  contentHeader.classList.add("hidden");
-  emptyState.classList.add("hidden");
-  gridView.classList.add("hidden");
-  singleView.classList.add("hidden");
-  gridMenu.classList.add("hidden");
-  gridDensityControl.classList.add("hidden");
-  breadcrumb.classList.add("hidden");
-  gridCount.classList.add("hidden");
   enterEditButton.disabled = true;
   try {
-    await imageEditor.open(entry);
-    refreshStatus();
+    const opened = await imageEditor.open(entry, () => {
+      singleImagePresenter.cancel();
+      gridController.pauseThumbnails();
+      const index = viewerSession.images.findIndex((image) => image.path === entry.path);
+      if (index >= 0) viewerSession.activeIndex = index;
+      closeImageShare();
+      closeImageOcr();
+      viewerSession.propsVisible = false;
+      viewerSession.viewMode = "edit";
+      for (const element of [
+        contentHeader,
+        emptyState,
+        gridView,
+        singleView,
+        gridMenu,
+        gridDensityControl,
+        breadcrumb,
+        gridCount,
+      ])
+        element.classList.add("hidden");
+    });
+    if (opened) refreshStatus();
   } catch (error) {
-    imageEditorView.classList.add("hidden");
-    viewerSession.viewMode = "single";
-    showSingle(viewerSession.activeIndex);
     toast(t("toast.openFailed", { msg: String(error) }), "error");
+  } finally {
+    enterEditButton.disabled = viewerSession.viewMode !== "single" || imageEditor.isOpening();
   }
 }
 
@@ -448,19 +492,6 @@ function refreshStatus() {
     statusLeft.textContent = t("status.ready");
     statusRight.textContent = "";
     gridCount.classList.add("hidden");
-  }
-}
-
-// 预加载相邻图片（原图，浏览器缓存）
-function preloadNeighbors(index: number) {
-  for (const off of [-1, 1]) {
-    const i = index + off;
-    if (i < 0 || i >= viewerSession.images.length) continue;
-    const entry = viewerSession.images[i];
-    if (entry.web_supported) {
-      const img = new Image();
-      img.src = fileSrc(entry.path);
-    }
   }
 }
 
@@ -657,7 +688,11 @@ bindFileDrop(dropOverlay, openFileOrFolder);
 function refreshViewerTranslations() {
   gridController.refreshMenu();
   refreshStatus();
-  if (viewerSession.viewMode === "single" && viewerSession.activeIndex >= 0) {
+  if (
+    viewerSession.viewMode === "single" &&
+    viewerSession.propsVisible &&
+    viewerSession.activeIndex >= 0
+  ) {
     imagePropertiesController.render(viewerSession.images[viewerSession.activeIndex]);
   }
   imageEditor.refreshTranslations();
@@ -688,10 +723,14 @@ const pageNavigation = createPageNavigationController({
     else showSingle(imageIndex);
   },
   showSettings: () => {
+    imageEditor.cancelPendingOpen();
+    singleImagePresenter.cancel();
     aboutController.close();
     settingsController.open();
   },
   showAbout: () => {
+    imageEditor.cancelPendingOpen();
+    singleImagePresenter.cancel();
     settingsController.close();
     aboutController.open();
   },
@@ -745,7 +784,9 @@ window.addEventListener("keydown", (event) => {
       if (!entry) throw new Error(t("toast.openFailed", { msg: payload.path }));
       imageOcrController.setResult(entry.path, payload.ocr_text);
       openImageOcr(entry);
-      await singleImg.decode();
+      if (!(await singleImagePresenter.whenReady())) {
+        throw new Error(t("toast.openFailed", { msg: payload.path }));
+      }
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );

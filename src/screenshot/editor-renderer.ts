@@ -39,7 +39,10 @@ export function createEditorCanvasRenderer({
   const drawMosaic = (target: CanvasRenderingContext2D, shape: Shape) => {
     const points = shape.points;
     if (!points?.length) return;
-    const blockSize = Math.max(1, Math.round((shape.strokeWidth || mosaicWidth) * getScale()));
+    const blockSize = Math.max(
+      1,
+      Math.round(shape.blockSize ?? (shape.strokeWidth || mosaicWidth)),
+    );
     const paintDot = (x: number, y: number) => {
       const sourceX = x - blockSize / 2;
       const sourceY = y - blockSize / 2;
@@ -64,7 +67,7 @@ export function createEditorCanvasRenderer({
 
   const drawShape = (target: CanvasRenderingContext2D, shape: Shape) => {
     if (shape.tool === "mosaic") drawMosaic(target, shape);
-    else drawAnnotation(target, shape, getScale());
+    else drawAnnotation(target, shape);
   };
 
   const drawSelectionMask = (canvas: HTMLCanvasElement, selection: Rect | null) => {

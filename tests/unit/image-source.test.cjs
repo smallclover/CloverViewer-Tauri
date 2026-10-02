@@ -43,3 +43,23 @@ test("fallback images are cached, evicted at the capacity boundary, and clearabl
   await resolver.for(fallbackImage);
   assert.equal(calls.get(fallbackImage.path), 3);
 });
+
+test("fallback source requests share native decoding and clearing isolates in-flight results", async () => {
+  const reads = [];
+  const resolver = createImageSourceResolver({
+    fileSrc: path => path,
+    readImageData: () => new Promise(resolve => reads.push(resolve)),
+  });
+  const first = resolver.for(fallbackImage), duplicate = resolver.for(fallbackImage);
+  assert.equal(reads.length, 1);
+  resolver.clear();
+  const fresh = resolver.for(fallbackImage);
+  assert.equal(reads.length, 2);
+  reads[1]("new pixels");
+  assert.equal(await fresh, "new pixels");
+  reads[0]("obsolete pixels");
+  assert.equal(await first, "obsolete pixels");
+  assert.equal(await duplicate, "obsolete pixels");
+  assert.equal(await resolver.for(fallbackImage), "new pixels");
+  assert.equal(reads.length, 2);
+});

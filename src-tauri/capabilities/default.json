@@ -9,6 +9,7 @@
     "global-shortcut:default",
     "updater:default",
     "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-set-position",
     "core:window:allow-outer-position",

@@ -1,10 +1,12 @@
 import type { Tool } from "./geometry";
-import { makeBtn } from "./icons";
+import { makeBtn, svgIcon } from "./icons";
+import { t } from "../i18n";
+import { SIZE_LABELS, SIZE_PRESETS, sizeKind } from "../image-editor/annotation-style";
 
 export interface ToolbarOptions {
   uiLayer: HTMLElement;
   color: string;
-  strokeWidth: number;
+  getSize: () => number;
   getTool: () => Tool | null;
   onToolChange: (tool: Tool | null) => void;
   onOcr: () => void;
@@ -13,7 +15,7 @@ export interface ToolbarOptions {
   onExport: (action: "clipboard" | "save" | "open") => void;
   onShare: () => void;
   onColorChange: (color: string) => void;
-  onStrokeWidthChange: (width: number) => void;
+  onSizeChange: (size: number) => void;
 }
 
 export interface ToolbarUi {
@@ -27,7 +29,7 @@ export interface ToolbarUi {
   closePopups(): void;
   setActionBusy(busy: boolean): void;
   syncColor(color: string): void;
-  syncStrokeWidth(width: number): void;
+  syncSize(): void;
 }
 
 const tools: { tool: Tool; icon: string; title: string }[] = [
@@ -91,9 +93,17 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
   colorBtn.replaceChildren(colorSwatch);
   toolbar.appendChild(colorBtn);
   const widthBtn = makeBtn("width", "shot.width");
-  const widthDot = document.createElement("div");
-  widthDot.className = "width-dot";
-  widthBtn.replaceChildren(widthDot);
+  widthBtn.classList.add("size-settings");
+  widthBtn.setAttribute("aria-haspopup", "true");
+  const sizeIcon = document.createElement("span");
+  sizeIcon.className = "size-icon";
+  sizeIcon.setAttribute("aria-hidden", "true");
+  const sizeValue = document.createElement("span");
+  sizeValue.className = "size-value";
+  const sizeChevron = document.createElement("span");
+  sizeChevron.className = "size-chevron";
+  sizeChevron.setAttribute("aria-hidden", "true");
+  widthBtn.replaceChildren(sizeIcon, sizeValue, sizeChevron);
   toolbar.appendChild(widthBtn);
   addDivider();
 
@@ -152,23 +162,16 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
 
   const widthPopup = document.createElement("div");
   widthPopup.className = "popup ui-interactive";
+  const sizeHeading = document.createElement("strong");
+  sizeHeading.className = "size-heading";
   const widthList = document.createElement("div");
   widthList.className = "width-list";
-  for (const width of [2, 4, 6, 10]) {
-    const row = document.createElement("div");
-    row.className = "row";
-    const bar = document.createElement("div");
-    bar.className = "bar";
-    bar.style.width = `${width * 3}px`;
-    bar.style.height = `${Math.min(12, 2 + width)}px`;
-    row.append(bar, document.createTextNode(`${width} px`));
-    row.addEventListener("click", () => {
-      options.onStrokeWidthChange(width);
-      closePopups();
-    });
-    widthList.appendChild(row);
-  }
-  widthPopup.appendChild(widthList);
+  widthPopup.append(sizeHeading, widthList);
+  const sizeHint = document.createElement("div");
+  sizeHint.className = "size-hint";
+  sizeHint.dataset.i18n = "editor.sizePixels";
+  sizeHint.textContent = t("editor.sizePixels");
+  widthPopup.appendChild(sizeHint);
   options.uiLayer.append(toolbar, colorPopup, widthPopup);
 
   function closePopups() {
@@ -185,13 +188,35 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
       cell.classList.toggle("sel", (cell as HTMLElement).style.background === color);
     });
   }
-  function syncStrokeWidth(width: number) {
-    const size = `${Math.min(14, 4 + width * 2)}px`;
-    widthDot.style.width = size;
-    widthDot.style.height = size;
+  function syncSize() {
+    const kind = sizeKind(options.getTool());
+    delete widthBtn.dataset.i18nTitle;
+    delete widthBtn.dataset.i18nAriaLabel;
+    widthBtn.title = t("shot.sizeValue", { name: t(SIZE_LABELS[kind]), value: options.getSize() });
+    widthBtn.ariaLabel = widthBtn.title;
+    sizeIcon.innerHTML = svgIcon(
+      kind === "fontSize" ? "text" : kind === "blockSize" ? "mosaic" : "width",
+    );
+    sizeValue.textContent = String(options.getSize());
+    sizeHeading.dataset.i18n = SIZE_LABELS[kind];
+    sizeHeading.textContent = t(SIZE_LABELS[kind]);
+    widthList.replaceChildren();
+    for (const size of SIZE_PRESETS[kind]) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "row";
+      row.setAttribute("aria-pressed", String(size === options.getSize()));
+      row.textContent = `${size} px`;
+      row.addEventListener("mousedown", stopMouseDown);
+      row.addEventListener("click", () => {
+        options.onSizeChange(size);
+        closePopups();
+      });
+      widthList.appendChild(row);
+    }
   }
   syncColor(options.color);
-  syncStrokeWidth(options.strokeWidth);
+  syncSize();
   return {
     toolbar,
     toolBtns,
@@ -203,6 +228,6 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
     closePopups,
     setActionBusy,
     syncColor,
-    syncStrokeWidth,
+    syncSize,
   };
 }

@@ -42,20 +42,20 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Dual view modes**: grid view (thumbnails) and single-image view (large image)
 *   **Large folders stay smooth**: virtualized grid scrolling with bounded thumbnail concurrency, request deduplication, and caching; queued work that leaves the visible range is skipped
 *   **Folder browsing**: opening a folder loads all images automatically; sorting and thumbnail-size controls appear only when images are available
-*   **Quick navigation**: ←/→ to switch, with preloading of adjacent images
+*   **Quick navigation**: ←/→ to switch; the current image takes priority over bounded adjacent-image preloading. Images transition smoothly after decoding, and rapid switching cannot display an obsolete selection
 *   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity; fit-to-window uses an arrow cursor, and draggable views use a hand cursor
 *   **Drag & drop open**: drag images or a folder directly into the window
 *   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens), with an option to open the containing folder
 *   **Right-click menu**: copy image, copy path, view, edit image
 *   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
-*   **Image editing**: enter from the toolbar, Edit menu, or right-click menu; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete, undo/redo, and export PNG / JPEG / WebP or overwrite the source image
+*   **Image editing**: enter from the toolbar, Edit menu, or right-click menu; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete, undo/redo, and export PNG / JPEG / WebP or overwrite the source image. Cropping offers a rule-of-thirds grid, edge and corner handles, selection movement and a grayscale exterior; the bottom toolbar shows parameters for the active tool, with format and output scale in the save panel
 
 ### 📸 Screenshot & Annotation
 
 *   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background and transfers raw pixels directly to reduce selection-screen delay without losing image quality
 *   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended, while sticky headers, pinned footers and fixed sidebars are skipped. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
-*   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text
+*   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; screenshot and image editing share separate stroke, font and block-size presets in original image pixels (px), retaining each size when switching tools during a session
 *   **Color & line width**: long-press a tool icon to open the color palette
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
@@ -88,6 +88,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 
 *   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly; synchronizes the page language and adapts settings descriptions and editing controls to narrow windows
 *   **Light/dark theme**: follow system / dark / light; settings and image editing share rounded dropdown menus with mouse and keyboard selection
+*   **Interface scale**: defaults to 100%; choose 110% / 125% / 150% in Settings → General → Language & appearance. The viewer and screenshot interface update immediately and remember your choice; screenshots keep their original pixel dimensions
 *   **Title-bar menus**: File (open folder) / Edit (settings) / Help (about CloverViewer); close them by clicking elsewhere or pressing Esc
 *   **Global hotkey**: default **Alt+S** to summon the screenshot (available from tray; customizable)
 *   **System tray**: optionally minimize to tray on close
@@ -97,6 +98,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Desktop pet**: Displays a Live2D character with idle, blink, periodic nod, and mouse-follow behavior; it can be dragged, scaled from 60% to 200% in Settings, and automatically hides during screenshots. Right-click for screenshot, scrolling capture, main window, or quit.
 *   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / LAN sharing / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the desktop pet and its scale, the three global hotkeys, magnifier, minimize to tray, launch on startup, software updates and LAN-sharing rules
 *   **Temporary cache management**: Settings → Cache shows the file count and size of temporary long screenshots in `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand
+*   **Software updates**: checked manually; persistent download progress and errors identify each stage, network downloads get up to three attempts, and installation starts only after signature verification
 
 ## 🖼️ Supported Formats
 

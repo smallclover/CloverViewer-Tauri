@@ -43,6 +43,10 @@
           <button id="win-min" class="titlebar-btn" data-i18n-title="win.min" title="最小化">
             <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14"/></svg>
           </button>
+          <button id="win-max" class="titlebar-btn" type="button" data-maximized="false" data-i18n-title="win.max" data-i18n-aria-label="win.max" title="最大化" aria-label="最大化">
+            <svg class="ic win-max-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/></svg>
+            <svg class="ic win-restore-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M9 8V5h10v10h-3"/><rect x="5" y="9" width="10" height="10" rx="1"/></svg>
+          </button>
           <button id="win-close" class="titlebar-btn" data-i18n-title="win.close" title="关闭">
             <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
@@ -153,6 +157,22 @@
         </section>
       </div>
 
+      <section id="update-status" class="hidden" aria-label="更新状态" data-i18n-aria-label="update.status">
+        <div class="update-status-line">
+          <span id="update-status-spinner" class="toast-ic progress" aria-hidden="true"></span>
+          <p id="update-status-message" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+        <progress id="update-progress" hidden max="100" aria-label="下载进度" data-i18n-aria-label="update.progress"></progress>
+        <details id="update-error-details" hidden>
+          <summary data-i18n="update.details">详细错误</summary>
+          <pre id="update-error-message"></pre>
+        </details>
+        <div class="update-status-actions">
+          <button id="update-retry" class="mini-btn" type="button" hidden data-i18n="update.retry">重试</button>
+          <button id="update-dismiss" class="mini-btn" type="button" hidden data-i18n="update.dismiss">关闭提示</button>
+        </div>
+      </section>
+
       <div id="settings-overlay" class="hidden">
         <div id="settings-panel" role="dialog" aria-modal="true">
           <nav class="settings-nav" aria-label="设置分类">
@@ -260,6 +280,18 @@
                     <option value="system" data-i18n="settings.theme.system">跟随系统</option>
                     <option value="dark" data-i18n="settings.theme.dark">深色</option>
                     <option value="light" data-i18n="settings.theme.light">浅色</option>
+                  </select>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-ui-scale" data-i18n="settings.uiScale">界面缩放</label>
+                    <span class="setting-desc" data-i18n="settings.uiScale.desc">调整主界面和截图界面的文字与控件大小，立即生效并记住选择。</span>
+                  </div>
+                  <select id="set-ui-scale">
+                    <option value="100">100%</option>
+                    <option value="110">110%</option>
+                    <option value="125">125%</option>
+                    <option value="150">150%</option>
                   </select>
                 </div>
               </div>

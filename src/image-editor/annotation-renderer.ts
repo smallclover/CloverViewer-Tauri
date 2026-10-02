@@ -1,4 +1,5 @@
 import { shapeBBox, type Pt, type Shape } from "./geometry";
+import { annotationFont, textFontSize } from "./annotation-style";
 
 function drawArrow(context: CanvasRenderingContext2D, start: Pt, end: Pt, strokeWidth: number) {
   context.beginPath();
@@ -55,8 +56,8 @@ export function drawAnnotation(context: CanvasRenderingContext2D, shape: Shape, 
       context.stroke();
       break;
     case "text": {
-      const fontSize = (20 + shape.strokeWidth * 2) * scale;
-      context.font = `600 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+      const fontSize = textFontSize(shape) * scale;
+      context.font = annotationFont(fontSize);
       context.textBaseline = "top";
       (shape.text || "").split("\n").forEach((line, index) => {
         context.fillText(line, shape.start.x, shape.start.y + index * fontSize * 1.2);

@@ -10,7 +10,7 @@ interface ScreenshotLoadControllerOptions {
   canvas: HTMLCanvasElement;
   resetSession: () => void;
   setBounds: (bounds: { totalW: number; totalH: number; minX: number; minY: number }) => void;
-  setInitialCursor: (cursor: { x: number; y: number } | null) => void;
+  setInitialCursor: (cursor: { x: number; y: number } | null) => Promise<void>;
   setScreens: (screens: LoadedScreenshotScreen[]) => void;
   render: () => void;
   restoreRunningScrollSession: () => Promise<void>;
@@ -46,12 +46,13 @@ export function createScreenshotLoadController(options: ScreenshotLoadController
       minX: data.min_x,
       minY: data.min_y,
     });
-    options.setInitialCursor(
-      data.cursor ? { x: data.cursor.x - data.min_x, y: data.cursor.y - data.min_y } : null,
-    );
     options.canvas.width = data.total_width;
     options.canvas.height = data.total_height;
     options.setScreens(screens);
+    await options.setInitialCursor(
+      data.cursor ? { x: data.cursor.x - data.min_x, y: data.cursor.y - data.min_y } : null,
+    );
+    if (current !== revision) return null;
     options.logLoaded(data);
     options.render();
     await options.restoreRunningScrollSession();

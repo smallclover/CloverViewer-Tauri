@@ -1,8 +1,29 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { ShapeHistory } = require("../../.unit-test-dist/screenshot/history.js");
+const { SnapshotHistory } = require("../../.unit-test-dist/image-editor/history.js");
 
 const shape = (x) => ({ tool: "rect", start: { x, y: 0 }, end: { x: x + 10, y: 10 }, color: "#cc0000", strokeWidth: 2 });
+
+test("image editor history availability follows undo, redo, new edits and reopening", () => {
+  const history = new SnapshotHistory(value => ({ ...value }));
+  assert.equal(history.canUndo, false);
+  assert.equal(history.canRedo, false);
+  history.checkpoint({ rotation: 0 });
+  assert.equal(history.canUndo, true);
+  const previous = history.undo({ rotation: 90 });
+  assert.equal(history.canUndo, false);
+  assert.equal(history.canRedo, true);
+  assert.deepEqual(history.redo(previous), { rotation: 90 });
+  assert.equal(history.canUndo, true);
+  assert.equal(history.canRedo, false);
+  history.undo({ rotation: 90 });
+  history.checkpoint({ rotation: 0 });
+  assert.equal(history.canRedo, false);
+  history.clear();
+  assert.equal(history.canUndo, false);
+  assert.equal(history.canRedo, false);
+});
 
 test("history restores the state before an edit and then restores the edit on redo", () => {
   const history = new ShapeHistory();

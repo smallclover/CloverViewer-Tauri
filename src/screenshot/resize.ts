@@ -1,9 +1,11 @@
 import type { Pt, Shape } from "./geometry";
+import { textFontSize } from "../image-editor/annotation-style";
 
 export interface ResizeOrigin {
   start: Pt;
   end: Pt;
   strokeWidth: number;
+  fontSize?: number;
 }
 
 /**
@@ -81,14 +83,18 @@ export function resizeShape(
 
   const width = Math.abs(end.x - start.x);
   const height = Math.abs(end.y - start.y);
-  if (width < minimumSize || height < minimumSize) return null;
+  const isLargeEnough =
+    shape.tool === "arrow"
+      ? Math.hypot(width, height) >= minimumSize
+      : width >= minimumSize && height >= minimumSize;
+  if (!isLargeEnough) return null;
 
-  let strokeWidth = shape.strokeWidth;
+  let fontSize = shape.fontSize;
   if (shape.tool === "text") {
     const originalWidth = Math.abs(origin.end.x - origin.start.x);
     if (originalWidth > 1) {
-      strokeWidth = Math.max(1, Math.min(48, origin.strokeWidth * (width / originalWidth)));
+      fontSize = Math.max(1, Math.min(512, textFontSize(origin) * (width / originalWidth)));
     }
   }
-  return { ...shape, start, end, strokeWidth };
+  return { ...shape, start, end, fontSize };
 }

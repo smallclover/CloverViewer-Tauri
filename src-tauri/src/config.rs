@@ -87,6 +87,12 @@ pub struct Config {
     pub language: Language,
     #[serde(default)]
     pub theme: ThemePreference,
+    /// 主界面和截图界面的缩放百分比；旧配置默认恢复到 100%。
+    #[serde(
+        default = "default_ui_scale",
+        deserialize_with = "deserialize_ui_scale"
+    )]
+    pub ui_scale: u16,
     #[serde(default = "default_zoom_sensitivity")]
     pub zoom_sensitivity: f32,
     /// 单图视图底部的相邻图片预览条；旧配置缺字段时保持默认开启。
@@ -132,6 +138,20 @@ pub struct Config {
 fn default_zoom_sensitivity() -> f32 {
     1.0
 }
+fn default_ui_scale() -> u16 {
+    100
+}
+pub(crate) fn normalize_ui_scale(scale: u16) -> u16 {
+    match scale {
+        100 | 110 | 125 | 150 => scale,
+        _ => default_ui_scale(),
+    }
+}
+fn deserialize_ui_scale<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<u16, D::Error> {
+    u16::deserialize(deserializer).map(normalize_ui_scale)
+}
 fn default_image_preview_strip_enabled() -> bool {
     true
 }
@@ -159,6 +179,7 @@ impl Default for Config {
         Self {
             language: Language::default(),
             theme: ThemePreference::default(),
+            ui_scale: default_ui_scale(),
             zoom_sensitivity: default_zoom_sensitivity(),
             image_preview_strip_enabled: default_image_preview_strip_enabled(),
             hotkeys: HotkeysConfig::default(),
@@ -254,5 +275,40 @@ impl ConfigStore {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         *config = new_config;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_configs_and_new_installs_use_full_size_interface() {
+        let old: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.ui_scale, 100);
+        assert_eq!(Config::default().ui_scale, 100);
+    }
+
+    #[test]
+    fn ui_scale_survives_config_serialization() {
+        for scale in [100, 110, 125, 150] {
+            let config = Config {
+                ui_scale: scale,
+                ..Config::default()
+            };
+            let json = serde_json::to_string(&config).unwrap();
+            let restored: Config = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored.ui_scale, scale);
+            assert!(restored == config);
+        }
+    }
+
+    #[test]
+    fn invalid_ui_scale_cannot_shrink_or_overflow_the_interface() {
+        for scale in [0, 80, 99, 101, 200, u16::MAX] {
+            let json = format!("{{\"ui_scale\":{scale}}}");
+            let config: Config = serde_json::from_str(&json).unwrap();
+            assert_eq!(config.ui_scale, 100);
+        }
     }
 }

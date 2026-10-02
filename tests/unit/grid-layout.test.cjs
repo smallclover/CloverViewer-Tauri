@@ -26,10 +26,10 @@ test("date sections reserve a heading and keep each month on its own image rows"
   const grouped = createGridSections(["2026-04", "2026-04", "2026-04", "2026-03", "2026-03"], layout);
 
   assert.deepEqual(grouped.sections, [
-    { startIndex: 0, itemCount: 3, top: 0, itemsTop: 32, itemsBottom: 166 },
-    { startIndex: 3, itemCount: 2, top: 182, itemsTop: 214, itemsBottom: 348 },
+    { startIndex: 0, itemCount: 3, top: 0, itemsTop: 48, itemsBottom: 182 },
+    { startIndex: 3, itemCount: 2, top: 210, itemsTop: 258, itemsBottom: 392 },
   ]);
-  assert.equal(grouped.totalHeight, 348);
+  assert.equal(grouped.totalHeight, 392);
 });
 
 test("virtualization retains a buffer around the viewport without crossing item boundaries", () => {

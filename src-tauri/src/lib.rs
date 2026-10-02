@@ -37,7 +37,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const MAIN_WINDOW: &str = "main";
 
-/// 需要跟随屏幕调整界面密度的窗口。
+/// 使用用户界面倍率的窗口。
 ///
 /// 只有主查看器和截图浮层有完整的界面层（工具栏、面板、网格）。桌宠是纯角色窗口，
 /// 缩放它只会让角色忽大忽小，因此排除在外。
@@ -226,7 +226,7 @@ pub fn run() {
                         }
                     }
                 }
-                // 界面密度跟随所在显示器（1080p 逻辑分辨率下比 2K/4K 显得大一号）。
+                // 恢复用户保存的界面倍率，默认 100%。
                 ui_scale::apply(&win);
             }
 
@@ -367,7 +367,7 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
-            // 界面密度跟随窗口所在显示器：换屏（分辨率或缩放不同）后要重算。
+            // 换屏后保持用户选择的倍率，系统 DPI 由 WebView 处理。
             if uses_ui_scale(window.label()) {
                 match event {
                     tauri::WindowEvent::Moved(_)

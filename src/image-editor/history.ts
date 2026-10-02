@@ -9,6 +9,14 @@ export class SnapshotHistory<T> {
 
   constructor(private readonly clone: (snapshot: T) => T) {}
 
+  get canUndo() {
+    return this.undoStack.length > 0;
+  }
+
+  get canRedo() {
+    return this.redoStack.length > 0;
+  }
+
   checkpoint(snapshot: T) {
     this.undoStack.push(this.clone(snapshot));
     if (this.undoStack.length > HISTORY_LIMIT) this.undoStack.shift();

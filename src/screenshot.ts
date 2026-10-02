@@ -14,6 +14,7 @@ import {
 } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
 import { createToolbar } from "./screenshot/toolbar";
+import { createAnnotationSizes, sizeKind } from "./image-editor/annotation-style";
 import { createHelpPanel } from "./screenshot/panels";
 import { createMagnifierRenderer } from "./screenshot/magnifier";
 import { createTextInputController } from "./screenshot/text-input";
@@ -59,8 +60,6 @@ import {
 const MIN_SHAPE_SIZE = 4; // 物理像素
 const HANDLE_HIT = 12; // 控制点命中半径（物理像素；不再随 devicePixelRatio 缩放）
 const DEFAULT_COLOR = "#cc0000";
-const DEFAULT_STROKE = 2;
-const DEFAULT_MOSAIC = 16;
 let editorInput: ReturnType<typeof createEditorInputController>;
 let scrollPositioner: ReturnType<typeof createScrollCapturePositioner>;
 let scrollController: ReturnType<typeof createScrollCaptureController>;
@@ -82,8 +81,8 @@ let minX = 0;
 let minY = 0;
 let screens: LoadedScreenshotScreen[] = [];
 
-const mosaicWidth = DEFAULT_MOSAIC;
-const editorSession = createEditorSession({ color: DEFAULT_COLOR, strokeWidth: DEFAULT_STROKE });
+const sizes = createAnnotationSizes();
+const editorSession = createEditorSession({ color: DEFAULT_COLOR, strokeWidth: sizes.strokeWidth });
 
 // ---------- 放大镜 ----------
 let magnifierActive = true; // 读 config.magnifier_enabled，main() 里覆盖
@@ -116,7 +115,7 @@ const lanSharePanel = createLanSharePanel({
 const toolbarUi = createToolbar({
   uiLayer,
   color: editorSession.color,
-  strokeWidth: editorSession.strokeWidth,
+  getSize: () => sizes[sizeKind(editorSession.tool)],
   getTool: () => editorSession.tool,
   onToolChange: setTool,
   onOcr: () => void runOcr(),
@@ -133,9 +132,10 @@ const toolbarUi = createToolbar({
     editorSession.color = next;
     toolbarUi.syncColor(editorSession.color);
   },
-  onStrokeWidthChange: (next) => {
-    editorSession.strokeWidth = next;
-    toolbarUi.syncStrokeWidth(editorSession.strokeWidth);
+  onSizeChange: (next) => {
+    sizes[sizeKind(editorSession.tool)] = next;
+    editorSession.strokeWidth = sizes.strokeWidth;
+    toolbarUi.syncSize();
   },
 });
 const { toolbar, toolBtns } = toolbarUi;
@@ -145,7 +145,9 @@ function closePopups() {
 }
 
 function setTool(t: Tool | null) {
+  textInputUi.commit();
   editorSession.tool = t;
+  toolbarUi.syncSize();
   for (const [k, button] of toolBtns) button.classList.toggle("active", k === t);
   if (t !== null) {
     editorSession.selectedIndex = null;
@@ -160,7 +162,11 @@ const textInputUi = createTextInputController({
   root,
   context: ctx,
   getCanvasSize: () => ({ width: totalW, height: totalH }),
-  getStyle: () => ({ color: editorSession.color, strokeWidth: editorSession.strokeWidth }),
+  getStyle: () => ({
+    color: editorSession.color,
+    strokeWidth: sizes.strokeWidth,
+    fontSize: sizes.fontSize,
+  }),
   getScale: physScale,
   onCommit: (shape) => {
     editorSession.checkpoint();
@@ -240,7 +246,7 @@ const editorRenderer = createEditorCanvasRenderer({
   context: ctx,
   getScreens: screenSources,
   getScale: physScale,
-  mosaicWidth,
+  mosaicWidth: sizes.blockSize,
   drawMagnifier,
 });
 
@@ -334,7 +340,7 @@ editorInput = createEditorInputController({
   getStyle: () => ({
     color: editorSession.color,
     strokeWidth: editorSession.strokeWidth,
-    mosaicWidth,
+    mosaicWidth: sizes.blockSize,
   }),
   getShapes: () => editorSession.shapes,
   getSelectedIndex: () => editorSession.selectedIndex,
@@ -501,8 +507,9 @@ screenshotLoadController = createScreenshotLoadController({
     minX = bounds.minX;
     minY = bounds.minY;
   },
-  setInitialCursor: (cursor) => {
+  setInitialCursor: async (cursor) => {
     initialCursorPos = cursor;
+    await editorInput.initializeCursor(cursor);
   },
   setScreens: (next) => {
     screens = next;
@@ -676,6 +683,9 @@ function hideFloatingPanels() {
 canvas.addEventListener("mousedown", editorInput.onMouseDown);
 window.addEventListener("mousemove", editorInput.onMouseMove);
 window.addEventListener("mouseup", editorInput.onMouseUp);
+window.addEventListener("resize", () => {
+  if (document.body.classList.contains("ready")) render();
+});
 
 function resetScreenshotSession() {
   screenshotActions.reset();
@@ -768,7 +778,10 @@ async function refreshConfig() {
       copyColorHotkey = hotkey;
     },
     applyTheme,
-    applyI18n: () => applyI18n(document),
+    applyI18n: () => {
+      applyI18n(document);
+      toolbarUi.syncSize();
+    },
     updateHelp: updateHelpBox,
   });
 }

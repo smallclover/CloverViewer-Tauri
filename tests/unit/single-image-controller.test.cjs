@@ -26,11 +26,10 @@ function setup() {
   global.window = createSurface();
   const controller = createSingleImageController({
     stage,
-    image,
+    getImage: () => image,
     isActive: () => true,
     getZoomSensitivity: () => 1,
     onChange: () => {},
-    playEnterAnimation: () => {},
   });
   const mouseDown = (button = 0, target = stage) => stage.dispatch("mousedown", {
     button, target, clientX: 100, clientY: 100,

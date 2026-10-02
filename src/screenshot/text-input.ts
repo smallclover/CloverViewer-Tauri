@@ -1,8 +1,10 @@
 import type { Pt, Shape } from "./geometry";
+import { annotationFont } from "../image-editor/annotation-style";
 
 interface TextStyle {
   color: string;
   strokeWidth: number;
+  fontSize: number;
 }
 
 interface TextInputControllerOptions {
@@ -30,22 +32,28 @@ export function createTextInputController({
   const element = document.createElement("textarea");
   element.id = "text-input";
   uiLayer.appendChild(element);
+  let start: Pt | null = null;
+  let style: TextStyle;
 
   const show = (point: Pt) => {
     const rootBox = root.getBoundingClientRect();
     const canvasSize = getCanvasSize();
     const cssX = point.x * (rootBox.width / canvasSize.width);
     const cssY = point.y * (rootBox.height / canvasSize.height);
-    const style = getStyle();
+    start = { ...point };
+    style = { ...getStyle() };
     element.value = "";
     element.style.left = `${cssX}px`;
     element.style.top = `${cssY}px`;
     element.style.color = style.color;
-    element.style.fontSize = `${20 + style.strokeWidth * 2}px`;
+    element.style.font = annotationFont(style.fontSize / getScale());
     element.classList.add("editing");
     onRender();
     // 等 mouse 事件完成后再聚焦，否则 blur 会抢先关闭输入框。
-    setTimeout(() => element.focus(), 0);
+    const activeStart = start;
+    setTimeout(() => {
+      if (start === activeStart && element.classList.contains("editing")) element.focus();
+    }, 0);
   };
 
   const commit = () => {
@@ -54,21 +62,18 @@ export function createTextInputController({
     element.classList.remove("editing");
     if (!text.trim()) return;
 
-    const rootBox = root.getBoundingClientRect();
-    const canvasSize = getCanvasSize();
-    const startX = Number.parseFloat(element.style.left) * (canvasSize.width / rootBox.width);
-    const startY = Number.parseFloat(element.style.top) * (canvasSize.height / rootBox.height);
-    const style = getStyle();
-    const fontSize = (20 + style.strokeWidth * 2) * getScale();
-    context.font = `600 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+    if (!start) return;
+    const fontSize = style.fontSize;
+    context.font = annotationFont(fontSize);
     const lines = text.split("\n");
     const width = Math.max(...lines.map((line) => context.measureText(line).width));
     onCommit({
       tool: "text",
-      start: { x: startX, y: startY },
-      end: { x: startX + width, y: startY + lines.length * fontSize * 1.2 },
+      start,
+      end: { x: start.x + width, y: start.y + lines.length * fontSize * 1.2 },
       color: style.color,
       strokeWidth: style.strokeWidth,
+      fontSize,
       text,
     });
     onRender();
@@ -76,6 +81,7 @@ export function createTextInputController({
 
   element.addEventListener("keydown", (event) => {
     event.stopPropagation();
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       commit();

@@ -1,6 +1,7 @@
 import type { ImageEntry } from "../api";
 import type { createImageSourceResolver } from "./image-source";
 import type { createViewerSession } from "./viewer-session";
+import { createThumbnailLoader } from "./thumbnail-loader";
 
 interface ImagePreviewStripOptions {
   strip: HTMLElement;
@@ -12,24 +13,47 @@ interface ImagePreviewStripOptions {
 
 /** Renders a compact, clickable window around the active image. */
 export function createImagePreviewStripController(options: ImagePreviewStripOptions) {
-  let renderId = 0;
+  const buttons = new Map<string, HTMLButtonElement>();
+  const thumbnailLoader = createThumbnailLoader({
+    load: options.getThumbnail,
+    cacheCapacity: 32,
+    maxConcurrent: 2,
+  });
+  const keyFor = (entry: ImageEntry) => `${entry.path}\0${entry.modified}\0${entry.size}`;
 
   const sourceFor = async (entry: ImageEntry) => {
     try {
-      return await options.getThumbnail(entry.path, 120);
+      return await thumbnailLoader.load(entry.path, 120);
     } catch {
       return options.imageSource.for(entry);
     }
   };
 
   const render = (activeIndex: number) => {
-    const id = ++renderId;
-    options.strip.innerHTML = "";
     const start = Math.max(0, activeIndex - 2);
     const end = Math.min(options.session.images.length, activeIndex + 3);
+    const entries = options.session.images.slice(start, end);
+    const keys = new Set(entries.map(keyFor));
+    thumbnailLoader.retain(
+      new Set(entries.map((entry) => thumbnailLoader.keyFor(entry.path, 120))),
+    );
+    for (const [key, button] of buttons) {
+      if (keys.has(key)) continue;
+      button.remove();
+      buttons.delete(key);
+    }
 
     for (let index = start; index < end; index += 1) {
       const entry = options.session.images[index];
+      const key = keyFor(entry);
+      const existing = buttons.get(key);
+      if (existing) {
+        existing.classList.toggle("active", index === activeIndex);
+        if (options.strip.children[index - start] !== existing) {
+          options.strip.insertBefore(existing, options.strip.children[index - start] ?? null);
+        }
+        continue;
+      }
       const button = document.createElement("button");
       button.type = "button";
       button.className = `image-preview${index === activeIndex ? " active" : ""}`;
@@ -42,14 +66,28 @@ export function createImagePreviewStripController(options: ImagePreviewStripOpti
       button.appendChild(image);
       button.addEventListener("mousedown", (event) => event.stopPropagation());
       button.addEventListener("dblclick", (event) => event.stopPropagation());
-      button.addEventListener("click", () => options.onSelect(index));
-      options.strip.appendChild(button);
-
-      void sourceFor(entry).then((source) => {
-        if (id === renderId) image.src = source;
+      button.addEventListener("click", () => {
+        const selected = options.session.images.findIndex((image) => image.path === entry.path);
+        if (selected >= 0) options.onSelect(selected);
       });
+      options.strip.insertBefore(button, options.strip.children[index - start] ?? null);
+      buttons.set(key, button);
+
+      void sourceFor(entry)
+        .then((source) => {
+          if (source && buttons.get(key) === button) image.src = source;
+        })
+        .catch(() => {});
     }
   };
 
-  return { render };
+  return {
+    render,
+    clear() {
+      thumbnailLoader.clear();
+      thumbnailLoader.retain(new Set());
+      for (const button of buttons.values()) button.remove();
+      buttons.clear();
+    },
+  };
 }

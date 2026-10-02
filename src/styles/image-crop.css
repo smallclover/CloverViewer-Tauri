@@ -1,0 +1,27 @@
+.image-crop-overlay { position: absolute; pointer-events: none; z-index: 1; }
+.image-crop-overlay.active { pointer-events: auto; touch-action: none; }
+.image-crop-preview-source { opacity: 0; }
+.image-crop-preview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.image-crop-frame { position: absolute; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, .9); box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); }
+.image-crop-grid { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.image-crop-line { position: absolute; display: block; background: rgba(255, 255, 255, .65); box-shadow: 0 0 1px rgba(0, 0, 0, .8); }
+.image-crop-v1, .image-crop-v2 { top: 0; bottom: 0; width: 1px; }
+.image-crop-v1 { left: 33.3333%; }
+.image-crop-v2 { left: 66.6667%; }
+.image-crop-h1, .image-crop-h2 { left: 0; right: 0; height: 1px; }
+.image-crop-h1 { top: 33.3333%; }
+.image-crop-h2 { top: 66.6667%; }
+.image-crop-handle { position: absolute; display: block; box-sizing: border-box; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .8)); }
+.image-crop-nw, .image-crop-ne, .image-crop-se, .image-crop-sw { width: 24px; height: 24px; border: solid white; border-width: 0; }
+.image-crop-nw { top: -3px; left: -3px; border-top-width: 4px; border-left-width: 4px; cursor: nwse-resize; }
+.image-crop-ne { top: -3px; right: -3px; border-top-width: 4px; border-right-width: 4px; cursor: nesw-resize; }
+.image-crop-se { bottom: -3px; right: -3px; border-bottom-width: 4px; border-right-width: 4px; cursor: nwse-resize; }
+.image-crop-sw { bottom: -3px; left: -3px; border-bottom-width: 4px; border-left-width: 4px; cursor: nesw-resize; }
+.image-crop-n, .image-crop-s { width: 20px; height: 4px; left: 50%; margin-left: -10px; background: white; cursor: ns-resize; }
+.image-crop-n { top: -3px; }
+.image-crop-s { bottom: -3px; }
+.image-crop-w, .image-crop-e { width: 4px; height: 20px; top: 50%; margin-top: -10px; background: white; cursor: ew-resize; }
+.image-crop-w { left: -3px; }
+.image-crop-e { right: -3px; }
+.image-crop-overlay:not(.active) .image-crop-handle,
+.image-crop-overlay:not(.active) .image-crop-grid { display: none; }

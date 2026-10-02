@@ -495,13 +495,8 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             }
         };
 
-        // 截图窗覆盖整个虚拟桌面，不能用它的左上角判断用户操作的是哪块屏幕。
-        // 改按热键触发时的鼠标所在屏幕缩放，让工具栏、面板和放大镜与当前屏幕同密度。
-        if let Some(cursor) = data.cursor.as_ref() {
-            crate::ui_scale::apply_for_physical_point(&win, &app, cursor.x, cursor.y);
-        } else {
-            crate::ui_scale::apply(&win);
-        }
+        // 每次复用恢复用户选择的界面倍率；屏幕坐标仍使用原始物理像素。
+        crate::ui_scale::apply(&win);
 
         // Windows 无边框窗口自带不可见 DWM resize border：set_position 设的是【外框】，
         // 内容(webview/content)会相对外框内缩若干像素（本例左 9px/上 5px），导致内容

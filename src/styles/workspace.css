@@ -58,7 +58,27 @@
 #grid-menu .grid-menu-popover button { display: flex; width: 100%; min-height: 30px; padding: 0 8px; color: var(--fg); text-align: left; }
 #grid-menu .grid-menu-popover button.selected { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 #grid-menu .grid-menu-popover button.selected::after { content: "✓"; margin-left: auto; font-size: 13px; }
-.grid-section-heading { position: absolute; left: 0; margin: 0; color: var(--fg); font-size: 14px; font-weight: 600; line-height: 20px; }
+.grid-section-heading {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  color: var(--fg);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  white-space: nowrap;
+}
+.grid-section-heading::after {
+  content: "";
+  flex: 1;
+  min-width: 24px;
+  height: 1px;
+  background: var(--border);
+}
 #empty-state, #grid-view, #single-view { flex: 1; min-height: 0; height: auto; }
 #image-preview-strip {
   position: absolute;

@@ -136,6 +136,9 @@ select option {
 .titlebar-btn .ic { width: 16px; height: 16px; }
 .titlebar-btn:hover { background: var(--bg-hover); color: var(--fg); }
 .titlebar-btn:active { transform: scale(0.92); }
+#win-max[data-maximized="false"] .win-restore-icon,
+#win-max[data-maximized="true"] .win-max-icon { display: none; }
+#win-max:disabled { cursor: default; }
 #win-close:hover { background: #e81123; color: #fff; }
 
 /* ---------- 无边框窗口缩放把手 ---------- */
@@ -144,6 +147,7 @@ select option {
   z-index: 50;
   background: transparent;
 }
+:root[data-window-maximized="true"] .resize-handle { display: none; }
 .rh-s { left: 0; right: 0; bottom: 0; height: 5px; cursor: ns-resize; }
 .rh-e { top: 0; bottom: 0; right: 0; width: 5px; cursor: ew-resize; }
 .rh-w { top: 0; bottom: 0; left: 0; width: 5px; cursor: ew-resize; }

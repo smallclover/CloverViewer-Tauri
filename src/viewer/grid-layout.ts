@@ -5,8 +5,8 @@ const GAP = 16;
 export const GRID_HORIZONTAL_PADDING = 96;
 const MIN_CELL_WIDTH = 136;
 const BUFFER_ROWS = 2;
-const SECTION_HEADING_HEIGHT = 32;
-const SECTION_GAP = 16;
+const SECTION_HEADING_HEIGHT = 48;
+const SECTION_GAP = 28;
 
 export interface GridLayout {
   columns: number;

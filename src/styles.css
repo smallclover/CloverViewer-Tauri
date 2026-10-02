@@ -1,8 +1,11 @@
 /* Main-window style entrypoint. Keep imports ordered to preserve the cascade. */
 @import "./styles/base.css";
 @import "./styles/viewer.css";
+@import "./styles/image-editor.css";
+@import "./styles/image-crop.css";
 @import "./styles/overlays.css";
 @import "./styles/settings.css";
+@import "./styles/update.css";
 @import "./styles/workspace.css";
 @import "./styles/motion.css";
 @import "./styles/select.css";

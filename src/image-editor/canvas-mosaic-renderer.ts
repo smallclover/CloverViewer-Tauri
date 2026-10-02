@@ -2,7 +2,7 @@ import type { Pt, Shape } from "./geometry";
 import { forEachMosaicStamp } from "./mosaic";
 
 export function mosaicBlockSize(shape: Shape) {
-  return Math.max(8, shape.strokeWidth * 3);
+  return shape.blockSize ?? Math.max(8, shape.strokeWidth * 3);
 }
 
 /** Samples the unchanged source canvas so preview and export use identical mosaic pixels. */

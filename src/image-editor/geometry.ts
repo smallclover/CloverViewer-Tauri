@@ -19,6 +19,8 @@ export interface Shape {
   end: Pt;
   color: string;
   strokeWidth: number;
+  fontSize?: number;
+  blockSize?: number;
   text?: string;
   points?: Pt[];
 }

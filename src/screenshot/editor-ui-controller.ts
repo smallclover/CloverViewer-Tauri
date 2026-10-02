@@ -86,7 +86,17 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
     const rootRect = options.root.getBoundingClientRect();
     popup.style.left = `${buttonRect.left - rootRect.left - offset}px`;
     popup.style.top = `${buttonRect.bottom - rootRect.top + 6}px`;
+    popup.style.maxHeight = `${Math.max(32, rootRect.height - 16)}px`;
+    popup.style.overflowY = "auto";
     popup.classList.add("open");
+    const popupRect = popup.getBoundingClientRect();
+    const below = buttonRect.bottom - rootRect.top + 6;
+    const top =
+      below + popupRect.height <= rootRect.height - 8
+        ? below
+        : buttonRect.top - rootRect.top - popupRect.height - 6;
+    popup.style.left = `${Math.max(8, Math.min(buttonRect.left - rootRect.left - offset, rootRect.width - popupRect.width - 8))}px`;
+    popup.style.top = `${Math.max(8, Math.min(top, rootRect.height - popupRect.height - 8))}px`;
   };
   colorBtn.addEventListener("click", (event) => {
     event.stopPropagation();

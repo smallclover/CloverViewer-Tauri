@@ -61,9 +61,64 @@ export function createEditorInputController(options: EditorInputOptions) {
   let moveSelectionOrig: Rect | null = null;
   let lastMousePos: Pt | null = null;
   let overUI = false;
-  let lastWinQuery = 0;
+  let lastWinQuery = -Infinity;
   let winQuerySeq = 0;
-  let lastQueryPos: Pt | null = null;
+  let winQueryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const canHoverWindow = () =>
+    !options.isScrollActive() &&
+    !overUI &&
+    dragMode === "none" &&
+    !options.getSelection() &&
+    !options.getTool();
+  const cancelWindowQuery = () => {
+    winQuerySeq++;
+    if (winQueryTimer !== null) clearTimeout(winQueryTimer);
+    winQueryTimer = null;
+  };
+  const queryWindow = async (point: Pt) => {
+    const seq = ++winQuerySeq;
+    lastWinQuery = performance.now();
+    const { minX, minY } = options.getBounds();
+    let windowRect = null;
+    try {
+      windowRect = await options.pickWindowAt(
+        Math.round(point.x + minX),
+        Math.round(point.y + minY),
+      );
+    } catch {
+      // Keep screen selection available if native window detection fails.
+    }
+    if (seq !== winQuerySeq || !canHoverWindow()) return;
+    if (windowRect) {
+      hoverWin = {
+        x: windowRect.x - minX,
+        y: windowRect.y - minY,
+        w: windowRect.width,
+        h: windowRect.height,
+      };
+    } else {
+      const screen = options
+        .getScreens()
+        .find(
+          (s) => point.x >= s.x && point.x < s.x + s.w && point.y >= s.y && point.y < s.y + s.h,
+        );
+      hoverWin = screen ? { x: screen.x, y: screen.y, w: screen.w, h: screen.h } : null;
+    }
+    options.render();
+  };
+  const scheduleWindowQuery = (point: Pt) => {
+    cancelWindowQuery();
+    const wait = 40 - (performance.now() - lastWinQuery);
+    if (wait <= 0) void queryWindow(point);
+    else {
+      // A trailing query must run even when no further mousemove arrives.
+      winQueryTimer = setTimeout(() => {
+        winQueryTimer = null;
+        if (lastMousePos && canHoverWindow()) void queryWindow(lastMousePos);
+      }, wait);
+    }
+  };
 
   const physPos = (event: MouseEvent): Pt => {
     const rect = options.root.getBoundingClientRect();
@@ -99,6 +154,7 @@ export function createEditorInputController(options: EditorInputOptions) {
 
   function onMouseDown(event: MouseEvent) {
     if (options.isScrollActive() || event.button !== 0 || options.isTextEditing()) return;
+    cancelWindowQuery();
     const point = physPos(event);
     const handle = options.hitHandle(point);
     if (handle) {
@@ -109,6 +165,7 @@ export function createEditorInputController(options: EditorInputOptions) {
         start: { ...shape.start },
         end: { ...shape.end },
         strokeWidth: shape.strokeWidth,
+        fontSize: shape.fontSize,
       };
       resizeHistorySnapshot = options.getShapes().map(cloneShape);
       return;
@@ -139,6 +196,7 @@ export function createEditorInputController(options: EditorInputOptions) {
         end: { ...start },
         color: style.color,
         strokeWidth: tool === "mosaic" ? style.mosaicWidth : style.strokeWidth,
+        blockSize: tool === "mosaic" ? style.mosaicWidth : undefined,
         points: tool === "pen" || tool === "mosaic" ? [{ ...start }] : undefined,
       });
       options.render();
@@ -173,6 +231,7 @@ export function createEditorInputController(options: EditorInputOptions) {
 
   function onMouseMove(event: MouseEvent) {
     if (options.isScrollActive()) {
+      cancelWindowQuery();
       if (options.canvas.style.cursor !== "default") options.canvas.style.cursor = "default";
       return;
     }
@@ -181,6 +240,7 @@ export function createEditorInputController(options: EditorInputOptions) {
     const element = document.elementFromPoint(event.clientX, event.clientY);
     overUI = !!element && !!(element as HTMLElement).closest?.(".ui-interactive, #text-input");
     if (overUI) {
+      cancelWindowQuery();
       if (options.canvas.style.cursor !== "default") options.canvas.style.cursor = "default";
       if (hoverWin && dragMode !== "pending-win") {
         hoverWin = null;
@@ -190,39 +250,11 @@ export function createEditorInputController(options: EditorInputOptions) {
       options.render();
       return;
     }
-    if (dragMode === "none" && !options.getSelection() && !options.getTool()) {
-      const now = performance.now();
-      const moved =
-        !lastQueryPos || Math.hypot(point.x - lastQueryPos.x, point.y - lastQueryPos.y) > 2;
-      if (now - lastWinQuery > 40 && moved) {
-        lastWinQuery = now;
-        lastQueryPos = { ...point };
-        const seq = ++winQuerySeq;
-        const { minX, minY } = options.getBounds();
-        void options
-          .pickWindowAt(Math.round(point.x + minX), Math.round(point.y + minY))
-          .then((windowRect) => {
-            if (seq !== winQuerySeq) return;
-            if (windowRect)
-              hoverWin = {
-                x: windowRect.x - minX,
-                y: windowRect.y - minY,
-                w: windowRect.width,
-                h: windowRect.height,
-              };
-            else {
-              const screen = options
-                .getScreens()
-                .find(
-                  (s) =>
-                    point.x >= s.x && point.x < s.x + s.w && point.y >= s.y && point.y < s.y + s.h,
-                );
-              hoverWin = screen ? { x: screen.x, y: screen.y, w: screen.w, h: screen.h } : null;
-            }
-            options.render();
-          });
-      }
-    } else if (hoverWin && dragMode !== "pending-win") hoverWin = null;
+    if (canHoverWindow()) scheduleWindowQuery(point);
+    else {
+      cancelWindowQuery();
+      if (hoverWin && dragMode !== "pending-win") hoverWin = null;
+    }
 
     if (dragMode === "pending-win") {
       dragCur = point;
@@ -386,9 +418,22 @@ export function createEditorInputController(options: EditorInputOptions) {
     }
     const currentShape = options.getCurrentShape();
     if (currentShape) {
+      // Mouse moves can be coalesced; commit the release position before validating.
+      const end = clampToSelection(physPos(event));
+      currentShape.end = end;
+      if (currentShape.points) {
+        const last = currentShape.points[currentShape.points.length - 1];
+        if (!last || last.x !== end.x || last.y !== end.y) currentShape.points.push({ ...end });
+      }
       options.setCurrentShape(null);
       const box = shapeBBox(currentShape);
-      if (box.w >= options.minShapeSize && box.h >= options.minShapeSize) {
+      const isLargeEnough =
+        currentShape.tool === "arrow" ||
+        currentShape.tool === "pen" ||
+        currentShape.tool === "mosaic"
+          ? Math.hypot(box.w, box.h) >= options.minShapeSize
+          : box.w >= options.minShapeSize && box.h >= options.minShapeSize;
+      if (isLargeEnough) {
         checkpoint(options.getShapes().map(cloneShape));
         options.getShapes().push(currentShape);
       }
@@ -400,8 +445,16 @@ export function createEditorInputController(options: EditorInputOptions) {
     onMouseDown,
     onMouseMove,
     onMouseUp,
+    initializeCursor: async (point: Pt | null) => {
+      cancelWindowQuery();
+      lastMousePos = point;
+      overUI = false;
+      if (point && canHoverWindow()) await queryWindow(point);
+    },
     getFrameState: () => ({ dragMode, dragStart, dragCur, hoverWin, lastMousePos, overUI }),
     reset: () => {
+      cancelWindowQuery();
+      lastWinQuery = -Infinity;
       dragStart = dragCur = null;
       hoverWin = null;
       pendingWinSelect = null;

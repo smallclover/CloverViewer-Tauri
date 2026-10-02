@@ -38,5 +38,21 @@ test("text resizing normalizes its bounds and scales its font size within limits
 
   assert.deepEqual(resized.start, { x: 60, y: 50 });
   assert.deepEqual(resized.end, { x: 110, y: 80 });
-  assert.equal(resized.strokeWidth, 6);
+  assert.equal(resized.strokeWidth, 12);
+  assert.equal(resized.fontSize, 22);
+});
+
+test("arrow endpoint resizing accepts axis-aligned lines and checks segment length", () => {
+  const arrow = { ...rect, tool: "arrow" };
+  for (const [handle, fixed] of [[0, origin.end], [1, origin.start]]) {
+    for (const offset of [{ x: 40, y: 0 }, { x: 0, y: 40 }, { x: -40, y: 0 }, { x: 0, y: -40 }, { x: 3, y: 3 }]) {
+      const point = { x: fixed.x + offset.x, y: fixed.y + offset.y };
+      const resized = resizeShape(arrow, origin, handle, point, 4);
+      assert.ok(resized);
+      assert.deepEqual(handle === 0 ? resized.start : resized.end, point);
+      assert.deepEqual(handle === 0 ? resized.end : resized.start, fixed);
+    }
+    assert.equal(resizeShape(arrow, origin, handle, fixed, 4), null);
+    assert.equal(resizeShape(arrow, origin, handle, { x: fixed.x + 2, y: fixed.y + 2 }, 4), null);
+  }
 });

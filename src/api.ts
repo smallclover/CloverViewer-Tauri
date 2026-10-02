@@ -1,5 +1,10 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { check, type Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
+
+export type { DownloadEvent };
+export type AppUpdate = Pick<Update, "version" | "body" | "download" | "install" | "close">;
+export const checkAppUpdate = (timeout: number): Promise<AppUpdate | null> => check({ timeout });
 
 export interface ImageEntry {
   path: string;
@@ -22,6 +27,8 @@ export interface HotkeysConfig {
 export interface AppConfig {
   language: "Zh" | "En" | "Ja";
   theme: "dark" | "light" | "system";
+  /** 主界面和截图界面的缩放百分比，默认 100%。 */
+  ui_scale: 100 | 110 | 125 | 150;
   zoom_sensitivity: number;
   /** Whether the single-image view shows its adjacent-image preview strip. */
   image_preview_strip_enabled: boolean;

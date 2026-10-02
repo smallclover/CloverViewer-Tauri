@@ -107,8 +107,7 @@ export function createScrollCaptureStartPanel({
   const manual = document.createElement("input");
   manual.type = "checkbox";
   manual.id = "sh-manual";
-  // Long capture is user-guided by default. Automatic injection is an
-  // explicitly selected experimental convenience path.
+  // 长截图默认由用户手动引导；自动注入是需显式选择的实验性便捷路径。
   manual.checked = true;
   manual.addEventListener("change", onModeChange);
   autoModeButton.addEventListener("click", () => {

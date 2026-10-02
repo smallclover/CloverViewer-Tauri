@@ -3,7 +3,7 @@
 //! 从 CloverViewer (egui/eframe 版) 迁移的核心结构：
 //! - 单实例 + 二次启动唤起主窗口
 //! - 托盘（左键显示 / 右键菜单：显示、退出）
-//! - 全局热键 Alt+S（Phase 3 接截图，当前转发给前端占位）
+//! - 全局热键 Alt+S 进截图、Alt+Shift+S 进滚动截图（被占用时自动降级）
 //! - 窗口位置/尺寸持久化（写入同一份 config.json）
 //! - minimize_on_close：关窗隐藏到托盘
 
@@ -16,7 +16,7 @@ mod lan_share;
 pub mod mcp;
 mod ocr;
 mod screenshot;
-// Public so the latency probe can benchmark the exact capture path without a visible UI.
+// 声明为 pub：延迟探针（examples 下的二进制）要复用同一条捕获路径做基准测试，不经过 UI。
 pub mod screenshot_capture;
 mod screenshot_window;
 /// 滚动截图（长截图）核心。

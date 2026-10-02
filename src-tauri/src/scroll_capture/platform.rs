@@ -3,7 +3,7 @@ use super::{RectPx, ScrollMethod, ScrollState, SettleResult, WinInfo};
 use image::RgbaImage;
 use std::time::{Duration, Instant};
 
-/// 一格滚轮的 delta（`WHEEL_DELTA`，windows crate 里没有该常量，硬编码）
+/// 一格滚轮的 delta（Win32 `WHEEL_DELTA`，固定 120；本地定义一份供滚动注入复用）
 pub const WHEEL_DELTA: u32 = 120;
 
 const STABLE_DIFF_RATIO: f32 = 0.001;
@@ -11,7 +11,6 @@ const STABLE_POLLS: u32 = 3;
 const DIFF_TOLERANCE: i16 = 2;
 
 // Win32 实现
-// ============================================================
 
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT, WPARAM};
@@ -43,11 +42,12 @@ pub(super) fn hwnd_from(raw: isize) -> HWND {
     HWND(raw as *mut core::ffi::c_void)
 }
 
-/// 独立二进制必须显式声明 DPI 感知；Tauri 主程序由 manifest 声明，重复调用无副作用。
+/// 独立二进制必须显式声明 DPI 感知（exe 清单里没有该声明）；
+/// Tauri 主程序由 tao 在事件循环启动时调同一 API，重复调用无副作用。
 /// 必须在任何窗口/坐标相关调用之前执行。
 pub fn ensure_dpi_aware() {
     unsafe {
-        // 已设置过会返回错误，忽略即可（例如 Tauri 主程序里 manifest 已生效）
+        // 已设置过会返回错误，忽略即可（Tauri 主程序里 tao 已在事件循环启动时设置）
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
 }
@@ -690,5 +690,3 @@ pub fn scroll_to_top(
         }
     }
 }
-
-// ============================================================

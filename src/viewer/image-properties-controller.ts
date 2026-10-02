@@ -10,7 +10,7 @@ interface ImagePropertiesControllerOptions {
   translate: (key: string) => string;
 }
 
-/** Renders grouped file details immediately, then adds EXIF metadata for the current image only. */
+/** 分组的基本文件信息立即渲染，EXIF 只异步补当前这一张（token 作废过期结果）。 */
 export function createImagePropertiesController(options: ImagePropertiesControllerOptions) {
   let token = 0;
   const iconPaths = {

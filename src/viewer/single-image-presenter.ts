@@ -9,7 +9,7 @@ interface SingleImagePresenterOptions {
   onError: (error: unknown) => void;
 }
 
-/** Swaps already-decoded images while keeping the previous frame visible during loading. */
+/** 在已解码的图片之间切换，加载期间继续显示上一帧。 */
 export function createSingleImagePresenter(options: SingleImagePresenterOptions) {
   const loader = createSingleImageLoader({ sourceFor: options.sourceFor });
   let revision = 0;
@@ -79,7 +79,7 @@ export function createSingleImagePresenter(options: SingleImagePresenterOptions)
     clear() {
       cancel();
       loader.clear();
-      // A new directory must not briefly reveal the previous directory's image.
+      // 换目录时清掉 src，避免短暂露出上一个目录的图片。
       options.getImage().removeAttribute("src");
       options.getImage().removeAttribute("data-image-path");
     },

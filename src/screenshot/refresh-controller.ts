@@ -6,7 +6,7 @@ interface ScreenshotRefreshOptions {
   applyScrollStartMode: () => Promise<void>;
 }
 
-/** Serialize startup and refresh events; a hidden warmup has nothing to show. */
+/** 串行化启动与刷新事件；隐藏的预热窗口没有任何内容可展示。 */
 export function createScreenshotRefreshController(options: ScreenshotRefreshOptions) {
   let revision = 0;
   let pending = false;

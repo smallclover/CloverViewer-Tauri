@@ -1,4 +1,4 @@
-/** Geometry and annotation DTOs shared by screenshot markup and image editing. */
+/** 截图标注与图片编辑共用的几何与标注数据结构。 */
 export interface Pt {
   x: number;
   y: number;

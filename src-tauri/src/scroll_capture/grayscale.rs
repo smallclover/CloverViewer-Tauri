@@ -2,7 +2,8 @@
 
 use image::RgbaImage;
 
-/// Downsample RGB pixels into a block-averaged grayscale row grid.
+/// 横向按目标宽度分块，块内抽样求加权亮度均值，得到灰度行网格；
+/// 返回 (灰度数据, 输出宽度, 输出高度)，纵向不缩放。
 pub(super) fn downsample(image: &RgbaImage, target_width: u32) -> (Vec<u8>, u32, u32) {
     let (width, height) = image.dimensions();
     let step_x = (width / target_width.max(1)).max(1);

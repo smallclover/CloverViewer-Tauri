@@ -1,9 +1,8 @@
-//! Frame registration for the V2 scrolling capture engine.
+//! V2 滚动截图引擎的帧配准。
 //!
-//! Registration deliberately ignores horizontal regions that are stationary at
-//! the screen coordinate (sidebars, browser chrome).  White background is not
-//! itself evidence of a sidebar: only a whole *textured segment* that remains
-//! at the same rows is excluded from the displacement search.
+//! 配准会刻意忽略那些在屏幕坐标上始终静止的水平区域（侧边栏、浏览器界面）。
+//! 纯白背景本身不能证明是侧边栏：只有整段「有纹理的区段」在相同行上保持
+//! 不变时，才会被排除在位移搜索之外。
 
 use image::RgbaImage;
 
@@ -26,8 +25,8 @@ pub enum RegistrationVerdict {
     Accepted(Registration),
     NoMotion,
     Reverse,
-    /// Retained for the public diagnostic contract. V2 no longer emits this
-    /// based on blank background pixels; it would reject normal web articles.
+    /// 为公开的诊断契约保留。V2 不再根据空白背景像素发出该事件；
+    /// 那会误判正常的网页文章。
     StaticRegion {
         percent: u8,
     },

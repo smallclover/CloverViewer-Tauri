@@ -21,7 +21,7 @@ interface ScreenshotActionControllerOptions {
   showLanShare: (info: LanShareInfo) => void;
 }
 
-/** Runs normal screenshot export and OCR without owning editor state or presentation layout. */
+/** 只负责常规截图导出与 OCR，不持有编辑器状态或界面布局。 */
 export function createScreenshotActionController(options: ScreenshotActionControllerOptions) {
   let busy = false;
   let generation = 0;
@@ -95,7 +95,7 @@ export function createScreenshotActionController(options: ScreenshotActionContro
     options.setOcrBusy(true);
     options.showNotice(options.translate("shot.ocrRecognizing"), "progress");
     try {
-      // OCR uses the unannotated selection; the same pixels are opened in the viewer.
+      // OCR 使用未叠加标注的选区，同样的像素会在查看器中打开。
       const png = await selectionToPngBase64({ selection, screens: options.getScreens() });
       if (current !== generation) return;
       const text = (await ocrImage(png)).trim();

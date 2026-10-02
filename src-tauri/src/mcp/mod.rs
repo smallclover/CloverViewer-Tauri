@@ -1,4 +1,4 @@
-//! MCP tools for capture, retrieval, and OCR. They run without the Tauri UI.
+//! MCP 截图、取图与 OCR 工具。它们不依赖 Tauri 界面即可运行。
 
 mod artifact_store;
 mod capture;
@@ -39,7 +39,7 @@ impl Default for CloverMcpServer {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 struct RegionParams {
-    /// Virtual-desktop physical pixel coordinate. Negative x/y values are supported.
+    /// 虚拟桌面的物理像素坐标，x/y 可以为负。
     x: i32,
     y: i32,
     width: u32,
@@ -48,17 +48,17 @@ struct RegionParams {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 struct ScreenshotParams {
-    /// `active_window` (default), `monitor`, `all_monitors`, or `region`.
+    /// 默认「active_window」，也可用「monitor」「all_monitors」或「region」。
     mode: Option<String>,
-    /// Legacy display index. Use `monitor_id` after calling `list_monitors` when possible.
+    /// 旧的显示器序号；先调用 `list_monitors` 拿到 `monitor_id` 会更稳。
     monitor_index: Option<u64>,
-    /// Stable-for-the-current-desktop display ID returned by `list_monitors`.
+    /// `list_monitors` 返回的显示器 ID，在当前桌面会话内保持稳定。
     monitor_id: Option<u32>,
-    /// Region to capture when mode is `region`; it must be contained by one display.
+    /// mode 为「region」时要截取的区域，必须完整落在同一台显示器内。
     region: Option<RegionParams>,
-    /// `image` (default) returns MCP image data; `path` returns a local compatibility path; `both` returns both.
+    /// 默认「image」返回 MCP 图片数据，「path」返回本地兼容路径，「both」两者都返回。
     delivery: Option<String>,
-    /// Maximum returned image width. Applies only to image/both and is capped at 1920 pixels.
+    /// 返回图片的最大宽度，只对 image/both 生效，上限 1920 像素。
     max_width: Option<u32>,
 }
 
@@ -70,7 +70,7 @@ struct CaptureIdParams {
 #[derive(Deserialize, schemars::JsonSchema)]
 struct GetScreenshotParams {
     capture_id: String,
-    /// `image` (default), `path`, or `both`.
+    /// 默认「image」，也可用「path」或「both」。
     delivery: Option<String>,
     max_width: Option<u32>,
 }
@@ -78,7 +78,7 @@ struct GetScreenshotParams {
 #[derive(Deserialize, schemars::JsonSchema)]
 struct OcrParams {
     capture_id: String,
-    /// OCR preference: `zh`, `en`, or `ja`. The system language is used when omitted.
+    /// OCR 语言偏好：「zh」「en」或「ja」；省略时用系统语言。
     language: Option<String>,
 }
 
@@ -308,8 +308,8 @@ fn result_for_artifacts(
                 .join("\n"),
         )]));
     }
-    // A server-local path can be meaningless to sandboxed MCP clients. Only
-    // expose it when the caller explicitly asks for a path-compatible result.
+    // 服务端本地路径对沙箱内的 MCP 客户端可能没有意义，
+    // 只在调用方明确要求返回兼容路径时才暴露。
     let metadata = json!({
         "screenshots": artifacts
             .iter()

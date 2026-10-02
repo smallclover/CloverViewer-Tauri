@@ -90,7 +90,7 @@ body {
 .hidden { display: none !important; }
 .spacer { flex: 1; }
 
-/* Native select popups need explicit option colors as well as the page scheme. */
+/* 原生 select 弹层除了页面配色外，还需要显式指定 option 的颜色。 */
 select option {
   background: var(--bg-panel);
   color: var(--fg);

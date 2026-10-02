@@ -9,8 +9,7 @@ use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, SetCursorPos};
 
 use super::{estimate_shift, virtual_screen, RectPx, ScrollMethod};
 
-// P1：会话
-// ============================================================
+// 会话：请求参数归一化、宿主能力抽象与清理租约
 
 /// 一次滚动截图的请求参数（前端 `start_scroll_capture` 的入参）
 #[derive(Debug, Clone, Deserialize)]
@@ -25,7 +24,7 @@ pub struct ScrollCaptureRequest {
     /// "auto"（默认，探针自动选）或 wheel_post / wheel_post_root / wheel_input / vscroll / pagedown
     #[serde(default)]
     pub method: Option<String>,
-    /// 每步滚轮格数；null = 用探针测得的「每格像素」自动校准到约 40% 选区高
+    /// 每步滚轮格数；null = 按实测位移自动校准，使每步滚动约 45% 选区高
     #[serde(default)]
     pub notches: Option<u32>,
     #[serde(default)]
@@ -120,7 +119,8 @@ impl SessionOptions {
 /// 进度事件负载（`scroll-capture-progress`）
 #[derive(Debug, Clone, Serialize)]
 pub struct ScrollCaptureProgress {
-    /// probing | capturing | finishing | matched | low_confidence | done | partial | failed | cancelled
+    /// HUD 状态标签：waiting | capturing | finishing | matched | low_confidence | failed
+    /// （小写英文字面量，前端直接按值比较切换提示）
     pub stage: String,
     pub frames: u32,
     pub width: u32,
@@ -171,7 +171,7 @@ pub struct ScrollCaptureResult {
     pub width: u32,
     pub height: u32,
     pub frames: u32,
-    /// high | low | partial
+    /// high = 拼接完整；partial = 中途停止或触顶，长图不完整
     pub confidence: String,
     pub message: Option<String>,
     pub png: Vec<u8>,
@@ -193,10 +193,10 @@ pub trait SessionHost {
     /// 捕获期间的任务栏进度指示（覆盖窗里没空地放 HUD 时的唯一可见反馈）。
     /// 默认空实现，命令行探针不需要。
     fn set_progress(&self, _running: bool, _ratio: f32) {}
-    /// 在最终图像编码前恢复并置顶结果 UI。
+    /// 恢复并置顶结果 UI 的扩展点。
     ///
-    /// 编码数万像素的 PNG 可能耗时明显；若等编码完成才恢复 HUD，用户会误以为
-    /// 自动截图卡死。默认空实现使探针和单元测试保持纯逻辑。
+    /// 当前没有调用点：结果 UI 由 tauri.rs 在会话收尾时统一 raise_for_result，
+    /// 不再需要「编码前先恢复」。默认空实现让探针和单元测试保持纯逻辑。
     fn prepare_result(&self) {}
     /// 尝试把覆盖窗从 Windows 的捕获结果中排除。
     ///
@@ -215,7 +215,7 @@ impl SessionHost for NoHost {
     fn set_escape_hook(&self, _on: bool) {}
 }
 
-/// 容差路径的额外门槛：绝对误差也不能太大（否则是「画面全变了」而不是「亚像素重绘」）
+/// 误差门槛：err >= 12 表示画面整体变了，而不是亚像素重绘（当前无调用点）
 pub(super) fn est_err_ok(prev: &RgbaImage, cur: &RgbaImage) -> bool {
     estimate_shift(prev, cur)
         .map(|e| e.err < 12.0)

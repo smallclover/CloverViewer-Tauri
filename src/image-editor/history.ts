@@ -2,7 +2,7 @@ import { cloneShape, type Shape } from "./geometry";
 
 const HISTORY_LIMIT = 50;
 
-/** Immutable snapshots for an editor state that includes more than annotations. */
+/** 面向「不止标注」的编辑器状态提供不可变快照。 */
 export class SnapshotHistory<T> {
   private undoStack: T[] = [];
   private redoStack: T[] = [];
@@ -43,7 +43,7 @@ export class SnapshotHistory<T> {
   }
 }
 
-/** Immutable annotation snapshots; both editors use the same undo semantics. */
+/** 标注的不可变快照；两个编辑器共用同一套撤销语义。 */
 export class ShapeHistory {
   private undoStack: Shape[][] = [];
   private redoStack: Shape[][] = [];

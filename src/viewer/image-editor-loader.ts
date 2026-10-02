@@ -3,7 +3,7 @@ interface ImageEditorLoaderOptions {
   createImage?: () => HTMLImageElement;
 }
 
-/** Decodes an editor source without changing the visible page; only the latest request can open. */
+/** 在后台解码编辑器用的图像，不打断当前页面；只有最新一次请求的结果会被采纳。 */
 export function createImageEditorLoader(options: ImageEditorLoaderOptions) {
   let revision = 0;
   let loading = false;

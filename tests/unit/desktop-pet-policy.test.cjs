@@ -14,7 +14,7 @@ test("packaged desktop pet can fetch its same-origin model, motions, core and sh
       .filter(([name]) => name)
       .map(([name, ...sources]) => [name, sources]),
   );
-  // fetch() uses connect-src, even when script-src permits the core script.
+  // script-src 允许加载 core 脚本，但 fetch() 取模型仍受 connect-src 约束。
   const sources = directives.get("connect-src") ?? directives.get("default-src");
   assert.ok(sources.includes("'self'"), "Live2D fetches must be allowed on the app origin");
   assert.ok(sources.includes("ipc:"), "Tauri IPC must remain available");

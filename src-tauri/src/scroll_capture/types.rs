@@ -1,7 +1,6 @@
 use image::RgbaImage;
 
 // 通用数据类型（平台无关）
-// ============================================================
 
 /// 物理像素矩形（虚拟桌面坐标，左上角 + 宽高）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,7 +38,7 @@ impl RectPx {
     }
 }
 
-/// 滚动注入方式（P0 逐一验证兼容性，P1 会按验证结果自动降级）
+/// 滚动注入方式（多种 Windows 消息/输入注入策略，供探测与手动选择）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScrollMethod {
     /// `PostMessage(WM_MOUSEWHEEL)` 发给光标下**最深层子窗口**（默认首选：不依赖焦点）

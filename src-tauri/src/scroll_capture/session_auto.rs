@@ -1,4 +1,4 @@
-//! Automatic driver for the shared V2 capture engine.
+//! 自动模式驱动：自动向选区注入滚动并采集共享的 V2 引擎帧。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -130,9 +130,8 @@ pub fn run_session_ext(
         attempted_methods.push(selected.name());
         host.set_passthrough(selected == ScrollMethod::WheelInput);
         if selected == ScrollMethod::WheelInput {
-            // Tauri applies the click-through flag through the native window
-            // loop.  Sending input in the same instant can still target our
-            // full-screen overlay, especially on a secondary monitor.
+            // Tauri 通过原生窗口消息循环异步应用鼠标穿透标记，紧接着注入输入
+            // 仍可能打到覆盖窗自己（副屏尤其明显），因此先等一下。
             std::thread::sleep(Duration::from_millis(80));
         }
         let scroll = with_cursor_at(&cap, selected, || {
@@ -169,8 +168,8 @@ pub fn run_session_ext(
                     "{} accepted shift={shift} support={support:.3}",
                     selected.name()
                 ));
-                // Aim for about 55% overlap. This only changes the next input,
-                // never the accepted seam.
+                // 按实测位移算出每步约滚 45% 选区高（即约 55% 重叠）；
+                // 只影响下一次注入，不改变已经拼接好的接缝。
                 if options.notches.is_none() {
                     notches =
                         ((cap.h as f32 * 0.45 / shift.max(1) as f32).round() as u32).clamp(1, 6);
@@ -192,9 +191,8 @@ pub fn run_session_ext(
             EngineEvent::NoMotion => {
                 if method.is_none() && candidate_index + 1 < METHOD_CANDIDATES.len() {
                     candidate_index += 1;
-                    // Discovery must exhaust every supported injection method.
-                    // The first V2 pass stopped after three no-motion frames,
-                    // never reaching PageDown/VScroll for native applications.
+                    // 探测阶段必须试遍所有注入方式：只等三次无位移就收手的话，
+                    // 原生程序永远轮不到 PageDown / VScroll。
                     log.log(&format!(
                         "{} produced no motion; trying {} next",
                         selected.name(),

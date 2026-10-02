@@ -1,4 +1,4 @@
-//! Hidden screenshot WebView creation shared by startup warmup and actual capture.
+//! 启动预热与实际截图共用的隐藏截图 WebView 创建逻辑。
 use crate::screenshot::{ScreenshotStore, WINDOW_LABEL};
 use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
@@ -9,7 +9,7 @@ pub fn ensure_window(
     app: &AppHandle,
     bounds: Option<(i32, i32, u32, u32)>,
 ) -> tauri::Result<WebviewWindow> {
-    // Warmup and a hotkey can arrive together. Only one worker may build the window.
+    // 预热与热键可能同时到达，只允许一个 worker 创建窗口。
     let store = app.state::<ScreenshotStore>();
     let _creation = store.window_creation.lock().unwrap();
     if let Some(window) = app.get_webview_window(WINDOW_LABEL) {

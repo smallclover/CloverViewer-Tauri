@@ -1,4 +1,4 @@
-//! Manual driver for the shared V2 capture engine.
+//! 手动模式驱动：只观察用户滚动，仅追加已验证的行。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -16,9 +16,8 @@ use super::session::{
 use super::{capture_rect, deepest_child_at, frame_diff_ratio, root_window, settle_capture};
 
 const MIN_SELECTION_HEIGHT: u32 = 280;
-/// A probe that differs by less than this is almost certainly an idle frame.
-/// Keeping this separate from registration lets us avoid doing a multi-second
-/// settle wait while the user is merely reading the page.
+/// 单次探测的差异低于该值，几乎可以肯定是静止帧。
+/// 与「配准」分开判定，用户只是在读页面时不必干等数秒的稳定等待。
 const CHANGE_PROBE_THRESHOLD: f32 = 0.001;
 
 pub fn run_manual_session_ext(
@@ -63,10 +62,8 @@ pub fn run_manual_session_ext(
         Some("请向下缓慢滚动；程序只会追加已验证的内容。".into()),
         false,
     );
-    // Manual capture is an observer: it is deliberately not allowed to decide
-    // that the user is finished just because an animation, a popup, or a fast
-    // scroll produced several hard-to-register frames.  Only an explicit
-    // Finish/Esc or a documented resource limit closes the session.
+    // 手动模式只做观察者：不因为动画、弹窗或快速滚动产生的几帧难配准就替用户判定结束。
+    // 只有用户明确 Finish/Esc，或达到文档化的资源上限，才会结束会话。
     let poll = options.poll_ms.clamp(20, 80);
     let (reason, partial) = loop {
         let safe_height = safe_height_limit(cap.w, options.max_height_px);
@@ -74,11 +71,9 @@ pub fn run_manual_session_ext(
             break (Some("达到滚动截图上限，已保留已验证内容".into()), true);
         }
         let finishing = cancel.load(Ordering::Relaxed);
-        // The first quick capture is only a change detector.  Once something
-        // moved we wait for it to settle, so a half-painted browser frame can
-        // never become a stitch anchor.  On Finish we always take this settled
-        // sample, but it still goes through `ingest` and is discarded when it
-        // contains no genuinely new rows.
+        // 首次快照只当作「有没有变化」的探测器：一旦画面动了，就等它稳定下来再采样，
+        // 这样半张没画完的浏览器帧绝不会变成拼接锚点。Finish 时也走这条稳定采样，
+        // 但仍要过 `ingest`，没有真正新增的行就丢弃。
         let current = if finishing {
             capture_settled(&cap, options, &gate)?
         } else {
@@ -108,9 +103,8 @@ pub fn run_manual_session_ext(
                 );
             }
             EngineEvent::NoMotion => {
-                // This is the normal result of the final settle frame when
-                // the user stopped at the bottom.  In particular, do not add
-                // it unconditionally: that was the source of duplicate tails.
+                // 用户在底部停下时，最后一帧稳定后没有新内容是正常结果。
+                // 注意不要无条件追加这一帧：那会产生重复的尾部。
                 if finishing {
                     finish_note = Some(("最后一帧没有新的正文，已跳过。".into(), false));
                     emit(
@@ -139,9 +133,8 @@ pub fn run_manual_session_ext(
                 );
             }
             EngineEvent::StaticRegion { percent } => {
-                // A fixed region is a selection-quality warning, not a reason
-                // to silently throw away a manual session.  The user can
-                // adjust their scrolling and finish with the verified part.
+                // 选区里有大片固定区域只是「选区质量」的警告，不构成静默丢弃整次手动会话的理由：
+                // 用户可以调整滚动方式，用已验证的部分完成截图。
                 if finishing {
                     finish_note = Some((
                         "最后一帧包含大量固定区域，已保留此前验证的内容。".into(),
@@ -193,9 +186,7 @@ pub fn run_manual_session_ext(
 }
 
 fn safe_height_limit(width: u32, requested: u32) -> u32 {
-    // Reserve a little headroom for the current frame, the first frame and
-    // PNG encoding.  This turns a possible process-wide allocation failure
-    // into an explicit, recoverable capture limit.
+    // 给当前帧、首帧和 PNG 编码留出余量：把可能的整进程分配失败变成可恢复的捕获上限。
     let bytes_per_row = (width as u64).saturating_mul(4).max(1);
     let memory_limited = (MAX_CANVAS_BYTES.saturating_mul(3) / 4 / bytes_per_row) as u32;
     requested.min(memory_limited.max(MIN_SELECTION_HEIGHT))
@@ -232,9 +223,8 @@ fn emit(
     message: Option<String>,
     low: bool,
 ) {
-    // `waiting` is a deliberate recoverable state.  Do not collapse it into
-    // the older generic low-confidence label: the HUD must tell the user that
-    // they can keep scrolling and recover from the last green anchor.
+    // `waiting` 是有意的可恢复状态，不要把它并进旧的通用「低置信」标签：
+    // HUD 需要告诉用户「可以继续滚动，并从前一个绿色锚点恢复」。
     let reported_stage = if low && stage != "waiting" {
         "low_confidence"
     } else {

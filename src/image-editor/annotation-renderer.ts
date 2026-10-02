@@ -18,7 +18,7 @@ function drawArrow(context: CanvasRenderingContext2D, start: Pt, end: Pt, stroke
   context.stroke();
 }
 
-/** Draws an annotation in image pixel coordinates. Mosaic is supplied by the caller. */
+/** 按图像像素坐标绘制一个标注；马赛克由调用方自行处理。 */
 export function drawAnnotation(context: CanvasRenderingContext2D, shape: Shape, scale = 1) {
   context.strokeStyle = shape.color;
   context.fillStyle = shape.color;

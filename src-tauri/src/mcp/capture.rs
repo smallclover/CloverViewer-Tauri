@@ -1,4 +1,4 @@
-//! Independent screen-capture primitives used by the MCP server.
+//! MCP 服务独立使用的屏幕捕获原语。
 
 use image::RgbaImage;
 use serde::Serialize;

@@ -2,7 +2,10 @@ export type ToastKind = "success" | "error" | "info" | "progress";
 
 const visibilityTimers = new WeakMap<HTMLElement, number>();
 
-/** Keeps overlay transitions reliable even when the user reduces motion. */
+/**
+ * 不用 CSS 过渡，靠定时器切换 class，保证浮层淡入淡出可靠；
+ * 系统开启「减少动态效果」时也照常生效。
+ */
 export function setAnimatedVisibility(el: HTMLElement, visible: boolean, duration = 180) {
   const previousTimer = visibilityTimers.get(el);
   if (previousTimer !== undefined) window.clearTimeout(previousTimer);

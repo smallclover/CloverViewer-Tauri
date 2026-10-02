@@ -4,10 +4,8 @@ use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 const INSPECTION_WIDTH: u32 = 320;
 const INSPECTION_MAX_HEIGHT: u32 = 260;
 
-/// A sharp, bounded preview of one screen frame for the live stitch inspector.
-/// Unlike the overview thumbnail, this deliberately preserves local detail so
-/// the user can judge whether the blue trusted image and the next candidate
-/// belong together.
+/// 拼接预览里「一帧画面」的清晰缩略图：尺寸受限（宽 320、高 260 内），
+/// 但刻意保留局部细节，便于用户判断候选帧能否与已确认的基准接上。
 pub(super) fn frame_data_url(frame: &RgbaImage) -> Option<String> {
     let width = INSPECTION_WIDTH.min(frame.width()).max(1);
     let proportional_height = ((frame.height() as u64 * width as u64)
@@ -23,8 +21,7 @@ pub(super) fn frame_data_url(frame: &RgbaImage) -> Option<String> {
     ))
 }
 
-// P1：实时预览（缩略图）
-// ============================================================
+// 实时预览（拼接过程中的增量缩略图）
 
 /// 增量缩略图：每追加一段就往预览里贴一段，避免每帧重算整张长图（那是 O(H²)）。
 pub(super) struct PreviewBuilder {
@@ -105,5 +102,3 @@ pub(super) fn encode_png(img: &RgbaImage, small: bool) -> Result<Vec<u8>, String
         .map_err(|e| format!("PNG 编码失败: {e}"))?;
     Ok(out)
 }
-
-// ============================================================

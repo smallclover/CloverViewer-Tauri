@@ -11,18 +11,17 @@ fn main() {
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
-        // MCP stdio reserves stdout exclusively for JSON-RPC messages. Keep
-        // diagnostics on stderr so a tool failure cannot corrupt the stream.
+        // MCP stdio 独占 stdout 传输 JSON-RPC 消息，诊断信息必须写在 stderr，
+        // 否则工具调用失败时可能污染该消息流。
         .with_writer(std::io::stderr)
         .init();
 
-    // MCP stdio must allow one independent server process per MCP client.
+    // MCP stdio 模式下每个 MCP 客户端都要有独立的服务进程。
     if std::env::args().any(|a| a == "--mcp") {
         cloverviewer_tauri_lib::mcp::run_mcp_server();
         return;
     }
 
-    // MCP HTTP server 模式
     if std::env::args().any(|a| a == "--mcp-http") {
         let args = std::env::args().collect::<Vec<_>>();
         let port = match args

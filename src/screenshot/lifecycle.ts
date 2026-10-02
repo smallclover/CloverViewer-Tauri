@@ -17,7 +17,7 @@ interface ScreenshotConfigTargets {
   updateHelp: () => void;
 }
 
-/** Refreshes the ephemeral screenshot-window configuration on every reuse. */
+/** 每次复用截图窗口时刷新其临时配置。 */
 export async function refreshScreenshotConfig(targets: ScreenshotConfigTargets): Promise<void> {
   try {
     const config = await getConfig();
@@ -27,7 +27,7 @@ export async function refreshScreenshotConfig(targets: ScreenshotConfigTargets):
     if (config.hotkeys?.copy_color) targets.setCopyColorHotkey(config.hotkeys.copy_color);
     targets.applyTheme(config.theme);
   } catch {
-    // Retain current defaults when config cannot be read.
+    // 读不到配置时沿用当前默认值。
   }
   targets.applyI18n();
   targets.updateHelp();
@@ -43,7 +43,7 @@ interface ScreenshotLifecycleOptions {
   onScrollDone: (done: ScrollCaptureDone) => void;
 }
 
-/** Registers all Tauri-side lifecycle events and preserves refresh ordering. */
+/** 注册全部 Tauri 侧生命周期事件，并保证刷新顺序不变。 */
 export async function startScreenshotLifecycle(options: ScreenshotLifecycleOptions): Promise<void> {
   const controller = createScreenshotRefreshController({
     ...options,

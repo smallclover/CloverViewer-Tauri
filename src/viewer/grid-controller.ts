@@ -31,7 +31,7 @@ interface GridControllerOptions {
   onSelect: (index: number) => void;
 }
 
-/** Owns virtualized thumbnail rendering and its local sort/size presentation state. */
+/** 负责虚拟滚动渲染缩略图，并在本地维护排序方向与缩略图尺寸这两项展示状态。 */
 export function createGridController(options: GridControllerOptions) {
   let thumbSizeIndex = 1;
   let cellWidth = 0;

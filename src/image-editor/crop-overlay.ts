@@ -35,7 +35,7 @@ const cursors: Record<CropTarget, string> = {
   new: "crosshair",
 };
 
-/** A display-sized crop frame; its handles and guide lines are never part of the exported canvas. */
+/** 按显示尺寸绘制的裁剪框；其手柄与参考线永远不会进入导出的画布。 */
 export function createCropOverlay(options: CropOverlayOptions) {
   const { canvas, workspace } = options;
   const overlay = document.createElement("div");

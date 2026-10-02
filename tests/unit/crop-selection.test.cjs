@@ -8,7 +8,7 @@ test("crop hit testing prioritizes corners, then edges, interior and a new selec
   const targets = [[100,80,"nw"],[400,80,"ne"],[400,280,"se"],[100,280,"sw"],
     [250,80,"n"],[400,180,"e"],[250,280,"s"],[100,180,"w"],[250,180,"move"],[500,350,"new"]];
   for (const [x,y,target] of targets) assert.equal(cropTarget(rect,{x,y},{w:10,h:10}),target);
-  // A ten-screen-pixel hit area still works when the source image is displayed at 25%.
+  // 容差放大到 40 像素时，左上角热区内仍优先命中角点 "nw" 而不是边 "n"。
   assert.equal(cropTarget(rect,{x:70,y:50},{w:40,h:40}),"nw");
 });
 

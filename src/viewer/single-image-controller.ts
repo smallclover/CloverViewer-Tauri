@@ -6,7 +6,7 @@ interface SingleImageControllerOptions {
   onChange: () => void;
 }
 
-/** Owns transform state and pointer gestures for the single-image canvas. */
+/** 负责单图画布的缩放/平移/旋转状态，以及滚轮、拖拽、双击等鼠标手势。 */
 export function createSingleImageController(options: SingleImageControllerOptions) {
   let scale = 1;
   let fitMode = true;

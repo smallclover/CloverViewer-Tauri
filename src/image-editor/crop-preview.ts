@@ -1,4 +1,4 @@
-/** Cache two viewport-sized bitmaps; dragging changes only the color preview's clip. */
+/** 缓存两张视口大小的位图；拖动时只改彩色预览的裁剪区域。 */
 export function createCropPreview(source: HTMLCanvasElement, root: HTMLElement) {
   const gray = document.createElement("canvas");
   const color = document.createElement("canvas");

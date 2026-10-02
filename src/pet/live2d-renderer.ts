@@ -10,9 +10,8 @@ const CORE_GLOBAL = "Live2DCubismCore";
 const CORE_URL = "/live2d/live2dcubismcore.min.js";
 const MODEL_URL = "/pet-model/clover-girl-2/clovergirl-2_v1.model3.json";
 const SHADER_URL = "/live2d/shaders/";
-// PSD2Live keeps broad invisible geometry around this character. Filling those
-// raw bounds makes the visible pet much smaller than its window, so compensate
-// at render time instead of expanding the transparent native window further.
+// PSD2Live 给这个角色留了大片不可见的空白几何：按原始包围盒绘制，
+// 可见的桌宠会明显小于窗口，所以在渲染时放大，而不是继续扩大透明原生窗口。
 const VISIBLE_MODEL_SCALE = 2;
 
 type ModelDefinition = {
@@ -77,7 +76,7 @@ type FrameworkModules = {
   getId(id: string): unknown;
 };
 
-/** Manages one self-contained official Cubism Web Framework canvas. */
+/** 管理一个自成体系的官方 Cubism Web Framework 画布。 */
 export class Live2DPetRenderer {
   private host?: HTMLElement;
   private canvas?: HTMLCanvasElement;
@@ -182,7 +181,7 @@ export class Live2DPetRenderer {
     this.playMotion("Shake");
   }
 
-  /** Receives the current system cursor relative to the pet window's centre. */
+  /** 接收相对桌宠窗口中心点的当前系统光标位置。 */
   setGazeTarget(position: { x: number; y: number } | undefined): void {
     this.gazeTarget = position;
   }
@@ -199,7 +198,7 @@ export class Live2DPetRenderer {
     }
   }
 
-  /** Re-check dimensions after the initially hidden host becomes visible. */
+  /** 宿主初始隐藏、转为可见后重新测量尺寸。 */
   refreshLayout(): void {
     this.resizeCanvas();
     this.requestFrame();
@@ -358,9 +357,8 @@ export class Live2DPetRenderer {
   private resizeCanvas(): void {
     const { host, canvas, renderer } = this;
     if (!host || !canvas || !renderer) return;
-    // Windows often reports 1.25 or 1.5 on a 2K display. Rendering at that
-    // exact density leaves diagonal line art with too few samples, so retain
-    // at least 2× supersampling before WebView composites the transparent canvas.
+    // Windows 在 2K 屏上常报 1.25 或 1.5 倍：按这个密度渲染，斜线采样太少，
+    // 所以至少保留 2× 超采样，再交给 WebView 合成透明画布。
     const density = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
     const width = Math.max(1, Math.round(host.clientWidth * density));
     const height = Math.max(1, Math.round(host.clientHeight * density));

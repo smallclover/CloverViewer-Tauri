@@ -1,4 +1,4 @@
-/* Main-window style entrypoint. Keep imports ordered to preserve the cascade. */
+/* 主窗口样式入口；导入顺序决定层叠优先级，不要随意调整。 */
 @import "./styles/base.css";
 @import "./styles/viewer.css";
 @import "./styles/image-editor.css";

@@ -14,7 +14,7 @@ export function releaseScreenshotScreens(screens: readonly LoadedScreenshotScree
   }
 }
 
-/** Upload binary RGBA frames directly; no PNG decoding or Base64 strings. */
+/** 直接上传二进制 RGBA 帧；不做 PNG 解码，也不用 Base64 字符串。 */
 export async function loadScreenshotScreens(
   data: ScreenshotData,
 ): Promise<LoadedScreenshotScreen[]> {

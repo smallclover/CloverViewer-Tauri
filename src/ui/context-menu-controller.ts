@@ -20,7 +20,7 @@ interface ContextMenuControllerOptions {
   translate: (key: string) => string;
 }
 
-/** Replaces the WebView context menu with image-aware actions. */
+/** 用图片相关的操作替换 WebView 自带的右键菜单。 */
 export function createContextMenuController(options: ContextMenuControllerOptions) {
   const menu = document.getElementById("context-menu");
   if (!menu) throw new Error("Missing context-menu element");

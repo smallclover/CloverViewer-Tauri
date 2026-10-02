@@ -35,8 +35,8 @@ function freshState(phase: ScrollPhase): ScrollCaptureSessionState {
   };
 }
 
-/** State-only controller for a scroll-capture session.
- * Commands, DOM mutation and event subscription deliberately stay at its edges. */
+/** 滚动截图会话的纯状态控制器。
+ * 命令、DOM 变更与事件订阅一律留在它的边界之外。 */
 export interface ScrollCaptureSession {
   state: ScrollCaptureSessionState;
   reset: (phase?: ScrollPhase) => void;
@@ -81,7 +81,7 @@ export function createScrollCaptureSession(): ScrollCaptureSession {
     if (progress.method === "manual") state.manualMode = true;
     setCaptureRect(progress, minX, minY);
   };
-  /** Returns whether the HUD DOM should apply this visibility update. */
+  /** HUD 是否应采纳这次可见性变更：捕获中一旦被隐藏，本次会话内不再自动显形。 */
   const receiveHudVisibility = (hidden: boolean, affectsHud: boolean) => {
     if (!affectsHud) return true;
     if (hidden) state.hudHiddenForSession = true;

@@ -1,7 +1,7 @@
 let nextSelectId = 0;
 let closeActiveSelect: (() => void) | undefined;
 
-/** Keeps the original select as the value/change contract and renders a themed listbox. */
+/** 原 <select> 保留隐藏的原位，仍负责 value/change 契约；旁边渲染主题化的 listbox。 */
 export function createSelectControl(select: HTMLSelectElement) {
   const wrapper = document.createElement("span");
   wrapper.className = "select-control";

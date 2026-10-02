@@ -8,7 +8,7 @@ const timestampOf = (image: DatedImage) => {
   return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
-/** Returns a deterministic modification-time ordering without mutating the input. */
+/** 按修改时间排序且不改动入参数组；时间无效或相同则按路径比较，结果稳定可预期。 */
 export function sortImagesByModified<T extends DatedImage>(
   images: readonly T[],
   newestFirst: boolean,

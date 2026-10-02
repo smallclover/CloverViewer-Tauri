@@ -16,7 +16,7 @@ async function toBase64(canvas: HTMLCanvasElement): Promise<string> {
   });
 }
 
-/** Crop the captured desktop to the current selection, optionally compositing annotations. */
+/** 按当前选区裁剪截取到的桌面，并可选择叠加标注。 */
 export async function selectionToPngBase64({
   selection,
   screens,

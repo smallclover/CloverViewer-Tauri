@@ -1,4 +1,4 @@
-/* Screenshot-window style entrypoint. Keep imports ordered to preserve the cascade. */
+/* 截图窗口样式入口；导入顺序决定层叠优先级，不要随意调整。 */
 @import "./screenshot/base.css";
 @import "./screenshot/toolbar.css";
 @import "./screenshot/editor-ui.css";

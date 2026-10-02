@@ -1,6 +1,6 @@
-//! EXIF 详细信息读取 —— 移植自 CloverViewer core/image_loader.rs 的 EXIF 逻辑并扩展。
+//! EXIF 详细信息读取，供属性面板展示。
 //!
-//! 原版只读取拍摄时间（ImageProperties.date），此处扩展出相机/ISO/光圈/快门/焦距等
+//! 读取拍摄时间（ImageProperties.date）之外，还扩展出相机/ISO/光圈/快门/焦距等
 //! 常见字段，供属性面板展示。字段为空时前端不展示该行。
 
 use serde::Serialize;
@@ -23,7 +23,7 @@ pub struct ExifInfo {
 pub async fn get_image_info(path: String) -> Result<ExifInfo, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let file = std::fs::File::open(&path).map_err(|e| format!("读取失败: {e}"))?;
-        // Let the EXIF reader consume the container; JPEG metadata doesn't need pixel data.
+        // 交给 EXIF 解析器按容器读取即可：JPEG 的元数据不需要像素数据。
         Ok(read_exif(&mut BufReader::new(file)))
     })
     .await
@@ -75,8 +75,8 @@ mod tests {
     fn jpeg_metadata_preserves_dates_without_reading_the_large_pixel_payload() {
         let mut tiff = b"II\x2a\x00\x08\x00\x00\x00".to_vec();
         tiff.extend_from_slice(&1u16.to_le_bytes());
-        tiff.extend_from_slice(&0x0132u16.to_le_bytes()); // DateTime
-        tiff.extend_from_slice(&2u16.to_le_bytes()); // ASCII
+        tiff.extend_from_slice(&0x0132u16.to_le_bytes()); // DateTime（拍摄时间）
+        tiff.extend_from_slice(&2u16.to_le_bytes()); // ASCII 编码
         tiff.extend_from_slice(&20u32.to_le_bytes());
         tiff.extend_from_slice(&26u32.to_le_bytes());
         tiff.extend_from_slice(&0u32.to_le_bytes());

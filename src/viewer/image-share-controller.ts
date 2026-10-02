@@ -9,7 +9,7 @@ interface ImageShareControllerOptions {
   onClose: () => void;
 }
 
-/** Owns the temporary LAN-share drawer; closing it never stops an active link. */
+/** 负责临时的局域网分享抽屉；关闭抽屉只会丢弃回调，不会中断已建立的链接。 */
 export function createImageShareController(options: ImageShareControllerOptions) {
   let requestToken = 0;
   let timer: number | undefined;

@@ -1,8 +1,7 @@
-//! Short-lived, token-protected LAN sharing for a single screenshot.
+//! 单张截图的短时、带令牌局域网分享。
 //!
-//! The HTTP listener never exposes the file system: it serves only the PNG held
-//! in memory for the active share, and shuts down after its TTL or an explicit
-//! stop command.
+//! HTTP 监听端从不暴露文件系统：它只提供当前分享常驻内存里的 PNG，
+//! 到达有效期或收到显式停止命令后就关闭服务。
 
 use crate::config::ConfigStore;
 use axum::{
@@ -121,8 +120,8 @@ struct SharedImage {
 }
 
 fn token() -> String {
-    // The OS-provided random source is used through a UUID-like 256-bit value;
-    // do not derive share URLs from a port or timestamp alone.
+    // 用系统随机源生成类 UUID 的 256 位值，
+    // 不能只靠端口或时间戳推导分享 URL。
     let mut bytes = [0u8; 32];
     for chunk in bytes.chunks_mut(8) {
         let random = rand::random::<u64>().to_le_bytes();
@@ -132,7 +131,7 @@ fn token() -> String {
 }
 
 fn lan_address() -> Result<Ipv4Addr, String> {
-    // UDP connect selects the active outbound adapter without sending a packet.
+    // UDP connect 会选中当前活动的出站网卡，且不发送任何数据包。
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).map_err(|e| e.to_string())?;
     socket
         .connect((Ipv4Addr::new(1, 1, 1, 1), 80))
@@ -198,8 +197,8 @@ pub async fn start_lan_share(
     start_share(&store, &config, png, "image/png", "screenshot", "png").await
 }
 
-/// Share the current viewer image as a browser-compatible JPEG preview. The
-/// original file never becomes a network path or an HTTP file-system resource.
+/// 把查看器当前图片转成浏览器可用的 JPEG 预览来分享。
+/// 原文件不会变成网络路径，也不会成为 HTTP 文件系统资源。
 #[tauri::command]
 pub async fn start_image_lan_share(
     store: tauri::State<'_, LanShareStore>,

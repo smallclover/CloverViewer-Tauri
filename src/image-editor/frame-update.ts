@@ -3,7 +3,7 @@ interface FrameUpdateOptions {
   cancel?: (id: number) => void;
 }
 
-/** Keep the latest input per display frame, with a synchronous final flush on pointer release. */
+/** 每帧只保留最新一次输入，并支持在指针释放时同步补一次最终刷新。 */
 export function createFrameUpdate<T>(apply: (value: T) => void, options: FrameUpdateOptions = {}) {
   const request = options.request ?? requestAnimationFrame;
   const cancel = options.cancel ?? cancelAnimationFrame;

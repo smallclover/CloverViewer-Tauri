@@ -14,7 +14,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
-/** Persistent feedback lives outside settings so navigating away cannot hide a download. */
+/** 状态显示在设置面板之外的独立容器里，切走页面也不会把下载中的提示藏起来。 */
 export function createUpdateStatusView(options: UpdateStatusViewOptions) {
   const panel = element("update-status");
   const message = element("update-status-message");

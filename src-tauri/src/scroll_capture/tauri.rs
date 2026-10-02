@@ -6,8 +6,7 @@ use super::session::{
 };
 use super::{focus_window, run_manual_session_ext, run_session_ext};
 
-// P1：Tauri 侧（会话状态 + 命令 + 事件）
-// ============================================================
+// Tauri 侧的滚动截图会话状态与命令（会话状态 + 命令 + 事件）
 
 /// 当前会话状态（Tauri managed state）
 pub struct ScrollCaptureSession {
@@ -19,9 +18,9 @@ struct SessionInner {
     running: bool,
     progress: Option<ScrollCaptureProgress>,
     result: Option<ScrollCaptureResult>,
-    /// 前端 HUD 是否与捕获区重叠。重叠时（整屏/整窗选区）每采一帧前都会通知前端
-    /// 把 HUD 让开 —— 覆盖窗是透明 WebView，正常情况下不会被 BitBlt 截进去，
-    /// 但「整屏选区」这种极端情况下留一个保险，比事后发现长图里烤进一个提示框便宜得多。
+    /// 前端上报的「HUD 是否与捕获区重叠」（兜底缓存）。
+    /// 重叠时整个会话隐藏 HUD，由 `hide_hud_during_capture` / `hide_glow_during_capture`
+    /// 经 FrameHideGate 逐帧执行，避免提示框被 BitBlt 烤进长图。
     hud_overlap: Arc<AtomicBool>,
 }
 
@@ -644,5 +643,3 @@ mod tests {
         );
     }
 }
-
-// ============================================================

@@ -14,7 +14,7 @@ type MotionClip = {
   curves: MotionCurve[];
 };
 
-/** Samples PSD2Live's parameter-only motion exports without a full motion manager. */
+/** 直接采样 PSD2Live 仅含参数的 motion 导出，不引入完整的 motion 管理器。 */
 export class PetMotionPlayer {
   private readonly clips = new Map<string, MotionClip>();
 
@@ -33,7 +33,7 @@ export class PetMotionPlayer {
           const clip = parseMotion((await response.json()) as MotionFile);
           if (clip) player.clips.set(name, clip);
         } catch {
-          // A missing optional animation must not prevent the pet from loading.
+          // 可选动画缺失时不能阻断桌宠加载。
         }
       }),
     );
@@ -70,7 +70,7 @@ function parseMotion(file: MotionFile): MotionClip | undefined {
   return { duration, loop: file.Meta?.Loop === true, curves };
 }
 
-/** PSD2Live's restricted exports use linear (type 0) segments. */
+/** PSD2Live 的受限导出只使用线性（type 0）段。 */
 function parseLinearSegments(segments: unknown): MotionCurve["points"] | undefined {
   if (!Array.isArray(segments) || segments.length < 2) return undefined;
   const firstTime = Number(segments[0]);

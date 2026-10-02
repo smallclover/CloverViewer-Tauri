@@ -23,7 +23,7 @@ export function overlapArea(a: OverlayBox, b: OverlayBox): number {
   return width * height;
 }
 
-/** Position an ordinary toolbar/panel below a selection, flipping above if needed. */
+/** 把普通工具栏或面板放在选区下方，放不下时翻到上方。 */
 export function placeSelectionOverlay(
   region: OverlayBox,
   viewport: OverlayBox,

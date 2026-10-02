@@ -2,7 +2,7 @@ import type { ImageEntry } from "../api";
 
 export type ViewerMode = "grid" | "single" | "edit";
 
-/** Shared durable state for directory, image selection, and the active viewer mode. */
+/** 查看器会话间共用的状态：当前目录、图片列表与选中项、视图模式、属性栏开关。 */
 export function createViewerSession() {
   let currentDir = "";
   let images: ImageEntry[] = [];

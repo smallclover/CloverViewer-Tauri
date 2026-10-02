@@ -1,4 +1,4 @@
-//! Pixel-exact V2 composition. Every output pixel comes from a captured frame.
+//! V2 的像素级精确合成：每个输出像素都来自某个已捕获的帧。
 
 use super::matching::Registration;
 use image::RgbaImage;
@@ -32,10 +32,8 @@ impl Composer {
         self.height
     }
 
-    /// Render a bounded, whole-canvas preview without first cloning the full
-    /// long image.  The preview is intentionally an overview: it lets the
-    /// user see that their verified content is continuously growing while the
-    /// full-resolution pixels stay in the composer.
+    /// 在不先克隆整张长图的前提下渲染一张有界的整幅预览。该预览刻意做成
+    /// 概览：让用户看到已验证内容在持续增长，而全分辨率像素仍留在合成器里。
     pub(super) fn preview(&self, target_width: u32, max_height: u32) -> RgbaImage {
         let width = target_width.max(1);
         let proportional_height = ((self.height as u64 * width as u64)

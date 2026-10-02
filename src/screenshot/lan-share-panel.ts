@@ -9,7 +9,7 @@ export interface LanSharePanel {
   hide(): void;
 }
 
-/** Presents the single active LAN-share link and owns only its local countdown UI. */
+/** 展示当前唯一生效的局域网分享链接，只负责本地的倒计时 UI。 */
 export function createLanSharePanel({
   uiLayer,
   onCopy,

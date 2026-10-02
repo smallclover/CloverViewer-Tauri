@@ -91,7 +91,7 @@ export function createThumbnailLoader(options: ThumbnailLoaderOptions) {
   return {
     keyFor,
     load,
-    /** Drops queued work which no longer has a visible consumer. */
+    /** 丢弃已无可见消费者的排队任务。 */
     retain(keys: ReadonlySet<string>) {
       queued = queued.filter((task) => {
         if (keys.has(task.key)) return true;

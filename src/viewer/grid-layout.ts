@@ -1,4 +1,4 @@
-/** Number of columns used by the small, medium, and large gallery sizes. */
+/** 小、中、大三档缩略图尺寸各自使用的列数。 */
 export const THUMB_COLUMNS = [6, 4, 3] as const;
 
 const GAP = 16;
@@ -61,7 +61,7 @@ export function visibleItemRange(
   ];
 }
 
-/** Lays out consecutive date groups while retaining virtualizable image rows. */
+/** 按连续的日期分组排版，同时保留可虚拟化的图片行。 */
 export function createGridSections(
   groupKeys: readonly string[],
   layout: GridLayout,

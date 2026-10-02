@@ -1,4 +1,4 @@
-/* Shared select trigger and rounded popup; the native select retains its value contract. */
+/* 共享的 select 触发器与圆角弹层；原生 select 仍保留其取值契约。 */
 .select-control { display: inline-flex; flex: none; min-width: 0; max-width: 100%; }
 .select-control > select[hidden] { display: none !important; }
 .select-trigger {

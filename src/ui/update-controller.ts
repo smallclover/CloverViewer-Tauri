@@ -38,7 +38,7 @@ interface UpdateControllerOptions {
   wait: (milliseconds: number) => Promise<void>;
 }
 
-/** Separates checking, verified download and installation so only downloads are retried. */
+/** 把检查、下载、安装拆分开来，这样只重试下载环节。 */
 export function createUpdateController(options: UpdateControllerOptions) {
   let busy = false;
   let state: UpdateState = { phase: "idle" };
@@ -75,7 +75,7 @@ export function createUpdateController(options: UpdateControllerOptions) {
             attempts: DOWNLOAD_ATTEMPTS,
           });
         } else {
-          // The plugin emits Finished before checking the package signature.
+          // 插件先发出 Finished，之后才校验安装包签名。
           publish({ phase: "verifying", downloaded, total });
         }
       };
@@ -105,7 +105,7 @@ export function createUpdateController(options: UpdateControllerOptions) {
     let stage: UpdateErrorStage = "checking";
     publish({ phase: "checking" });
     try {
-      // Give the immediate spinner/status a frame before starting native work.
+      // 先让加载动画与状态文字渲染一帧，再开始原生工作。
       await options.yieldUi();
       update = await options.check(UPDATE_CHECK_TIMEOUT_MS);
       if (!update) {
@@ -122,7 +122,7 @@ export function createUpdateController(options: UpdateControllerOptions) {
       stage = "installing";
       publish({ phase: "installing" });
       await options.yieldUi();
-      // On Windows the updater starts NSIS, exits this app and restarts after installation.
+      // Windows 上更新器会启动 NSIS、退出本应用，并在安装完成后重启。
       await update.install();
       publish({ phase: "installed" });
     } catch (error) {
@@ -143,7 +143,7 @@ export function createUpdateController(options: UpdateControllerOptions) {
         }
       }
       busy = false;
-      // Re-enable actions only after cleanup has completed.
+      // 清理完成之后才重新启用各项操作。
       options.onState(state);
     }
   };

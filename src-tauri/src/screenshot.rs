@@ -1,12 +1,12 @@
-//! 截图覆盖窗 —— 移植自 CloverViewer feature/screenshot/capture 的截屏 + 窗口逻辑。
+//! 截图覆盖窗：独立窗口的截屏 + 覆盖层窗口逻辑。
 //!
-//! 与 egui 版的关键差异：egui 版复用主窗口 viewport 切换透明态；Tauri 版改为**独立截图窗口**
-//! （独立 HWND，规避与主窗口共享 HWND 导致的样式/状态泄漏——Xiangxu 项目已验证的教训）。
+//! 本模块用**独立截图窗口**（独立 HWND），不复用主窗口的 viewport 切换透明态：
+//! 与主窗口共享 HWND 会导致样式/状态互相泄漏。
 //!
 //! 性能策略：
-//! - **改用 builder API 在 build 阶段一次性设置 position + inner_size**（logical 像素）。
-//!   早期版本用 `set_position(PhysicalPosition)` 在 show 后再移动，wry Windows 后端有时不
-//!   按 physical 单位消费、外加 OS relayout race，窗口外框偏离 + 内部 viewport 不对齐。
+//! - **用 builder API 在 build 阶段一次性设置 position + inner_size**（logical 像素）。
+//!   在 show 之后再 `set_position(PhysicalPosition)` 移动不可靠：wry Windows 后端有时不
+//!   按 physical 单位消费，外加 OS relayout race，窗口外框偏离 + 内部 viewport 不对齐。
 //!   builder 上 `position`/`inner_size` 是 logical，wry 内部按窗口所在 monitor 的 scale
 //!   自动换算成 raw pixel 调 SetWindowPos，定位最稳。
 //! - 主界面首帧后预建隐藏 WebView，首次 Alt+S 不再承担窗口冷启动；关闭时隐藏复用。
@@ -54,7 +54,7 @@ impl ScreenshotStore {
         }
     }
 
-    /// 前端取走并清除「是否以滚动截图模式启动」
+    /// 本次覆盖窗是否以滚动截图模式启动（读取即清，一次性）
     pub fn take_scroll_start(&self) -> bool {
         let mut g = self.scroll_start.lock().unwrap();
         let v = g.map(|(v, _)| v).unwrap_or(false);
@@ -62,9 +62,9 @@ impl ScreenshotStore {
         v
     }
 
-    /// 记录启动模式。
+    /// 记录「本次覆盖窗是否以滚动截图模式启动」，并用 500ms 窗口处理两个热键同时触发。
     ///
-    /// 「先写先赢」（窗口 500ms 内）：Alt+Shift+S 与 Alt+S 都可能在同一瞬间触发同一个入口，
+    /// 「先写先赢」：Alt+Shift+S 与 Alt+S 可能在同一瞬间触发同一个入口，
     /// 若普通截图那次后到，就会把「滚动截图」意图覆盖掉 —— 现象是按下 Alt+Shift+S 却进了
     /// 普通截图（用户实测报回）。真正的「过一会儿再按 Alt+S」不受影响（超过窗口就正常覆盖）。
     fn set_scroll_start(&self, on: bool) {
@@ -139,7 +139,7 @@ pub fn take_scroll_start_mode(store: State<'_, ScreenshotStore>) -> bool {
 /// 关闭截图窗口（前端 Esc 时调用）—— 仅隐藏窗口（不销毁），保留供下次复用。
 #[tauri::command]
 pub fn close_screenshot(app: AppHandle, completed: Option<bool>, capture_id: Option<u64>) {
-    // A preloaded/reloaded page must never pick up a previously closed screenshot.
+    // capture_id 守卫：预加载/重载过的页面不得领走已经关闭的那次截图。
     let store = app.state::<ScreenshotStore>();
     let mut capture = store.data.lock().unwrap();
     if capture_id.is_some_and(|id| {
@@ -192,9 +192,9 @@ pub fn copy_image_file(path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 物理坐标 (x, y) 处的顶层窗口矩形（物理像素）。
-/// 用于"绿框跟随鼠标自动框选窗口"：按 Z 序枚举顶层可见窗口，跳过本应用自己的
-/// 窗口（截图/主窗口），命中第一个包含该点且最上层的窗口。坐标与 xcap 同一物理像素系。
+/// 物理坐标 (x, y) 处的顶层窗口矩形（物理像素，与 xcap 同一坐标系）。
+/// 用于「绿框跟随鼠标自动框选窗口」：按 Z 序枚举顶层可见窗口，跳过本应用自己的
+/// 窗口（截图/主窗口），命中第一个包含该点且最上层的窗口。
 #[derive(Debug, Clone, Serialize)]
 pub struct WindowRect {
     pub x: i32,
@@ -340,7 +340,7 @@ pub fn pick_window_at(app: AppHandle, x: i32, y: i32) -> Option<WindowRect> {
 /// Rust 侧负责「落盘」或「写剪贴板」；普通复制/保存可延后隐藏，让前端先显示确认。
 #[derive(Debug, Deserialize)]
 pub struct FinishRequest {
-    /// "save" | "clipboard" | "open"
+    /// 导出动作，三选一："save" 存到桌面，"clipboard" 写剪贴板，"open" 存临时目录并交查看器打开
     pub action: String,
     /// 前端 `canvas.toBlob` 导出的 PNG（base64，可带 data: 前缀）
     pub png: String,
@@ -543,7 +543,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
         // 以规避 WebView2 冷启动白屏/卡死导致的"始终置顶锁屏"。
 
         // 通知前端刷新：复用窗口下 main() 不会重跑，由事件触发 loadScreenshot。
-        // Keep the original buffers; metadata queries never copy image bytes.
+        // 只克隆元数据，像素帧经 Arc 零拷贝取用，不复制图像字节。
         *store.data.lock().unwrap() = Some(capture);
         if let Err(e) = win.emit("screenshot-refresh", ()) {
             tracing::warn!("emit screenshot-refresh 失败: {e}");

@@ -2,7 +2,8 @@
 
 use image::RgbaImage;
 
-/// Sampled ratio of pixels whose RGB channel difference exceeds `tolerance`.
+/// 按 2×2 间隔抽样，返回 RGB 任一通道差值超过 `tolerance` 的像素占比（忽略 alpha）；
+/// 两图尺寸不同则直接按 1.0 处理。
 pub(super) fn diff_ratio(a: &RgbaImage, b: &RgbaImage, tolerance: i16) -> f32 {
     if a.dimensions() != b.dimensions() {
         return 1.0;

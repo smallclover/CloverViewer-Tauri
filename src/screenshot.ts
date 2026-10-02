@@ -49,13 +49,11 @@ import {
   type Tool,
 } from "./screenshot/geometry";
 
-// ============================================================
-// 截图标注器 —— 移植自 CloverViewer feature/screenshot 的 Canvas 2D 重写
+// 截图标注器：交互绘制、放大镜、滚动截图与导出的组合根
 //
 // 坐标约定：所有图形数据统一用「物理像素」（与 xcap 返回一致）。
 // 前端仅做交互绘制；导出时用同一套 draw 逻辑在离屏 Canvas 上合成，
 // 再交给 Rust 落盘/写剪贴板。
-// ============================================================
 
 const MIN_SHAPE_SIZE = 4; // 物理像素
 const HANDLE_HIT = 12; // 控制点命中半径（物理像素；不再随 devicePixelRatio 缩放）
@@ -89,7 +87,7 @@ let magnifierActive = true; // 读 config.magnifier_enabled，main() 里覆盖
 let experimentalAutoScrollEnabled = false;
 let copiedAt = 0; // 最近一次复制色值的时间戳
 
-// ---------- DOM ----------
+// ---------- DOM 引用 ----------
 function requiredElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing screenshot element: ${id}`);
@@ -111,7 +109,6 @@ const lanSharePanel = createLanSharePanel({
 });
 
 // 工具栏
-// ============================================================
 const toolbarUi = createToolbar({
   uiLayer,
   color: editorSession.color,
@@ -177,7 +174,6 @@ const textInputUi = createTextInputController({
 const textInput = textInputUi.element;
 
 // 帮助框
-// ============================================================
 const helpPanel = createHelpPanel(uiLayer);
 const helpBox = helpPanel.element;
 
@@ -200,9 +196,7 @@ editorUi = createEditorUiController({
   getCopyColorHotkey: () => copyColorHotkey,
   getMagnifierActive: () => magnifierActive,
 });
-// ============================================================
 // 几何工具
-// ============================================================
 function hitTestShapes(p: Pt): number | null {
   for (let i = editorSession.shapes.length - 1; i >= 0; i--) {
     if (isShapeHit(editorSession.shapes[i], p, 8 * physScale())) return i;
@@ -223,9 +217,7 @@ function hitHandle(p: Pt): { index: number; handle: number } | null {
   return null;
 }
 
-// ============================================================
 // 绘制
-// ============================================================
 // 从多屏截图采样一块区域，绘制到目标矩形（用于马赛克/放大镜/导出/OCR）。
 // 坐标系约定：src 侧（sx, sy）与 screens[] 一律是 **root-local 物理像素**；
 // dst 侧（dx, dy, dw, dh）是目标 canvas 的坐标。两侧各自独立，不混用。
@@ -310,9 +302,7 @@ function render() {
   if (scroll.phase === "armed") syncScrollUi();
 }
 
-// ============================================================
 // 历史
-// ============================================================
 function undo() {
   if (editorSession.undo()) render();
 }
@@ -321,12 +311,9 @@ function redo() {
   if (editorSession.redo()) render();
 }
 
-// ============================================================
 // 鼠标交互
-// ============================================================
-// ---------- 文本输入 ----------
 
-// Pointer interaction is deliberately isolated from the composition root.
+// 指针交互刻意与组合根隔离，方便单独测试与替换。
 editorInput = createEditorInputController({
   root,
   canvas,
@@ -362,9 +349,7 @@ editorInput = createEditorInputController({
   render,
 });
 
-// ============================================================
 // 键盘
-// ============================================================
 
 // 取色热键（读 config.hotkeys.copy_color，main() 里覆盖；与后端默认一致）
 let copyColorHotkey = "Alt+C";
@@ -405,9 +390,7 @@ bindEditorShortcuts({
 // 阻止浏览器默认右键菜单
 window.addEventListener("contextmenu", (e) => e.preventDefault());
 
-// ============================================================
 // 导出
-// ============================================================
 async function exportImage(action: "save" | "clipboard" | "open") {
   await screenshotActions.exportImage(action);
 }
@@ -416,14 +399,11 @@ async function shareImage() {
   await screenshotActions.shareImage();
 }
 
-// ============================================================
-// OCR
-// ============================================================
+// OCR 识别：识别选区文字，并在查看器中打开同一张图
 async function runOcr() {
   await screenshotActions.runOcr();
 }
 
-// ============================================================
 // 滚动截图（长截图）
 //
 // 交互：滚动截图专属热键 → 框选区域 → 浮动面板点「开始」→ 后端逐帧捕获拼接
@@ -436,7 +416,6 @@ async function runOcr() {
 //   避免吃掉边界像素。
 // - 后端若选用 SendInput 注入（资源管理器这类不吃滚轮消息的目标），会把覆盖窗临时设为
 //   click-through（滚轮要落到底下的目标窗口），此时 HUD 按钮点不到 → 只提示按 Esc 停止。
-// ============================================================
 
 const scrollSession = createScrollCaptureSession();
 const scroll = scrollSession.state;
@@ -677,9 +656,7 @@ function hideFloatingPanels() {
   lanSharePanel.hide();
 }
 
-// ============================================================
 // 事件绑定 + 初始化
-// ============================================================
 canvas.addEventListener("mousedown", editorInput.onMouseDown);
 window.addEventListener("mousemove", editorInput.onMouseMove);
 window.addEventListener("mouseup", editorInput.onMouseUp);

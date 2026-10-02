@@ -5,7 +5,7 @@ export function mosaicBlockSize(shape: Shape) {
   return shape.blockSize ?? Math.max(8, shape.strokeWidth * 3);
 }
 
-/** Samples the unchanged source canvas so preview and export use identical mosaic pixels. */
+/** 从未被改动的源画布取样，保证预览与导出的马赛克像素完全一致。 */
 export function createCanvasMosaicRenderer(sourceCanvas: HTMLCanvasElement) {
   const sampleCanvas = document.createElement("canvas");
   sampleCanvas.width = 1;
@@ -24,8 +24,8 @@ export function createCanvasMosaicRenderer(sourceCanvas: HTMLCanvasElement) {
     );
     sampleContext.clearRect(0, 0, 1, 1);
     sampleContext.drawImage(sourceCanvas, x, y, blockSize, blockSize, 0, 0, 1, 1);
-    // Scaling the one-pixel sample avoids getImageData(), which synchronizes the
-    // Canvas pipeline and caused the editing brush to fall behind on large images.
+    // 缩放这个单像素采样可避开 getImageData()，后者会同步 Canvas 管线，
+    // 导致大图上的编辑画笔跟不上手速。
     target.drawImage(sampleCanvas, 0, 0, 1, 1, x, y, blockSize, blockSize);
   };
 

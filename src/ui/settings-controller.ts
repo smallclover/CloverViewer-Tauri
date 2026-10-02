@@ -35,7 +35,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
-/** Owns settings form persistence, hotkey registration, and the update dialog. */
+/** 负责设置表单的保存、快捷键注册，以及更新对话框。 */
 export function createSettingsController(options: SettingsControllerOptions) {
   const overlay = element("settings-overlay");
   const button = element("btn-settings");

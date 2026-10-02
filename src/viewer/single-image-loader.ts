@@ -17,7 +17,7 @@ interface ImageTask {
   reject: (error: unknown) => void;
 }
 
-/** Keeps a small decoded neighborhood and gives current selections priority over warmup. */
+/** 只缓存少量已解码图片（上限 96 MB、至少留 1 张），前台请求排在预热任务前面。 */
 export function createSingleImageLoader(options: SingleImageLoaderOptions) {
   const maxBytes = options.maxBytes ?? 96 * 1024 * 1024;
   const cache = new Map<string, ImageTask>();

@@ -1,5 +1,4 @@
-//! 图片目录扫描与元数据 —— 移植自 CloverViewer model/image_meta.rs + core/image_loader.rs
-//! 使用 rayon 并行读取目录条目与图片尺寸。
+//! 图片目录扫描与元数据：rayon 并行读取条目、尺寸与修改时间。
 
 use rayon::prelude::*;
 use serde::Serialize;
@@ -9,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// WebView2 (Chromium) 原生支持的格式，可直接走 asset protocol
 const WEB_SUPPORTED: &[&str] = &["png", "jpg", "jpeg", "bmp", "gif", "webp", "avif"];
 
-/// 与原版一致的完整支持列表
+/// 扫描白名单：比 WebView2 原生支持的格式多出 tiff
 pub const SUPPORTED_IMAGE_EXTENSIONS: &[&str] =
     &["png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "avif"];
 
@@ -44,8 +43,8 @@ fn is_web_supported(path: &Path) -> bool {
     WEB_SUPPORTED.contains(&ext.as_str())
 }
 
-/// 扫描目录下的所有支持图片（不递归，与原版一致）
-/// 返回按名称排序的列表。
+/// 扫描目录下的所有支持图片（只扫一层，不递归）
+/// 顺序为 rayon 并行收集顺序，不保证按名称排序。
 pub fn scan_directory(dir: &Path) -> Vec<ImageEntry> {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return Vec::new();
@@ -111,8 +110,7 @@ mod chrono_like {
     }
 
     impl LocalTime {
-        /// RFC3339 本地时间（Windows 时区通过 powershell 获取太重，
-        /// 这里用简单 UTC 偏移近似：仅输出 UTC，前端负责本地化显示）
+        /// RFC3339 UTC 时间（不做时区换算，前端负责本地化显示）
         pub fn to_rfc3339(&self) -> String {
             let days = self.secs.div_euclid(86400);
             let rem = self.secs.rem_euclid(86400);

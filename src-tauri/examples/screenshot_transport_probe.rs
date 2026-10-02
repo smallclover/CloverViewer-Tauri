@@ -1,8 +1,8 @@
-//! Compare the old/new screenshot paths in a hidden, real WebView2 window.
-//! Requires built dist; old mode also needs a copy at .unit-test-dist/screenshot-baseline-dist.
-//! Run with `png` or `raw`. Captures remain in memory; no files or clipboard writes.
-//! Windows cargo examples lack the main executable's resources. Before running, use Windows
-//! SDK mt.exe to embed tauri-build's src/windows-app-manifest.xml (from the cargo registry):
+//! 在隐藏的真实 WebView2 窗口中对比新旧两条截图链路。
+//! 需要先构建 dist；旧模式还要求 .unit-test-dist/screenshot-baseline-dist 下有一份副本。
+//! 用 `png` 或 `raw` 运行。截图只留在内存里，不写文件、不写剪贴板。
+//! Windows 上的 cargo 示例缺少主程序的资源。运行前先用 Windows SDK 的 mt.exe 嵌入
+//! tauri-build 的 src/windows-app-manifest.xml（位于 cargo registry）：
 //! `mt.exe -manifest <manifest-path> "-outputresource:<probe-exe-path>;#1"`
 //! Without this, the process can fail at startup with STATUS_ENTRYPOINT_NOT_FOUND.
 use base64::Engine;
@@ -30,7 +30,7 @@ struct Probe {
 
 fn queue_capture(app: AppHandle) {
     std::thread::spawn(move || {
-        // Allow the initial page load / previous clear callback to finish before timing.
+        // 先让首页加载与上一次清理回调结束，再开始计时。
         std::thread::sleep(Duration::from_millis(200));
         let probe = app.state::<Probe>();
         let round = probe.round.fetch_add(1, Ordering::SeqCst) + 1;
@@ -195,7 +195,7 @@ fn main() {
             .focused(false)
             .inner_size(800.0, 600.0)
             .build()?;
-            // Never leave a hidden probe process running if a page error prevents completion.
+            // 页面出错导致流程走不完时，不能让隐藏的探测进程一直留着。
             let app = app.handle().clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_secs(20));

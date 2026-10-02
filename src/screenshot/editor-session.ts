@@ -6,7 +6,7 @@ export interface EditorSessionOptions {
   strokeWidth: number;
 }
 
-/** Durable annotation state shared by input, rendering, export, and lifecycle code. */
+/** 输入、渲染、导出与生命周期代码共用的持久标注状态。 */
 export function createEditorSession(options: EditorSessionOptions) {
   let selection: Rect | null = null;
   let tool: Tool | null = null;

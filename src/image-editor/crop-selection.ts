@@ -25,7 +25,7 @@ export function cropTarget(rect: Rect, point: Pt, tolerance: CropSize): CropTarg
   return insideX && insideY ? "move" : "new";
 }
 
-/** Work in source pixels, keep the opposite edge fixed, and never allow an inverted/outside crop. */
+/** 全程使用源图像素：对边保持不动，且不允许裁剪框反向或越界。 */
 export function dragCrop(
   origin: Rect,
   start: Pt,
@@ -47,7 +47,7 @@ export function dragCrop(
     top = origin.y,
     right = origin.x + origin.w,
     bottom = origin.y + origin.h;
-  // Use deltas so grabbing anywhere in a handle's hit area does not make the frame jump.
+  // 用位移增量计算，这样在控制点热区内任意位置都能拖动，而不会让选框跳一下。
   const dx = point.x - start.x,
     dy = point.y - start.y;
   if (target.includes("w")) left = clamp(left + dx, 0, right - Math.min(minimum.w, origin.w));

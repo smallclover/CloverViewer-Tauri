@@ -16,7 +16,7 @@ interface DesktopPetControllerOptions {
   toast: (message: string, kind?: ToastKind) => void;
 }
 
-/** Keeps the main window responsive while the separate Live2D window starts. */
+/** 在独立的 Live2D 窗口启动期间保持主窗口可响应。 */
 export function createDesktopPetController(options: DesktopPetControllerOptions) {
   let ready = false;
   let wanted = false;
@@ -75,8 +75,8 @@ export function createDesktopPetController(options: DesktopPetControllerOptions)
     }
   };
 
-  // Subscribe before any request creates the pet window, so its first-frame
-  // event cannot race the main window's listener registration.
+  // 必须先于任何创建桌宠窗口的请求完成订阅，否则其首帧事件
+  // 会与主窗口注册监听的时机产生竞态。
   const listener = listenDesktopPetLoadStatus(onLoadStatus);
   void listener.catch(() => undefined);
 
@@ -93,7 +93,7 @@ export function createDesktopPetController(options: DesktopPetControllerOptions)
     const next = (async () => {
       await listener;
       if (enabled && !wasReady) {
-        // The status card gets a chance to paint before native WebView creation.
+        // 先给状态卡片一点绘制时间，再创建原生 WebView。
         await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
       }
       if (id !== requestId) return;

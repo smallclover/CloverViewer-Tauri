@@ -12,7 +12,7 @@ pub struct ShiftEstimate {
 }
 
 impl ShiftEstimate {
-    /// Relative improvement over treating the two frames as unshifted.
+    /// 相对「把两帧视为未位移」的误差改进幅度。
     pub fn improvement(&self) -> f32 {
         if self.err <= f32::EPSILON {
             f32::INFINITY
@@ -22,7 +22,7 @@ impl ShiftEstimate {
     }
 }
 
-/// Find the vertical shift with the smallest sampled grayscale absolute error.
+/// 找出采样灰度绝对误差最小的纵向位移。
 pub(super) fn from_grays(
     previous: &[u8],
     current: &[u8],
@@ -36,9 +36,8 @@ pub(super) fn from_grays(
     let x0 = margin;
     let x1 = width.saturating_sub(margin).max(x0 + 1);
     let height = height as usize;
-    // PageDown and trackpad flings may move substantially more than half a
-    // viewport.  Keep only the minimum overlap required for registration
-    // instead of silently classifying those valid frames as "no motion".
+    // PageDown 与触控板惯性滑动可能远超半个视口。这里只保留配准所需的
+    // 最小重叠，而不是把这类有效帧直接判成「无位移」。
     let min_overlap = (height / 10).clamp(32, 240);
     let max_shift = height.saturating_sub(min_overlap).max(1);
     let rows: Vec<usize> = (0..height).step_by(2).collect();

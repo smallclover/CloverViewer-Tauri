@@ -17,13 +17,13 @@ interface ScreenshotLoadControllerOptions {
   logLoaded: (data: ScreenshotData) => void;
 }
 
-/** Loads one screenshot-window session in the only safe order for window reuse. */
+/** 按窗口复用唯一安全的顺序加载一次截图窗口会话。 */
 export function createScreenshotLoadController(options: ScreenshotLoadControllerOptions) {
   let revision = 0;
   const load = async () => {
     const current = ++revision;
     const data = await getScreenshotData();
-    // Startup warmup has no capture. Keep the prepared page hidden and idle.
+    // 启动预热阶段没有截图数据，保持已就绪的页面隐藏且空闲。
     if (!data || current !== revision) return null;
     let screens: LoadedScreenshotScreen[];
     try {

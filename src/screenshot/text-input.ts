@@ -18,7 +18,7 @@ interface TextInputControllerOptions {
   onRender: () => void;
 }
 
-/** Owns textarea placement, focus timing and conversion from DOM text to an annotation shape. */
+/** 负责 textarea 的定位、聚焦时机，以及从 DOM 文本到标注图形的转换。 */
 export function createTextInputController({
   uiLayer,
   root,

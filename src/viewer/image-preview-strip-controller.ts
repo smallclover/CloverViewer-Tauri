@@ -11,7 +11,7 @@ interface ImagePreviewStripOptions {
   onSelect: (index: number) => void;
 }
 
-/** Renders a compact, clickable window around the active image. */
+/** 渲染当前图片前后各两张的紧凑缩略图条，点击可切换。 */
 export function createImagePreviewStripController(options: ImagePreviewStripOptions) {
   const buttons = new Map<string, HTMLButtonElement>();
   const thumbnailLoader = createThumbnailLoader({

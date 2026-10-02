@@ -1,4 +1,4 @@
-//! Platform-independent V2 capture state machine.
+//! 平台无关的 V2 滚动截图状态机。
 
 use image::RgbaImage;
 

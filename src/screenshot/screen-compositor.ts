@@ -6,7 +6,7 @@ export interface ScreenImage {
   h: number;
 }
 
-/** Paint every captured display over an opaque background. */
+/** 在不透明底图上绘制每一块已采集的显示器画面。 */
 export function drawScreenBase(context: CanvasRenderingContext2D, screens: readonly ScreenImage[]) {
   context.fillStyle = "#14161c";
   context.fillRect(0, 0, context.canvas.width, context.canvas.height);

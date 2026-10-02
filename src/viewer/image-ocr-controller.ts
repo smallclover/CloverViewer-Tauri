@@ -8,7 +8,7 @@ interface ImageOcrControllerOptions {
   onClose: () => void;
 }
 
-/** Keeps recognized text with its image for this viewer session. */
+/** 识别结果按路径缓存，仅保存在本次查看器会话内。 */
 export function createImageOcrController(options: ImageOcrControllerOptions) {
   const results = new Map<string, string>();
   const keyFor = (path: string) => path.replace(/\\/g, "/").toLowerCase();

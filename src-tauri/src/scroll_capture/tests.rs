@@ -170,16 +170,16 @@ fn manual_anchor_skips_a_duplicate_tail_then_accepts_later_new_content() {
         engine.ingest(second.clone()).unwrap(),
         EngineEvent::Appended { .. }
     ));
-    // The final settle probe may be identical to the last accepted screen.
-    // It must never add a second copy of the visible tail.
+    // 最后的稳定探测帧可能与上一张已接受的画面完全相同，
+    // 绝不能重复追加一份可见尾部。
     assert!(matches!(
         engine.ingest(second).unwrap(),
         EngineEvent::NoMotion
     ));
     assert_eq!(engine.height(), 375);
 
-    // A skipped frame must not poison the anchor.  Scrolling on afterwards
-    // still registers against the last verified frame and remains appendable.
+    // 被跳过的帧不能污染锚点。此后继续滚动仍会对最后一张已验证的
+    // 帧配准，并且依然可以追加。
     assert!(matches!(
         engine.ingest(third).unwrap(),
         EngineEvent::Appended { .. }
@@ -204,8 +204,8 @@ fn manual_anchor_survives_an_unmatched_frame() {
         engine.ingest(unrelated).unwrap(),
         EngineEvent::Uncertain { .. }
     ));
-    // The only trusted reference is still the last green frame, therefore a
-    // later valid frame can recover without a wrong seam or early termination.
+    // 唯一可信的参照仍是最后一张有效帧，因此后续有效帧可以恢复，
+    // 不会出现错误接缝或提前终止。
     assert!(matches!(
         engine.ingest(third).unwrap(),
         EngineEvent::Appended { .. }

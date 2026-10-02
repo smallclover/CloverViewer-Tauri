@@ -29,7 +29,7 @@ const failLoad = () => {
   if (loadFailed) return;
   loadFailed = true;
   loadFinished = true;
-  // Closing a failed secondary window permits a later off/on retry to create it afresh.
+  // 关闭加载失败的独立窗口，后续 off/on 重试才能重新创建它。
   void reportLoadStatus("failed").finally(() => {
     void desktopWindow?.close().catch(() => undefined);
   });
@@ -50,8 +50,8 @@ function celebrate() {
   void renderer.celebrate();
 }
 
-// A plain browser preview has no Tauri IPC bridge; keep the default locale and
-// animation there while the production window receives its real IPC events.
+// 纯浏览器预览没有 Tauri IPC 桥，保持默认语言与动画；
+// 正式窗口则由真实的 IPC 事件驱动。
 if (desktopWindow) {
   let contextMenuOpening = false;
 
@@ -136,7 +136,7 @@ if (desktopWindow) {
 }
 
 const initialStatus = reportLoadStatus("started");
-// Let the small loading bubble paint before parsing the Cubism core and texture.
+// 先让加载气泡绘制出来，再去解析 Cubism 核心与贴图。
 window.setTimeout(() => {
   void initialStatus
     .then(() => renderer.mount(live2dHost))

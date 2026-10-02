@@ -22,7 +22,7 @@ interface EditorCanvasRendererOptions {
   drawMagnifier: (context: CanvasRenderingContext2D, x: number, y: number) => void;
 }
 
-/** Renders only the editor canvas; all DOM layout and state transitions stay outside this module. */
+/** 只负责绘制编辑器画布；所有 DOM 布局与状态切换都留在这个模块之外。 */
 export function createEditorCanvasRenderer({
   context,
   getScreens,

@@ -1,4 +1,4 @@
-//! Measures the capture/encoding path without writing or displaying screenshots.
+//! 测量截图采集与编码的耗时，不写盘也不显示截图。
 //! Run: cargo run --release --manifest-path src-tauri/Cargo.toml --example screenshot_latency_probe
 use base64::Engine;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "data:image/png;base64,{}",
                 base64::engine::general_purpose::STANDARD.encode(&png)
             );
-            // Match the store clone and JSON response costs (not the WebView transport).
+            // 统计 store 克隆与 JSON 响应这两项开销（不含 WebView 传输）。
             json_bytes += serde_json::to_vec(&url.clone())?.len();
             transfer_ms += stage.elapsed().as_secs_f64() * 1000.0;
             let stage = Instant::now();

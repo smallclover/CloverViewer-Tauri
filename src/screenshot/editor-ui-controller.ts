@@ -24,7 +24,7 @@ interface EditorUiControllerOptions {
   getMagnifierActive: () => boolean;
 }
 
-/** Coordinates editor-only floating UI; canvas rendering and editor state stay outside. */
+/** 统一调度编辑器专用的浮动 UI；画布渲染与编辑器状态都在其外。 */
 export function createEditorUiController(options: EditorUiControllerOptions) {
   const { toolbarUi, helpPanel } = options;
   const { toolbar, colorBtn, widthBtn, colorPopup, widthPopup } = toolbarUi;

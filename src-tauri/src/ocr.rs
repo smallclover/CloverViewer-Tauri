@@ -296,9 +296,7 @@ mod imp {
     }
 }
 
-// ============================================================
 // 图像预处理（跨平台，纯 image/imageproc，无 Windows 依赖）
-// ============================================================
 fn preprocess_for_ocr(img: DynamicImage) -> DynamicImage {
     let mut gray = img.grayscale().into_luma8();
 
@@ -480,9 +478,7 @@ fn binarize(mut gray: GrayImage, threshold: u8) -> GrayImage {
     gray
 }
 
-// ============================================================
 // Tauri 命令
-// ============================================================
 
 /// OCR 命令：前端传 PNG base64（选区裁剪结果），语言读自 config，后台线程识别。
 #[tauri::command]

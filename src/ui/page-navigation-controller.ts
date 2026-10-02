@@ -15,7 +15,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
-/** Keeps full-page workspaces on a small, browser-like navigation history. */
+/** 让整页工作区共享一份浏览器式的小型前进后退历史。 */
 export function createPageNavigationController(options: PageNavigationOptions) {
   const backButton = element<HTMLButtonElement>("page-back");
   const forwardButton = element<HTMLButtonElement>("page-forward");

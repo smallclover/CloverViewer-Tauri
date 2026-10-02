@@ -5,7 +5,7 @@ const PIXEL_SIZE = 10;
 const OFFSET = 20;
 const INFO_HEIGHT = 64;
 
-/** Convert the center pixel in a square RGBA sample into the copied color value. */
+/** 取正方形 RGBA 采样中中心像素的颜色值（复制用的十六进制色）。 */
 export function centerColorHex(data: Uint8ClampedArray, gridSize = GRID_SIZE): string {
   const half = Math.floor(gridSize / 2);
   const offset = (half * gridSize + half) * 4;
@@ -42,7 +42,7 @@ function roundRect(
   context.closePath();
 }
 
-/** Keeps the reusable sample canvas close to the magnifier renderer instead of editor state. */
+/** 可复用的采样画布放在放大镜渲染器内部，而不是放进编辑器状态。 */
 export function createMagnifierRenderer({
   getScreens,
   getViewport,

@@ -5,7 +5,7 @@ interface ImageSourceApi {
   readImageData(path: string): Promise<string>;
 }
 
-/** Resolves native image paths and bounds the fallback data-URL cache. */
+/** 返回图片可用的地址：Web 支持的格式走原生路径，否则回退到 data-URL（LRU 上限 20 条）。 */
 export function createImageSourceResolver({ fileSrc, readImageData }: ImageSourceApi) {
   const decodedCache = new Map<string, string>();
   const pending = new Map<string, Promise<string>>();

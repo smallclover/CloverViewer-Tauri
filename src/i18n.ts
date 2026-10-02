@@ -1,6 +1,6 @@
 import { en, ja, zh } from "./locales";
 
-// i18n runtime: language selection, interpolation, and DOM synchronization.
+// i18n 运行时：语言选择、插值与 DOM 同步。
 export type Lang = "Zh" | "En" | "Ja";
 type Dict = Record<string, string>;
 

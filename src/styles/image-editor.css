@@ -1,4 +1,4 @@
-/* The image keeps its own canvas; editing islands reserve space below it. */
+/* 图片保留自己的画布；编辑工具岛在它下方预留空间。 */
 #image-editor-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .image-editor-workspace {
   position: relative;

@@ -1,4 +1,4 @@
-//! Screen capture metadata and immutable, unencoded RGBA frames.
+//! 截图元数据，以及不可变、未编码的 RGBA 原始像素帧（全程留在内存，按 capture_id 取用）。
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -116,8 +116,8 @@ pub fn capture_all(capture_id: u64) -> Result<CapturedScreenshot, String> {
     }
 
     // 诊断日志：每个 monitor 的原始 xcap 元数据（物理像素、scale factor、image 尺寸）。
-    // 多屏/混合 DPI 的坐标问题靠猜是修不掉的（已经返工三轮），输出到 stderr，
-    // 让用户截图发回或下一步接 tracing 都方便。release 构建下也能保留。
+    // 混合 DPI 下的跨屏坐标偏移只能靠原始数据定位，所以打印未经换算的 xcap 值，
+    // 便于用户回传排查；release 构建下也保留。
     eprintln!("[screenshot] monitors (raw, all values physical px):");
     for (i, mi) in monitor_info.iter().enumerate() {
         eprintln!(

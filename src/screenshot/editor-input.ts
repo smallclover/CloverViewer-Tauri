@@ -87,7 +87,7 @@ export function createEditorInputController(options: EditorInputOptions) {
         Math.round(point.y + minY),
       );
     } catch {
-      // Keep screen selection available if native window detection fails.
+      // 原生窗口探测失败时，仍保留整屏选区可用。
     }
     if (seq !== winQuerySeq || !canHoverWindow()) return;
     if (windowRect) {
@@ -112,7 +112,7 @@ export function createEditorInputController(options: EditorInputOptions) {
     const wait = 40 - (performance.now() - lastWinQuery);
     if (wait <= 0) void queryWindow(point);
     else {
-      // A trailing query must run even when no further mousemove arrives.
+      // 即使之后不再收到 mousemove，也必须补发一次查询。
       winQueryTimer = setTimeout(() => {
         winQueryTimer = null;
         if (lastMousePos && canHoverWindow()) void queryWindow(lastMousePos);
@@ -147,8 +147,8 @@ export function createEditorInputController(options: EditorInputOptions) {
     );
   };
   const checkpoint = (snapshot: Shape[]) => {
-    // The caller snapshots on drag start through the array's immutable history hook.
-    // This event lets the composition root retain ownership of undo history.
+    // 调用方会在拖拽开始时通过数组的不可变历史钩子做快照。
+    // 该事件让组合根继续拥有撤销历史。
     options.onCheckpoint?.(snapshot);
   };
 
@@ -418,7 +418,7 @@ export function createEditorInputController(options: EditorInputOptions) {
     }
     const currentShape = options.getCurrentShape();
     if (currentShape) {
-      // Mouse moves can be coalesced; commit the release position before validating.
+      // 鼠标移动事件可能被合并；校验前先按抬起位置落点。
       const end = clampToSelection(physPos(event));
       currentShape.end = end;
       if (currentShape.points) {

@@ -15,7 +15,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
-/** Owns the About overlay, runtime metadata, and its external links. */
+/** 负责「关于」浮层、运行时信息和其中的外部链接。 */
 export function createAboutController(options: {
   toast: (message: string, kind?: ToastKind) => void;
 }) {
@@ -43,7 +43,7 @@ export function createAboutController(options: {
       const arch = info.arch === "x86_64" ? "x64" : info.arch;
       runtime.textContent = `${os} · ${arch}`;
     } catch {
-      // The build-time version remains useful when the backend is unavailable.
+      // 后端不可用时，保留构建期写入的版本号仍有用。
     }
   };
   const open = () => {

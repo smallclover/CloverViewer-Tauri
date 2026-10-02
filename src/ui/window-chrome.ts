@@ -7,7 +7,7 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
   return found as T;
 };
 
-/** Binds custom titlebar controls to the native window drag and resize APIs. */
+/** 把自定义标题栏的按钮、拖动与缩放把手接到原生窗口 API 上。 */
 export function bindWindowChrome() {
   const windowHandle = getCurrentWindow();
   element("win-min").addEventListener("click", () => void windowHandle.minimize());

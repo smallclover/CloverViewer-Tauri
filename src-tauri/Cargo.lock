@@ -806,7 +806,7 @@ dependencies = [
 
 [[package]]
 name = "cloverviewer-tauri"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "arboard",
  "axum",

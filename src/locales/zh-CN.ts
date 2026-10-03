@@ -291,6 +291,8 @@ export const zh = {
   "editor.fontSize": "字号",
   "editor.blockSize": "色块大小",
   "editor.sizePixels": "px 为原图像素；缩放预览会等比例显示，缩小导出会等比例缩小。",
+  "editor.imageSizePixels":
+    "默认大小按打开图片时的预览比例调整；px 为原图像素，已有标注随图片等比例显示和导出。",
   // 截图标注器
   "shot.rect": "矩形",
   "shot.circle": "椭圆",
@@ -320,8 +322,8 @@ export const zh = {
   "shot.shareDownloadsUnlimited": "不限下载次数",
   "shot.shareDownloadsOnce": "下载一次后失效",
   "shot.ocr": "文字识别 (OCR)",
-  // 截图提示框：「键帽 + 说明」逐项渲染（见 screenshot.ts 的 HELP_ITEMS），
-  // 每一项都要与 screenshot.ts 里真实生效的交互一致。
+  // 截图提示框：「键帽 + 说明」逐项渲染（见 screenshot/panels.ts 的 createHelpPanel），
+  // 每一项都要与 panels.ts 里真实生效的交互一致。
   "shot.hint.dragKey": "拖动",
   "shot.hint.drag": "框选区域",
   "shot.hint.clickKey": "单击",

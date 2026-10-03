@@ -9,9 +9,8 @@ export interface ResizeOrigin {
 }
 
 /**
- * Return a resized copy of an annotation, or null when the requested bounds
- * would be too small to keep it usable.  Keeping this independent from the
- * canvas event layer makes the handle mapping safe to exercise in unit tests.
+ * 返回缩放后的标注副本；若目标尺寸小到不可用则返回 null。
+ * 与画布事件层解耦，使手柄映射可以在单元测试里安全验证。
  */
 export function resizeShape(
   shape: Shape,

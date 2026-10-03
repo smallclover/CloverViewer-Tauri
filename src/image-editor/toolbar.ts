@@ -1,7 +1,13 @@
 import type { Tool } from "./geometry";
 import { createSelectControl } from "../ui/select-control";
 import { editorIcon } from "./toolbar-icons";
-import { createAnnotationSizes, SIZE_LABELS, SIZE_PRESETS, sizeKind } from "./annotation-style";
+import {
+  createAnnotationSizes,
+  createPreviewAnnotationSizing,
+  SIZE_LABELS,
+  SIZE_PRESETS,
+  sizeKind,
+} from "./annotation-style";
 
 export type EditorTool = Tool | "select" | "crop";
 
@@ -28,7 +34,7 @@ const TOOLS: [EditorTool, string][] = [
   ["text", "shot.text"],
 ];
 
-/** Bottom editing islands and their contextual controls; image state stays in the controller. */
+/** 底部编辑工具岛及其上下文控件；图片状态仍由控制器持有。 */
 export function createEditorToolbar(options: ToolbarOptions) {
   const element = document.createElement("div");
   element.className = "image-editor-controls";
@@ -38,6 +44,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
   const labels = new Map<HTMLElement, string>();
   let activeTool: EditorTool = "select";
   const sizes = createAnnotationSizes();
+  let sizePresets = SIZE_PRESETS;
 
   const translated = (tag: "span" | "strong", key: string) => {
     const node = document.createElement(tag);
@@ -197,10 +204,10 @@ export function createEditorToolbar(options: ToolbarOptions) {
     const widthKey = SIZE_LABELS[kind];
     labels.set(widthCaption, widthKey);
     widthCaption.textContent = options.translate(widthKey);
-    width.title = `${options.translate(widthKey)} · ${options.translate("editor.sizePixels")}`;
+    width.title = `${options.translate(widthKey)} · ${options.translate("editor.imageSizePixels")}`;
     width.ariaLabel = width.title;
     width.replaceChildren(
-      ...SIZE_PRESETS[kind].map(
+      ...sizePresets[kind].map(
         (value) =>
           new Option(`${value} px`, String(value), value === sizes[kind], value === sizes[kind]),
       ),
@@ -260,6 +267,12 @@ export function createEditorToolbar(options: ToolbarOptions) {
     refreshTranslations,
     closePanels,
     updateLayout,
+    initializeSizes: (previewScale: number) => {
+      const adapted = createPreviewAnnotationSizing(previewScale);
+      Object.assign(sizes, adapted.sizes);
+      sizePresets = adapted.presets;
+      refreshContext();
+    },
     refreshHistory: (canUndo: boolean, canRedo: boolean) => {
       undo.disabled = !canUndo;
       redo.disabled = !canRedo;

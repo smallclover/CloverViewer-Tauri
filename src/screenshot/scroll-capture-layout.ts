@@ -22,7 +22,7 @@ interface ScrollCapturePositionerOptions {
   onHudOverlap: (overlapsCapture: boolean) => void;
 }
 
-/** Positions every scroll-capture overlay in CSS pixels, outside the capture region where possible. */
+/** 把截图控件摆到选区之外，并按 CSS 像素把提示居中。 */
 export function createScrollCapturePositioner(options: ScrollCapturePositionerOptions) {
   const place = (element: HTMLElement, region: CssBox, monitor: CssBox) => {
     const point = placeScrollOverlay(region, monitor, {
@@ -37,19 +37,23 @@ export function createScrollCapturePositioner(options: ScrollCapturePositionerOp
     if (!options.notice.classList.contains("on")) return;
     const capture = options.getCaptureRect() ?? options.getSelection();
     const monitor = capture ? options.monitorBox(capture) : options.rootBox();
+    const margin = 10;
+    options.notice.style.maxWidth = `${Math.max(1, Math.min(420, monitor.w - margin * 2))}px`;
+    options.notice.style.maxHeight = `${Math.max(1, monitor.h - margin * 2)}px`;
+    options.notice.style.left = `${monitor.x + margin}px`;
     const width = options.notice.offsetWidth || 320;
     const height = options.notice.offsetHeight || 40;
-    const minX = monitor.x + 10;
-    const maxX = Math.max(minX, monitor.x + monitor.w - width - 10);
-    const x = Math.max(minX, Math.min(monitor.x + (monitor.w - width) / 2, maxX));
-    let y = monitor.y + monitor.h - height - 16;
-    if (capture) {
-      const region = options.toCssBox(capture);
-      if (overlaps({ x, y, w: width, h: height }, region)) {
-        const top = monitor.y + 16;
-        if (!overlaps({ x, y: top, w: width, h: height }, region)) y = top;
-      }
-    }
+    const region = capture ? options.toCssBox(capture) : null;
+    const anchor =
+      region && region.w >= width + margin * 2 && region.h >= height + margin * 2
+        ? region
+        : monitor;
+    const minX = monitor.x + margin;
+    const maxX = Math.max(minX, monitor.x + monitor.w - width - margin);
+    const minY = monitor.y + margin;
+    const maxY = Math.max(minY, monitor.y + monitor.h - height - margin);
+    const x = Math.max(minX, Math.min(anchor.x + (anchor.w - width) / 2, maxX));
+    const y = Math.max(minY, Math.min(anchor.y + (anchor.h - height) / 2, maxY));
     options.notice.style.left = `${x}px`;
     options.notice.style.top = `${y}px`;
   };
@@ -78,7 +82,7 @@ export function createScrollCapturePositioner(options: ScrollCapturePositionerOp
   return { position, positionNotice };
 }
 
-/** Draws the capture-time dimmer and transparent capture hole in physical pixels. */
+/** 按物理像素绘制截图时的遮罩与透明的截取孔。 */
 export function renderScrollCaptureOverlay(options: {
   context: CanvasRenderingContext2D;
   canvas: HTMLCanvasElement;

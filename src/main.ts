@@ -46,7 +46,7 @@ const viewerSession = createViewerSession();
 
 const imageSource = createImageSourceResolver({ fileSrc, readImageData });
 
-// ---------- DOM ----------
+// ---------- DOM 引用 ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const emptyState = $("empty-state");
@@ -423,7 +423,7 @@ function showSingle(index: number) {
   refreshStatus();
 }
 
-/** Opens an image from a browsing surface and makes the grid returnable via titlebar history. */
+/** 从网格等浏览界面打开单图详情，并压入标题栏历史，使「后退」能回到网格。 */
 function openImageDetails(index: number) {
   if (index < 0 || index >= viewerSession.images.length) return;
   pageNavigation.showImage(index);
@@ -633,7 +633,7 @@ bindWindowChrome();
 
 // ---------- 自定义右键菜单（接管 WebView 默认菜单） ----------
 // 复制图片走原生剪贴板，避免 Windows WebView2 对 ClipboardItem 图片支持不完整。
-// 这也让从滚动截图打开的长图和截图覆盖窗使用同一条可靠路径。
+// 滚动截图的长图也在本窗口打开，与网格/单图共用这条复制路径。
 async function copyImageBitmap(entry: ImageEntry) {
   try {
     await copyImageFile(entry.path);
@@ -761,8 +761,8 @@ window.addEventListener("keydown", (event) => {
   }
   applyI18n(document);
   refreshStatus();
-  // Defer warmup until after startup. A timer also runs when --startup hides the viewer;
-  // requestAnimationFrame would stall there and leave the first tray capture cold.
+  // 预热推迟到启动之后：--startup 隐藏查看器时定时器照样会跑，
+  // 而 requestAnimationFrame 在那里会停摆，导致首次托盘截图仍是冷启动。
   window.setTimeout(() => {
     void prepareScreenshotWindow().catch((error) => {
       console.warn("Preparing screenshot window failed; will retry on capture", error);
@@ -776,7 +776,7 @@ window.addEventListener("keydown", (event) => {
   void bindOpenImageBridge(
     async (payload) => {
       await openFileOrFolder(payload.path);
-      if (payload.ocr_text === undefined) return;
+      if (typeof payload.ocr_text !== "string") return;
       const normalized = payload.path.replace(/\\/g, "/").toLowerCase();
       const entry = viewerSession.images.find(
         (image) => image.path.replace(/\\/g, "/").toLowerCase() === normalized,
@@ -795,5 +795,4 @@ window.addEventListener("keydown", (event) => {
     toast,
   );
   void showStartupNotices(t, toast);
-  // 记住上次的语言仅作展示；无目录状态由用户操作进入
 })();

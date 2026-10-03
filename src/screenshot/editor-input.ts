@@ -41,9 +41,9 @@ interface EditorInputOptions {
 }
 
 /**
- * The pointer state machine for the screenshot editor. It owns transient drag
- * state only; durable editor state remains with the composition root so export,
- * rendering and lifecycle code can share it without a second source of truth.
+ * 截图编辑器的指针状态机。它只持有拖拽过程中的瞬时状态；持久化的编辑器
+ * 状态仍由组合根保留，这样导出、渲染与生命周期代码都能共用，而不会出现
+ * 第二个数据来源。
  */
 export function createEditorInputController(options: EditorInputOptions) {
   let dragStart: Pt | null = null;

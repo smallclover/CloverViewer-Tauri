@@ -1,8 +1,8 @@
 /**
- * Live2D Cubism 5 renderer for the desktop pet.
+ * 桌面小宠物的 Live2D Cubism 5 渲染器。
  *
- * Draws the exported model, plays its PSD2Live motion exports, and evaluates
- * physics through the official Live2D Web Framework.
+ * 绘制导出的模型，播放 PSD2Live 导出的动作，并通过官方
+ * Live2D Web Framework 求物理。
  */
 import { PetMotionPlayer } from "./motion-player";
 

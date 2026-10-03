@@ -55,7 +55,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 
 *   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background and transfers raw pixels directly to reduce selection-screen delay without losing image quality
 *   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended, while sticky headers, pinned footers and fixed sidebars are skipped. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
-*   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; screenshot and image editing share separate stroke, font and block-size presets in original image pixels (px), retaining each size when switching tools during a session
+*   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; stroke, font and block sizes are set independently in original image pixels (px), retaining each size when switching tools during a session. Image editing adapts initial sizes and presets to the preview scale so annotations stay clear on large images shown smaller; resizing the window preserves chosen sizes and existing annotations
 *   **Color & line width**: long-press a tool icon to open the color palette
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y

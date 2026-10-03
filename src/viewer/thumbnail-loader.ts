@@ -14,10 +14,10 @@ interface ThumbnailTask {
 }
 
 /**
- * Bounds native thumbnail work while a virtualized grid is moving.
+ * 在虚拟化网格滚动时限制原生缩略图任务的开销。
  *
- * A task that leaves the visible range before it starts resolves to undefined;
- * work already handed to Tauri is allowed to finish and seed the small LRU.
+ * 尚未开始就已离开可见范围的任务会以 undefined 结束；
+ * 已交给 Tauri 的任务则允许跑完，并写入小容量 LRU 缓存。
  */
 export function createThumbnailLoader(options: ThumbnailLoaderOptions) {
   const maxConcurrent = Math.max(1, options.maxConcurrent ?? 4);

@@ -10,6 +10,8 @@ async function setup() {
   const drawn = [];
   let active = null;
   let toolbarActions;
+  let toolbar;
+  let previewScale = 0.2;
   const elements = [];
   const context = new Proxy({ measureText: text => ({ width: text.length * 24 }) }, { get: (target, key) => target[key] ?? (() => {}) });
   function element(tag) {
@@ -23,7 +25,7 @@ async function setup() {
       append: () => {}, replaceChildren: () => {},
       getContext: () => context,
       getBoundingClientRect: () => tag === "canvas"
-        ? { left: 120, top: 80, width: 400, height: 200 }
+        ? { left: 120, top: 80, width: 2000 * previewScale, height: 1000 * previewScale }
         : { left: 100, top: 50, width: 700, height: 500 },
       addEventListener: (name, handler) => listeners.set(name, handler),
       fire: (name, event = {}) => listeners.get(name)?.(event),
@@ -48,8 +50,14 @@ async function setup() {
       if (name === "@tauri-apps/plugin-dialog") return { save: async () => null };
       if (name === "../image-editor/toolbar") return { createEditorToolbar: actions => {
         toolbarActions = actions;
-        return { color: { value: "#ff0000" }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
-          refreshTranslations: () => {}, refreshHistory: () => {}, setActiveTool: () => {}, closePanels: () => {}, updateLayout: () => {} };
+        toolbar = { color: { value: "#ff0000" }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
+          refreshTranslations: () => {}, refreshHistory: () => {}, setActiveTool: () => {}, closePanels: () => {}, updateLayout: () => {},
+          initializeSizes: scale => {
+            assert.equal(root.classList.contains("hidden"), false, "measure the visible editor");
+            const { createPreviewAnnotationSizing } = require("../../.unit-test-dist/image-editor/annotation-style.js");
+            Object.assign(toolbar.sizes, createPreviewAnnotationSizing(scale).sizes);
+          } };
+        return toolbar;
       } };
       if (name === "./image-editor-loader") return { createImageEditorLoader: () => ({
         load: async () => ({ naturalWidth: 2000, naturalHeight: 1000 }), cancel: () => {}, isLoading: () => false,
@@ -72,7 +80,7 @@ async function setup() {
     const event = { clientX: x, clientY: y, button: 0, pointerId: 1, defaultPrevented: false,
       preventDefault() { this.defaultPrevented = true; } };
     canvas.fire("pointerdown", event);
-    // Model the browser's default focus change after the pointerdown handler returns.
+    // 模拟浏览器默认行为：pointerdown 处理器返回后，未 preventDefault 才发生焦点切换。
     if (!event.defaultPrevented) active?.blur();
     return event;
   };
@@ -82,7 +90,8 @@ async function setup() {
     input.fire("keydown", event);
     return event;
   };
-  return { controller, input, canvas, click, key, drawn, toolbarActions,
+  return { controller, input, canvas, click, key, drawn, toolbarActions, toolbar,
+    resizePreview: scale => { previewScale = scale; },
     flush: () => { while (timers.length) timers.shift()(); }, focused: () => active === input };
 }
 
@@ -96,16 +105,35 @@ test("clicking the image keeps the text field open and focuses after pointer def
   assert.equal(fixture.focused(), true);
   assert.equal(fixture.input.style.left, "200px");
   assert.equal(fixture.input.style.top, "110px");
-  assert.ok(Math.abs(parseFloat(fixture.input.style.font.split(" ")[1]) - 4.8) < 0.00001);
+  assert.equal(parseFloat(fixture.input.style.font.split(" ")[1]), 24);
   fixture.input.value = "输入文字";
   fixture.key();
   assert.equal(fixture.input.classList.contains("hidden"), true);
   assert.equal(fixture.drawn[0].text, "输入文字");
   assert.equal(fixture.drawn[0].start.x, 900);
   assert.equal(fixture.drawn[0].start.y, 400);
-  assert.equal(fixture.drawn[0].fontSize, 24);
+  assert.equal(fixture.drawn[0].fontSize, 120);
+  assert.equal(fixture.drawn[0].strokeWidth, 10);
   assert.equal(fixture.drawn[0].end.x, 996);
-  assert.equal(fixture.drawn[0].end.y, 428.8);
+  assert.equal(fixture.drawn[0].end.y, 544);
+});
+
+test("manual sizes and committed annotations survive tool switching and later preview resizing", async () => {
+  const fixture = await setup();
+  fixture.click(); fixture.flush(); fixture.input.value = "First"; fixture.key();
+  const first = JSON.stringify(fixture.drawn[0]);
+  fixture.toolbar.sizes.fontSize = 160;
+  fixture.toolbar.sizes.strokeWidth = 20;
+  fixture.toolbarActions.setTool("rect");
+  fixture.toolbarActions.setTool("text");
+  fixture.resizePreview(0.1);
+  fixture.click(); fixture.flush(); fixture.input.value = "Second"; fixture.key();
+  assert.equal(parseFloat(fixture.input.style.font.split(" ")[1]), 16);
+  assert.equal(fixture.toolbar.sizes.fontSize, 160);
+  assert.equal(fixture.toolbar.sizes.strokeWidth, 20);
+  assert.equal(fixture.drawn.at(-1).fontSize, 160);
+  assert.equal(fixture.drawn.at(-1).strokeWidth, 20);
+  assert.equal(JSON.stringify(fixture.drawn[0]), first);
 });
 
 test("IME confirmation and Shift+Enter remain in the text field; a normal Enter commits", async () => {

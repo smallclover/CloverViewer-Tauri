@@ -6,7 +6,7 @@ type Toast = (message: string, kind?: ToastKind, persistent?: boolean) => void;
 type ProgressToast = Toast & { hide: () => void };
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
-/** Binds Tauri drag/drop payloads to the main viewer's file-opening flow. */
+/** 把 Tauri 拖放事件的载荷接到主查看器的文件打开流程上。 */
 export function bindFileDrop(
   overlay: HTMLElement,
   openPath: (path: string) => Promise<void>,
@@ -24,7 +24,7 @@ export function bindFileDrop(
   });
 }
 
-/** Opens a screenshot that the backend has materialized as a temporary image file. */
+/** 打开后端已落成临时图片文件的截图。 */
 export async function bindOpenImageBridge(
   openPath: (payload: OpenImagePayload) => Promise<void>,
   translate: Translate,
@@ -32,7 +32,7 @@ export async function bindOpenImageBridge(
 ): Promise<void> {
   await listenOpenImage(async (payload) => {
     if (!payload?.path) return;
-    const isOcr = payload.ocr_text !== undefined;
+    const isOcr = typeof payload.ocr_text === "string";
     if (isOcr) toast(translate("toast.openingOcr"), "progress", true);
     try {
       await openPath(payload);
@@ -44,7 +44,7 @@ export async function bindOpenImageBridge(
   });
 }
 
-/** Shows one-time backend notices such as global-hotkey registration conflicts. */
+/** 展示后端的一次性通知，例如全局快捷键注册冲突。 */
 export async function showStartupNotices(translate: Translate, toast: Toast): Promise<void> {
   try {
     const notices = await takeStartupNotices();
@@ -62,6 +62,6 @@ export async function showStartupNotices(translate: Translate, toast: Toast): Pr
       }
     }
   } catch {
-    // Startup notices are non-essential and should never block the viewer.
+    // 启动通知并非必需，不能因它阻塞查看器。
   }
 }

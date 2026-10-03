@@ -30,7 +30,7 @@ export interface AppConfig {
   /** 主界面和截图界面的缩放百分比，默认 100%。 */
   ui_scale: 100 | 110 | 125 | 150;
   zoom_sensitivity: number;
-  /** Whether the single-image view shows its adjacent-image preview strip. */
+  /** 单图查看时，是否显示相邻图片的预览条。 */
   image_preview_strip_enabled: boolean;
   hotkeys: HotkeysConfig;
   minimize_on_close: boolean;
@@ -94,7 +94,7 @@ export const listenDesktopPetLoadStatus = (
 ): Promise<UnlistenFn> =>
   listen<DesktopPetLoadStatus>("desktop-pet-load-status", (event) => handler(event.payload));
 
-/** Ask an already-running pet window to replay its current loading state. */
+/** 请求已运行的桌宠窗口重放一次当前加载状态（主窗口挂载时补齐状态用）。 */
 export const requestDesktopPetLoadStatus = () =>
   emitTo("desktop-pet", "desktop-pet-status-request", {});
 
@@ -126,7 +126,7 @@ export const listImages = (dir: string) => invoke<ImageEntry[]>("list_images", {
 
 export const readImageData = (path: string) => invoke<string>("read_image_data", { path });
 
-/** Local image as a same-origin data URL, safe to draw and export from Canvas. */
+/** 把本地图片读成同源 data URL，满足 Canvas 绘制与导出的同源要求。 */
 export const readEditableImageData = (path: string) =>
   invoke<string>("read_editable_image_data", { path });
 
@@ -154,7 +154,7 @@ export interface ScreenData {
 }
 
 export interface ScreenshotData {
-  /** Identifies the immutable RGBA frames belonging to this capture. */
+  /** 标识本次截图的那批 RGBA 帧（取帧与关闭都靠它校验，避免领错会话）。 */
   capture_id: number;
   min_x: number;
   min_y: number;
@@ -179,11 +179,11 @@ export interface MonitorInfo {
 
 export const getScreenshotData = () => invoke<ScreenshotData | null>("get_screenshot_data");
 
-/** Raw RGBA bytes (top to bottom, four bytes per pixel), outside JSON/Base64. */
+/** 直接取原始 RGBA 字节（自上而下，每像素 4 字节），不走 JSON/Base64。 */
 export const getScreenshotFrame = (captureId: number, screenIndex: number) =>
   invoke<ArrayBuffer | number[]>("get_screenshot_frame", { captureId, screenIndex });
 
-/** Prepare the hidden screenshot WebView without capturing the desktop or changing focus. */
+/** 提前备好隐藏的截图 WebView：不抓屏、不改动焦点。 */
 export const prepareScreenshotWindow = () => invoke<void>("prepare_screenshot_window");
 
 /** 前端把截图渲染完成后通知后端：此时才显示截图窗口（避免冷启动白屏/锁屏） */
@@ -208,7 +208,8 @@ export const finishScreenshot = (
 
 export interface OpenImagePayload {
   path: string;
-  ocr_text?: string;
+  /** Rust 把缺失的 OCR 文本序列化为 null；滚动截图则完全不传该字段。 */
+  ocr_text?: string | null;
 }
 
 export const listenOpenImage = (
@@ -217,7 +218,7 @@ export const listenOpenImage = (
 
 export type EditedImageFormat = "png" | "jpeg" | "webp";
 
-/** Encodes the canvas result with Rust's image codec and writes it to the chosen user path. */
+/** 用 Rust 的图像编码器把 Canvas 结果写成用户选定的格式，存到指定路径。 */
 export const saveEditedImage = (path: string, png: string, format: EditedImageFormat) =>
   invoke<void>("save_edited_image", { path, png, format });
 
@@ -228,10 +229,10 @@ export interface LanShareInfo {
   download_limit: number;
 }
 
-/** Starts a temporary, token-protected HTTP share visible only to devices on the same LAN. */
+/** 开启临时的、带 token 校验的 HTTP 分享，仅同一局域网内的设备可访问。 */
 export const startLanShare = (png: string) => invoke<LanShareInfo>("start_lan_share", { png });
 
-/** Shares the current viewer image as a browser-compatible JPEG preview. */
+/** 把查看器当前图片转成浏览器可直接显示的 JPEG 预览再分享。 */
 export const startImageLanShare = (path: string) =>
   invoke<LanShareInfo>("start_image_lan_share", { path });
 
@@ -283,9 +284,7 @@ export interface WindowRect {
 export const pickWindowAt = (x: number, y: number) =>
   invoke<WindowRect | null>("pick_window_at", { x, y });
 
-// ============================================================
 // 滚动截图（长截图）
-// ============================================================
 
 /** 滚动截图请求：x/y/w/h 是**虚拟桌面物理像素**（= 截图窗内坐标 + min_x/min_y） */
 export interface ScrollCaptureRequest {
@@ -348,7 +347,7 @@ export interface ScrollCaptureDone {
   width?: number;
   height?: number;
   frames?: number;
-  /** high | low | partial */
+  /** 取值：high | low | partial */
   confidence?: string;
   message?: string;
 }

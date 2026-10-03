@@ -1,6 +1,7 @@
 require("./grid-layout.test.cjs");
 require("./image-sort.test.cjs");
 require("./image-source.test.cjs");
+require("./open-image-bridge.test.cjs");
 require("./image-editor-loader.test.cjs");
 require("./image-editor-text-input.test.cjs");
 require("./crop-selection.test.cjs");

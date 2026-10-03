@@ -11,7 +11,7 @@ export const en = {
   "toolbar.propsTitle": "Show/Hide Properties",
   "toolbar.settings": "Settings",
   "toolbar.enterEdit": "Enter edit mode",
-  // About page (full screen)
+  // 关于页（全屏）
   "toolbar.about": "About",
   "menu.file": "File",
   "menu.edit": "Edit",
@@ -266,7 +266,7 @@ export const en = {
   "ctx.share": "Share on LAN",
   "ctx.ocrResult": "View recognized text",
   "ctx.edit": "Edit image",
-  // Image editor
+  // 图片编辑器
   "editor.title": "Edit image",
   "editor.select": "Select",
   "editor.crop": "Crop",
@@ -293,6 +293,8 @@ export const en = {
   "editor.blockSize": "Block size",
   "editor.sizePixels":
     "px means original image pixels. Preview zoom and reduced-size export scale annotations proportionally.",
+  "editor.imageSizePixels":
+    "Defaults adapt to the preview scale when an image opens. Values are original image pixels; existing annotations scale with the image in preview and export.",
   "shot.rect": "Rectangle",
   "shot.circle": "Ellipse",
   "shot.arrow": "Arrow",
@@ -349,7 +351,7 @@ export const en = {
   "shot.openFailed": "Open failed: {msg}",
   "shot.ocrEmpty": "No text found. Adjust the selection and try again.",
   "shot.ocrFailed": "OCR failed: {msg}",
-  // ---------- Scrolling capture (long screenshot) ----------
+  // ---------- 滚动截图（长截图） ----------
   "shot.scroll": "Scrolling capture (long screenshot)",
   "shot.scrollReady": "Ready",
   "shot.scrollSelectionLabel": "Selection",

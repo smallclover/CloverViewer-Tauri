@@ -49,9 +49,9 @@ export function placeSelectionOverlay(
 }
 
 /**
- * Score overlay candidates around a capture region. Every long-capture state
- * shares the same right-side-first order so switching from setup to capture to
- * result does not make the panel visibly jump around.
+ * 为截图区域周围的面板候选位置打分。长截图的各个状态都采用
+ * 同一个「优先右侧」的顺序，这样从设置切到采集再到结果时
+ * 面板不会出现肉眼可见的跳动。
  */
 export function placeScrollOverlay(
   region: OverlayBox,

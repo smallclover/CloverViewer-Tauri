@@ -48,7 +48,7 @@ function canvasPng(canvas: HTMLCanvasElement): Promise<string> {
   );
 }
 
-/** Owns a non-destructive, canvas-based editor for a single viewer image. */
+/** 单张查看器图像的编辑器：基于 canvas 绘制，标注过程不破坏原图（可随时撤销）。 */
 export function createImageEditorController(options: ImageEditorControllerOptions) {
   const loader = createImageEditorLoader({ getSource: options.getEditableSource });
   const workspace = document.createElement("div");
@@ -259,7 +259,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     textInput.style.left = `${workspace.scrollLeft + Math.max(0, Math.min(x, workspaceBox.width - inputWidth - 8))}px`;
     textInput.style.top = `${workspace.scrollTop + Math.max(0, Math.min(y, workspaceBox.height - 74))}px`;
     textInput.classList.remove("hidden");
-    // The pointerdown default action must finish before the textarea owns focus.
+    // pointerdown 的默认动作要先走完，之后 textarea 才能拿到焦点，故延到下一个任务。
     window.setTimeout(() => {
       if (textStart === point) textInput.focus({ preventScroll: true });
     }, 0);
@@ -569,10 +569,11 @@ export function createImageEditorController(options: ImageEditorControllerOption
     rebuildSource();
     rasterizeAnnotations();
     setTool("select");
-    // setTool draws the first frame while hidden; reveal it and leave the viewer in one turn.
+    // setTool 已在隐藏状态下画好首帧；这里紧接着显形并让查看器一并切走，不留中间态。
     onReady();
     options.root.classList.remove("hidden");
     toolbar.updateLayout();
+    toolbar.initializeSizes(canvas.getBoundingClientRect().width / canvas.width);
     cropOverlay.refreshImage();
     return true;
   };

@@ -294,6 +294,8 @@ export const ja = {
   "editor.blockSize": "ブロックサイズ",
   "editor.sizePixels":
     "px は元画像のピクセル数です。プレビューの拡大縮小と縮小出力では、注釈も同じ比率で変わります。",
+  "editor.imageSizePixels":
+    "初期サイズは画像を開いた時の表示倍率に合わせて調整します。値は元画像のピクセル数で、既存の注釈はプレビューと出力で画像と同じ比率に拡大縮小されます。",
   "shot.rect": "矩形",
   "shot.circle": "楕円",
   "shot.arrow": "矢印",

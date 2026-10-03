@@ -16,9 +16,8 @@ export function drawScreenBase(context: CanvasRenderingContext2D, screens: reado
 }
 
 /**
- * Copy the overlapping portions of a root-local source region from one or more
- * display captures into a target rectangle.  This preserves the source/dest
- * coordinate separation needed by mosaic, magnifier, OCR, and export paths.
+ * 把根坐标下的源区域中与各显示器重叠的部分，复制到目标矩形。
+ * 由此保持源坐标与目标坐标分离，供马赛克、放大镜、OCR 与导出使用。
  */
 export function blitScreenRegion(
   context: CanvasRenderingContext2D,

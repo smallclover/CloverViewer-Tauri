@@ -4,7 +4,7 @@ const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { runInNewContext } = require("node:vm");
 const ts = require("typescript");
-const { createAnnotationSizes, sizeKind } = require("../../.unit-test-dist/image-editor/annotation-style.js");
+const { createAnnotationSizes, createPreviewAnnotationSizing, sizeKind } = require("../../.unit-test-dist/image-editor/annotation-style.js");
 const { resizeShape } = require("../../.unit-test-dist/screenshot/resize.js");
 
 test("tool changes retain independent font, stroke and mosaic sizes", () => {
@@ -15,6 +15,21 @@ test("tool changes retain independent font, stroke and mosaic sizes", () => {
   assert.equal(sizes[sizeKind("text")], 48);
   for (const tool of ["rect", "circle", "arrow", "pen"]) assert.equal(sizes[sizeKind(tool)], 6);
   assert.equal(sizes[sizeKind("mosaic")], 32);
+});
+
+test("image-editor defaults and every size preset stay legible in fitted large-image previews", () => {
+  for (const scale of [1, 0.75, 0.25, 0.2, 0.05]) {
+    const { sizes, presets } = createPreviewAnnotationSizing(scale);
+    for (const [kind, target] of Object.entries(createAnnotationSizes())) {
+      assert.ok(Math.abs(sizes[kind] * scale - target) <= scale / 2 + 0.00001);
+      assert.ok(presets[kind].includes(sizes[kind]), "adapted default must be selectable");
+      assert.ok(presets[kind].every(size => Number.isInteger(size) && size > 0));
+    }
+  }
+  for (const scale of [0, NaN, Infinity, -1, 2]) {
+    assert.deepEqual(createPreviewAnnotationSizing(scale).sizes, createAnnotationSizes());
+  }
+  assert.deepEqual(createAnnotationSizes(), {strokeWidth: 2, fontSize: 24, blockSize: 16});
 });
 
 test("screenshot preview and export use image pixels regardless of interface scale", () => {

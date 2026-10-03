@@ -9,7 +9,8 @@
 //!   按 physical 单位消费，外加 OS relayout race，窗口外框偏离 + 内部 viewport 不对齐。
 //!   builder 上 `position`/`inner_size` 是 logical，wry 内部按窗口所在 monitor 的 scale
 //!   自动换算成 raw pixel 调 SetWindowPos，定位最稳。
-//! - 主界面首帧后预建隐藏 WebView，首次 Alt+S 不再承担窗口冷启动；关闭时隐藏复用。
+//! - 主界面首帧后按完整桌面尺寸预建隐藏 WebView，并提前应用倍率；关闭时隐藏复用。
+//!   内容坐标补偿集中在 screenshot_window，尺寸和落点未变时不重复调整。
 //! - 截屏完成 → 写 store → `emit("screenshot-refresh")`，前端监听后清状态 + 重载截图。
 //! - `capturing` 互斥锁避免重叠 Alt+S。
 //!
@@ -26,7 +27,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
 };
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// 截图覆盖窗的窗口标签（跨模块共用：界面缩放、滚动截图定位等）。
 pub const WINDOW_LABEL: &str = "screenshot";
@@ -153,9 +154,13 @@ pub fn close_screenshot(app: AppHandle, completed: Option<bool>, capture_id: Opt
     drop(capture);
     *store.capture_started.lock().unwrap() = None;
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
-        // 先让前端清掉画面（移除 body.ready），避免下次 show 时闪旧截图
-        let _ = w.emit("screenshot-clear", ());
-        let _ = w.hide();
+        // 先隐藏覆盖窗，再通知前端释放画面，避免清理/重新排版露在用户眼前。
+        match w.hide() {
+            Ok(()) => {
+                let _ = w.emit("screenshot-clear", ());
+            }
+            Err(error) => tracing::warn!("隐藏截图窗口失败: {error}"),
+        }
     }
     crate::desktop_pet::restore_after_screenshot(&app);
     if completed.unwrap_or(false) {
@@ -498,27 +503,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
         // 每次复用恢复用户选择的界面倍率；屏幕坐标仍使用原始物理像素。
         crate::ui_scale::apply(&win);
 
-        // Windows 无边框窗口自带不可见 DWM resize border：set_position 设的是【外框】，
-        // 内容(webview/content)会相对外框内缩若干像素（本例左 9px/上 5px），导致内容
-        // 盖不到屏幕最左/最上（透过透明窗看到活桌面）。补偿：读「内框-外框」的真实偏移，
-        // 把外框往左/上再挪这么多，让内容正好落在虚拟桌面 (min_x, min_y)。
-        // 注意：set_size 设的是【内容】尺寸（6400x2160），位置才是问题，只补偿位置即可。
-        let border = match (win.outer_position(), win.inner_position()) {
-            (Ok(op), Ok(ip)) => (ip.x - op.x, ip.y - op.y),
-            _ => (0, 0),
-        };
-        if border != (0, 0) {
-            let _ = win.set_position(PhysicalPosition::new(
-                data.min_x - border.0,
-                data.min_y - border.1,
-            ));
-        }
-
         // 诊断：确认内容实际落点是否等于期望的虚拟桌面包围盒（用于排查跨屏/边缘偏移）
-        eprintln!(
-            "[screenshot] border offset (inner-outer): ({},{})",
-            border.0, border.1
-        );
         eprintln!(
             "[screenshot] window expected content: pos=({},{}) size={}x{}",
             data.min_x, data.min_y, data.total_width, data.total_height

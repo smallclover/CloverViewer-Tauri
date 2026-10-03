@@ -286,7 +286,7 @@ export const zh = {
   "editor.tools": "编辑工具",
   "editor.history": "编辑历史与退出",
   "editor.saveOptions": "保存选项",
-  "editor.freeCrop": "自由裁剪",
+  "editor.cropHint": "拖动边框调整裁剪范围",
   "editor.selectHint": "点击选中标注",
   "editor.fontSize": "字号",
   "editor.blockSize": "色块大小",

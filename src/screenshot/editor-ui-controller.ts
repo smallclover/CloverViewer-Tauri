@@ -1,6 +1,6 @@
-import type { HelpPanel } from "./panels";
-import { placeSelectionOverlay } from "./overlay-layout";
 import type { Pt, Rect } from "./geometry";
+import { placeSelectionOverlay } from "./overlay-layout";
+import type { HelpPanel } from "./panels";
 import type { ToolbarUi } from "./toolbar";
 
 interface CssBox {
@@ -29,8 +29,11 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
   const { toolbarUi, helpPanel } = options;
   const { toolbar, colorBtn, widthBtn, colorPopup, widthPopup } = toolbarUi;
   const closePopups = () => toolbarUi.closePopups();
-  const updateHelp = () =>
+  let lastLayout: unknown[] = [];
+  const updateHelp = () => {
+    lastLayout = [];
     helpPanel.sync(options.getCopyColorHotkey(), options.getMagnifierActive());
+  };
 
   const positionHelp = () => {
     if (toolbar.style.display === "none") {
@@ -64,11 +67,34 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
 
   const sync = () => {
     const selection = options.getSelection();
+    const anchor = options.getAnchor();
+    const monitor = options.monitorBox(anchor ? { x: anchor.x, y: anchor.y, w: 1, h: 1 } : null);
+    const rootBox = options.rootBox();
+    const layout = [
+      selection?.x,
+      selection?.y,
+      selection?.w,
+      selection?.h,
+      monitor.x,
+      monitor.y,
+      monitor.w,
+      monitor.h,
+      rootBox.x,
+      rootBox.y,
+      rootBox.w,
+      rootBox.h,
+    ];
+    if (
+      layout.length === lastLayout.length &&
+      layout.every((value, index) => value === lastLayout[index])
+    )
+      return;
+    lastLayout = layout;
     if (selection) {
       toolbar.style.display = "flex";
       const point = placeSelectionOverlay(
         options.toCssBox(selection),
-        options.rootBox(),
+        rootBox,
         { w: toolbar.offsetWidth || 360, h: toolbar.offsetHeight || 44 },
         "end",
       );
@@ -77,6 +103,13 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
     } else toolbar.style.display = "none";
     positionHelp();
   };
+  const observer = new ResizeObserver(() => {
+    lastLayout = [];
+    sync();
+  });
+  observer.observe(toolbar);
+  observer.observe(helpPanel.element);
+  observer.observe(options.root);
 
   const openPopup = (button: HTMLElement, popup: HTMLElement, offset: number) => {
     const open = popup.classList.contains("open");

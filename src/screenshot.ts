@@ -5,49 +5,52 @@ import {
   copyText,
   discardScrollCapture,
   pickWindowAt,
+  type ScrollCaptureDone,
+  type ScrollCaptureProgress,
   scrollCaptureProgress,
   scrollCaptureRunning,
   stopLanShare,
   takeScrollStartMode,
-  type ScrollCaptureDone,
-  type ScrollCaptureProgress,
 } from "./api";
 import { applyI18n, setLang, t } from "./i18n";
-import { createToolbar } from "./screenshot/toolbar";
 import { createAnnotationSizes, sizeKind } from "./image-editor/annotation-style";
-import { createHelpPanel } from "./screenshot/panels";
-import { createMagnifierRenderer } from "./screenshot/magnifier";
-import { createTextInputController } from "./screenshot/text-input";
-import { createEditorCanvasRenderer } from "./screenshot/editor-renderer";
-import { bindEditorShortcuts } from "./screenshot/editor-shortcuts";
+import { createFrameUpdate } from "./image-editor/frame-update";
+import { createMosaicCursor } from "./image-editor/mosaic-cursor";
 import { createEditorInputController } from "./screenshot/editor-input";
+import { createEditorCanvasRenderer } from "./screenshot/editor-renderer";
+import { createEditorSession } from "./screenshot/editor-session";
+import { bindEditorShortcuts } from "./screenshot/editor-shortcuts";
+import { createEditorUiController } from "./screenshot/editor-ui-controller";
+import {
+  isShapeHit,
+  normRect,
+  type Pt,
+  type Rect,
+  shapeHandles,
+  type Tool,
+} from "./screenshot/geometry";
+import { createLanSharePanel } from "./screenshot/lan-share-panel";
+import { refreshScreenshotConfig, startScreenshotLifecycle } from "./screenshot/lifecycle";
+import { createMagnifierRenderer } from "./screenshot/magnifier";
+import { placeScrollOverlay } from "./screenshot/overlay-layout";
+import { createHelpPanel } from "./screenshot/panels";
 import { createScreenshotActionController } from "./screenshot/screenshot-action-controller";
+import { createScreenshotLoadController } from "./screenshot/screenshot-load-controller";
+import {
+  type LoadedScreenshotScreen,
+  releaseScreenshotScreens,
+} from "./screenshot/screenshot-loader";
+import { createScrollCaptureController } from "./screenshot/scroll-capture-controller";
 import { createScrollCaptureHud } from "./screenshot/scroll-capture-hud";
-import { createScrollCaptureStartPanel } from "./screenshot/scroll-capture-panel";
 import {
   createScrollCapturePositioner,
   renderScrollCaptureOverlay,
 } from "./screenshot/scroll-capture-layout";
-import { placeScrollOverlay } from "./screenshot/overlay-layout";
+import { createScrollCaptureStartPanel } from "./screenshot/scroll-capture-panel";
 import { createScrollCaptureSession } from "./screenshot/scroll-capture-session";
-import { createScrollCaptureController } from "./screenshot/scroll-capture-controller";
-import { refreshScreenshotConfig, startScreenshotLifecycle } from "./screenshot/lifecycle";
-import { createScreenshotLoadController } from "./screenshot/screenshot-load-controller";
-import {
-  releaseScreenshotScreens,
-  type LoadedScreenshotScreen,
-} from "./screenshot/screenshot-loader";
-import { createEditorUiController } from "./screenshot/editor-ui-controller";
-import { createEditorSession } from "./screenshot/editor-session";
-import { createLanSharePanel } from "./screenshot/lan-share-panel";
-import {
-  isShapeHit,
-  normRect,
-  shapeHandles,
-  type Pt,
-  type Rect,
-  type Tool,
-} from "./screenshot/geometry";
+import { createTextInputController } from "./screenshot/text-input";
+import { createToolbar } from "./screenshot/toolbar";
+import { createViewportBounds } from "./screenshot/viewport";
 
 // 截图标注器：交互绘制、放大镜、滚动截图与导出的组合根
 //
@@ -59,6 +62,7 @@ const MIN_SHAPE_SIZE = 4; // 物理像素
 const HANDLE_HIT = 12; // 控制点命中半径（物理像素；不再随 devicePixelRatio 缩放）
 const DEFAULT_COLOR = "#cc0000";
 let editorInput: ReturnType<typeof createEditorInputController>;
+let mosaicCursor: ReturnType<typeof createMosaicCursor> | undefined;
 let scrollPositioner: ReturnType<typeof createScrollCapturePositioner>;
 let scrollController: ReturnType<typeof createScrollCaptureController>;
 let screenshotLoadController: ReturnType<typeof createScreenshotLoadController>;
@@ -69,7 +73,7 @@ let screenshotActions: ReturnType<typeof createScreenshotActionController>;
 // multi-monitor mixed-DPI 时单值不可靠，会让 outer frame 与 inner viewport 比例同步错位）。
 function physScale(): number {
   if (totalW <= 0) return 1;
-  const w = root.getBoundingClientRect().width;
+  const w = viewportBounds.get().width;
   return w > 0 ? totalW / w : 1;
 }
 // ---------- 状态 ----------
@@ -99,6 +103,7 @@ function requiredContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
   return context;
 }
 const root = requiredElement("screenshot-root");
+const viewportBounds = createViewportBounds(root);
 const canvas = requiredElement<HTMLCanvasElement>("overlay-canvas");
 const ctx = requiredContext(canvas);
 const uiLayer = requiredElement("ui-layer");
@@ -133,6 +138,7 @@ const toolbarUi = createToolbar({
     sizes[sizeKind(editorSession.tool)] = next;
     editorSession.strokeWidth = sizes.strokeWidth;
     toolbarUi.syncSize();
+    mosaicCursor?.refresh();
   },
 });
 const { toolbar, toolBtns } = toolbarUi;
@@ -165,6 +171,7 @@ const textInputUi = createTextInputController({
     fontSize: sizes.fontSize,
   }),
   getScale: physScale,
+  getPrompt: () => t("editor.textPrompt"),
   onCommit: (shape) => {
     editorSession.checkpoint();
     editorSession.shapes.push(shape);
@@ -227,7 +234,7 @@ function screenSources() {
 
 const magnifier = createMagnifierRenderer({
   getScreens: screenSources,
-  getViewport: () => root.getBoundingClientRect(),
+  getViewport: viewportBounds.get,
   getScale: physScale,
   translate: t,
   getCopyColorHotkey: () => copyColorHotkey,
@@ -241,6 +248,7 @@ const editorRenderer = createEditorCanvasRenderer({
   mosaicWidth: sizes.blockSize,
   drawMagnifier,
 });
+const editorPaint = createFrameUpdate(() => render());
 
 screenshotActions = createScreenshotActionController({
   getSelection: () => editorSession.selection,
@@ -264,6 +272,8 @@ screenshotActions = createScreenshotActionController({
 });
 
 function render() {
+  const input = editorInput?.getFrameState();
+  mosaicCursor?.update(input?.overUI ? null : (input?.lastMousePos ?? null));
   // 滚动截图进行中/已完成：只画「压暗 + 选区挖空 + 外框」，不画底图/标注/工具栏。
   // 选区挖空是硬要求——后端按屏幕像素捕获，覆盖窗在选区里必须完全透明。
   if (scrollActive()) {
@@ -272,7 +282,6 @@ function render() {
     return;
   }
 
-  const input = editorInput?.getFrameState();
   const selRect =
     input?.dragMode === "select" && input.dragStart && input.dragCur
       ? normRect(input.dragStart, input.dragCur)
@@ -286,7 +295,12 @@ function render() {
     // 滚动截图（包括待框选阶段）不需要取色；普通截图则允许放大镜跨过工具栏、
     // 提示框等浮层继续跟随鼠标。画布在 UI 层下方，因此不会遮挡这些控件。
     magnifierPoint:
-      magnifierActive && scroll.phase === "idle" && input?.lastMousePos ? input.lastMousePos : null,
+      magnifierActive &&
+      editorSession.tool !== "mosaic" &&
+      scroll.phase === "idle" &&
+      input?.lastMousePos
+        ? input.lastMousePos
+        : null,
     windowHover:
       input?.hoverWin &&
       !editorSession.selection &&
@@ -316,6 +330,7 @@ function redo() {
 // 指针交互刻意与组合根隔离，方便单独测试与替换。
 editorInput = createEditorInputController({
   root,
+  getRootBounds: viewportBounds.get,
   canvas,
   getBounds: () => ({ totalW, totalH, minX, minY }),
   getScreens: () => screens,
@@ -346,10 +361,32 @@ editorInput = createEditorInputController({
   pickWindowAt,
   minShapeSize: MIN_SHAPE_SIZE,
   onCheckpoint: (snapshot) => editorSession.checkpoint(snapshot),
-  render,
+  render: () => editorPaint.push(undefined),
 });
 
 // 键盘
+mosaicCursor = createMosaicCursor({
+  surface: canvas,
+  layer: uiLayer,
+  trackPointer: false,
+  getSize: () => editorSession.currentShape?.blockSize ?? sizes.blockSize,
+  isEnabled: (point) => {
+    const input = editorInput.getFrameState();
+    const selection = editorSession.selection;
+    return (
+      document.body.classList.contains("ready") &&
+      editorSession.tool === "mosaic" &&
+      !scrollActive() &&
+      !input.overUI &&
+      input.dragMode === "none" &&
+      !!selection &&
+      point.x >= selection.x &&
+      point.x <= selection.x + selection.w &&
+      point.y >= selection.y &&
+      point.y <= selection.y + selection.h
+    );
+  },
+});
 
 // 取色热键（读 config.hotkeys.copy_color，main() 里覆盖；与后端默认一致）
 let copyColorHotkey = "Alt+C";
@@ -603,7 +640,7 @@ interface CssBox {
 
 /** 物理像素矩形 → 截图窗内 CSS 矩形 */
 function toCssBox(r: Rect): CssBox {
-  const b = root.getBoundingClientRect();
+  const b = viewportBounds.get();
   const kx = b.width / Math.max(totalW, 1);
   const ky = b.height / Math.max(totalH, 1);
   return { x: r.x * kx, y: r.y * ky, w: r.w * kx, h: r.h * ky };
@@ -611,7 +648,7 @@ function toCssBox(r: Rect): CssBox {
 
 /** 覆盖窗整体（CSS） */
 function rootBoxCss(): CssBox {
-  const b = root.getBoundingClientRect();
+  const b = viewportBounds.get();
   return { x: 0, y: 0, w: b.width, h: b.height };
 }
 
@@ -627,7 +664,7 @@ function monitorBoxCss(anchor: Rect | null): CssBox {
   const cy = anchor.y + anchor.h / 2;
   const hit = screens.find((s) => cx >= s.x && cx < s.x + s.w && cy >= s.y && cy < s.y + s.h);
   if (!hit) return all;
-  const b = root.getBoundingClientRect();
+  const b = viewportBounds.get();
   const kx = b.width / Math.max(totalW, 1);
   const ky = b.height / Math.max(totalH, 1);
   return { x: hit.x * kx, y: hit.y * ky, w: hit.w * kx, h: hit.h * ky };
@@ -661,10 +698,14 @@ canvas.addEventListener("mousedown", editorInput.onMouseDown);
 window.addEventListener("mousemove", editorInput.onMouseMove);
 window.addEventListener("mouseup", editorInput.onMouseUp);
 window.addEventListener("resize", () => {
+  viewportBounds.invalidate();
   if (document.body.classList.contains("ready")) render();
 });
 
 function resetScreenshotSession() {
+  viewportBounds.invalidate();
+  editorPaint.discard();
+  editorRenderer.reset();
   screenshotActions.reset();
   clearScreenshotNotice();
   root.querySelectorAll(":scope > img").forEach((element) => {
@@ -677,6 +718,7 @@ function resetScreenshotSession() {
   releaseScreenshotScreens(screens);
   screens = [];
   editorInput.reset();
+  mosaicCursor?.reset();
   scrollSession.reset();
   shManual.checked = false;
   void discardScrollCapture();
@@ -774,9 +816,9 @@ function applyTheme(theme: "dark" | "light" | "system") {
 
 function clearScreenshotState() {
   screenshotLoadController.cancel();
+  document.body.classList.remove("ready");
   resetScreenshotSession();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  document.body.classList.remove("ready");
 }
 
 function handleScrollProgress(progress: ScrollCaptureProgress) {

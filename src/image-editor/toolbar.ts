@@ -91,14 +91,15 @@ export function createEditorToolbar(options: ToolbarOptions) {
 
   const context = document.createElement("div");
   context.className = "image-editor-context image-editor-island";
+  const contextIntro = document.createElement("div");
+  contextIntro.className = "image-editor-context-intro";
   const contextName = document.createElement("strong");
   contextName.className = "image-editor-context-name";
   const hint = document.createElement("span");
   hint.className = "image-editor-context-hint";
-  labels.set(hint, "editor.selectHint");
+  contextIntro.append(contextName, hint);
   const cropping = document.createElement("div");
   cropping.className = "image-editor-context-fields";
-  cropping.append(translated("span", "editor.freeCrop"));
   button(cropping, "editor.rotate", options.rotate, true);
   const annotation = document.createElement("div");
   annotation.className = "image-editor-context-fields";
@@ -121,7 +122,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
     sizes[sizeKind(activeTool)] = Number(width.value);
   });
   const widthCaption = field(annotation, "shot.width", width).caption;
-  context.append(contextName, hint, cropping, annotation);
+  context.append(contextIntro, cropping, annotation);
   element.append(context, dock);
 
   const saving = group("saving", "editor.saveOptions");
@@ -196,7 +197,10 @@ export function createEditorToolbar(options: ToolbarOptions) {
     const name = document.createElement("span");
     name.textContent = options.translate(key);
     contextName.append(name);
-    hint.hidden = activeTool !== "select";
+    const hintKey = activeTool === "crop" ? "editor.cropHint" : "editor.selectHint";
+    labels.set(hint, hintKey);
+    hint.textContent = options.translate(hintKey);
+    hint.hidden = activeTool !== "select" && activeTool !== "crop";
     cropping.hidden = activeTool !== "crop";
     annotation.hidden = activeTool === "select" || activeTool === "crop";
     colorField.hidden = activeTool === "mosaic";

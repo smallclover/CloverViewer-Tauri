@@ -287,7 +287,7 @@ export const en = {
   "editor.tools": "Editing tools",
   "editor.history": "Edit history and exit",
   "editor.saveOptions": "Save options",
-  "editor.freeCrop": "Free crop",
+  "editor.cropHint": "Drag the edges to adjust the crop area",
   "editor.selectHint": "Click an annotation to select it",
   "editor.fontSize": "Font size",
   "editor.blockSize": "Block size",

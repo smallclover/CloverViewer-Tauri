@@ -1,20 +1,21 @@
-import { resizeShape, type ResizeOrigin } from "./resize";
 import {
   cloneShape,
   normRect,
-  shapeBBox,
-  translateShape,
   type Pt,
   type Rect,
   type Shape,
+  shapeBBox,
   type Tool,
+  translateShape,
 } from "./geometry";
+import { type ResizeOrigin, resizeShape } from "./resize";
 
 export type DragMode = "none" | "select" | "move" | "resize" | "move-selection" | "pending-win";
 
 interface EditorInputOptions {
   root: HTMLElement;
   canvas: HTMLCanvasElement;
+  getRootBounds?: () => DOMRect;
   getBounds: () => { totalW: number; totalH: number; minX: number; minY: number };
   getScreens: () => readonly { x: number; y: number; w: number; h: number }[];
   getSelection: () => Rect | null;
@@ -121,7 +122,7 @@ export function createEditorInputController(options: EditorInputOptions) {
   };
 
   const physPos = (event: MouseEvent): Pt => {
-    const rect = options.root.getBoundingClientRect();
+    const rect = options.getRootBounds?.() ?? options.root.getBoundingClientRect();
     const { totalW, totalH } = options.getBounds();
     return {
       x: (event.clientX - rect.left) * (totalW / rect.width),
@@ -156,7 +157,8 @@ export function createEditorInputController(options: EditorInputOptions) {
     if (options.isScrollActive() || event.button !== 0 || options.isTextEditing()) return;
     cancelWindowQuery();
     const point = physPos(event);
-    const handle = options.hitHandle(point);
+    const paintingMosaic = options.getTool() === "mosaic";
+    const handle = paintingMosaic ? null : options.hitHandle(point);
     if (handle) {
       dragMode = "resize";
       resizeHandle = handle.handle;
@@ -170,7 +172,7 @@ export function createEditorInputController(options: EditorInputOptions) {
       resizeHistorySnapshot = options.getShapes().map(cloneShape);
       return;
     }
-    const hit = options.hitTestShapes(point);
+    const hit = paintingMosaic ? null : options.hitTestShapes(point);
     if (hit !== null) {
       options.setSelectedIndex(hit);
       dragMode = "move";
@@ -337,7 +339,7 @@ export function createEditorInputController(options: EditorInputOptions) {
       options.render();
       return;
     }
-    const hit = options.hitTestShapes(point);
+    const hit = options.getTool() === "mosaic" ? null : options.hitTestShapes(point);
     const cursor =
       hit !== null
         ? "move"
@@ -428,11 +430,10 @@ export function createEditorInputController(options: EditorInputOptions) {
       options.setCurrentShape(null);
       const box = shapeBBox(currentShape);
       const isLargeEnough =
-        currentShape.tool === "arrow" ||
-        currentShape.tool === "pen" ||
-        currentShape.tool === "mosaic"
+        currentShape.tool === "mosaic" ||
+        (currentShape.tool === "arrow" || currentShape.tool === "pen"
           ? Math.hypot(box.w, box.h) >= options.minShapeSize
-          : box.w >= options.minShapeSize && box.h >= options.minShapeSize;
+          : box.w >= options.minShapeSize && box.h >= options.minShapeSize);
       if (isLargeEnough) {
         checkpoint(options.getShapes().map(cloneShape));
         options.getShapes().push(currentShape);

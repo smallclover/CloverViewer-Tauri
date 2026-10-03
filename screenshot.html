@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Screenshot</title>
+    <!-- 模块样式加载前也保持透明、隐藏；截图准备完成后一次性显示。 -->
+    <style>
+      html, body { margin: 0; background: transparent; }
+      body { visibility: hidden; }
+      body.ready { visibility: visible; }
+    </style>
   </head>
   <body>
     <div id="screenshot-root">

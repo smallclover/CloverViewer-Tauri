@@ -1,5 +1,7 @@
 /* 主窗口样式入口；导入顺序决定层叠优先级，不要随意调整。 */
 @import "./styles/base.css";
+@import "./styles/annotation-text-input.css";
+@import "./styles/mosaic-cursor.css";
 @import "./styles/viewer.css";
 @import "./styles/image-editor.css";
 @import "./styles/image-crop.css";

@@ -1,24 +1,6 @@
 /* ============ 文本输入 ============ */
-#text-input {
-  position: absolute;
-  min-width: 60px;
-  min-height: 28px;
-  background: transparent;
-  border: 1px dashed #6fd07e;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  color: var(--s-fg);
-  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  line-height: 1.2;
-  padding: 0;
-  caret-color: #6fd07e;
-  display: none;
-  pointer-events: auto;
-}
-#text-input.editing {
-  display: block;
-}
+#text-input { --text-input-accent: var(--s-accent); --text-input-fg: var(--s-fg); --text-input-fg-dim: var(--s-fg-dim); }
+#text-input-frame { --text-input-accent: var(--s-accent); }
 
 /* ============ 帮助框（快捷键提示） ============
    与滚动截图面板共用视觉语言：面板底色、圆角、边框、阴影和间距保持一致。

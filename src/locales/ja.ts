@@ -288,7 +288,7 @@ export const ja = {
   "editor.tools": "編集ツール",
   "editor.history": "編集履歴と終了",
   "editor.saveOptions": "保存オプション",
-  "editor.freeCrop": "自由に切り抜き",
+  "editor.cropHint": "枠をドラッグして切り抜き範囲を調整",
   "editor.selectHint": "注釈をクリックして選択",
   "editor.fontSize": "文字サイズ",
   "editor.blockSize": "ブロックサイズ",

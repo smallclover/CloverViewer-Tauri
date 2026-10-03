@@ -1,24 +1,27 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import type { EditedImageFormat, ImageEntry } from "../api";
-import { createEditorToolbar, type EditorTool } from "../image-editor/toolbar";
-import { createImageEditorLoader } from "./image-editor-loader";
-import { createCropOverlay } from "../image-editor/crop-overlay";
+import { createAnnotationLayers } from "../image-editor/annotation-layers";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
 import { annotationFont } from "../image-editor/annotation-style";
-import {
-  cloneShape,
-  isShapeHit,
-  normRect,
-  shapeBBox,
-  type Pt,
-  type Rect,
-  type Shape,
-} from "../image-editor/geometry";
-import { SnapshotHistory } from "../image-editor/history";
 import {
   createCanvasMosaicRenderer,
   mosaicBlockSize,
 } from "../image-editor/canvas-mosaic-renderer";
+import { createCropOverlay } from "../image-editor/crop-overlay";
+import { createFrameUpdate } from "../image-editor/frame-update";
+import {
+  cloneShape,
+  isShapeHit,
+  normRect,
+  type Pt,
+  type Rect,
+  type Shape,
+  shapeBBox,
+} from "../image-editor/geometry";
+import { SnapshotHistory } from "../image-editor/history";
+import { createMosaicCursor } from "../image-editor/mosaic-cursor";
+import { createEditorToolbar, type EditorTool } from "../image-editor/toolbar";
+import { createImageEditorLoader } from "./image-editor-loader";
 
 interface EditSnapshot {
   shapes: Shape[];
@@ -56,9 +59,19 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const canvas = document.createElement("canvas");
   canvas.className = "image-editor-canvas";
   const textInput = document.createElement("textarea");
-  textInput.className = "image-editor-text-input hidden";
-  textInput.rows = 2;
-  workspace.append(canvas, textInput);
+  textInput.className = "image-editor-text-input annotation-text-input hidden";
+  textInput.rows = 1;
+  textInput.wrap = "off";
+  textInput.spellcheck = false;
+  const textFrame = document.createElement("div");
+  textFrame.className = "image-editor-text-frame annotation-text-frame hidden";
+  textFrame.ariaHidden = "true";
+  for (const position of ["top-left", "top-right", "bottom-left", "bottom-right"]) {
+    const corner = document.createElement("span");
+    corner.className = `annotation-text-corner ${position}`;
+    textFrame.append(corner);
+  }
+  workspace.append(canvas, textInput, textFrame);
   options.root.replaceChildren(workspace);
   const toolbar = createEditorToolbar({
     workspace,
@@ -77,13 +90,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
   if (!context) throw new Error("Canvas 2D is unavailable");
   const sourceCanvas = document.createElement("canvas");
   const sourceContext = sourceCanvas.getContext("2d");
-  const annotationCanvas = document.createElement("canvas");
-  const annotationContext = annotationCanvas.getContext("2d");
-  const activeMosaicCanvas = document.createElement("canvas");
-  const activeMosaicContext = activeMosaicCanvas.getContext("2d");
-  if (!sourceContext || !annotationContext || !activeMosaicContext)
-    throw new Error("Canvas 2D is unavailable");
+  if (!sourceContext) throw new Error("Canvas 2D is unavailable");
   const mosaicRenderer = createCanvasMosaicRenderer(sourceCanvas);
+  const layers = createAnnotationLayers({
+    getSize: () => ({ width: sourceCanvas.width, height: sourceCanvas.height }),
+    drawShape: (target, shape) => drawShape(target, shape),
+    drawMosaicSegment: mosaicRenderer.drawSegment,
+  });
 
   let entry: ImageEntry | null = null;
   let image: HTMLImageElement | null = null;
@@ -96,9 +109,16 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let textStart: Pt | null = null;
   let textStyle = { color: color.value, fontSize: sizes.fontSize };
   let rotation = 0;
-  let activeMosaicPoint: Pt | null = null;
+  let repaint = true;
   let dragging = false;
   let dirty = false;
+  const mosaicCursor = createMosaicCursor({
+    surface: canvas,
+    layer: workspace,
+    getSize: () => (current?.tool === "mosaic" ? mosaicBlockSize(current) : sizes.blockSize),
+    isEnabled: () => !!image && tool === "mosaic" && !options.root.classList.contains("hidden"),
+  });
+  toolbar.width.addEventListener("change", mosaicCursor.refresh);
   const cloneSnapshot = (value: EditSnapshot): EditSnapshot => ({
     shapes: value.shapes.map(cloneShape),
     crop: value.crop && { ...value.crop },
@@ -116,7 +136,11 @@ export function createImageEditorController(options: ImageEditorControllerOption
     rasterizeAnnotations();
   };
 
-  const translate = toolbar.refreshTranslations;
+  const translate = () => {
+    toolbar.refreshTranslations();
+    textInput.ariaLabel = options.translate("editor.textPrompt");
+    textInput.placeholder = textInput.ariaLabel;
+  };
 
   const displayPoint = (event: PointerEvent): Pt => {
     const box = canvas.getBoundingClientRect();
@@ -136,49 +160,57 @@ export function createImageEditorController(options: ImageEditorControllerOption
     sourceContext.translate(sourceCanvas.width / 2, sourceCanvas.height / 2);
     sourceContext.rotate((rotation * Math.PI) / 180);
     sourceContext.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+    mosaicRenderer.reset();
+    layers.reset();
     canvas.width = sourceCanvas.width;
     canvas.height = sourceCanvas.height;
     resetActiveMosaic();
   };
 
   const resetActiveMosaic = () => {
-    activeMosaicCanvas.width = sourceCanvas.width;
-    activeMosaicCanvas.height = sourceCanvas.height;
-    activeMosaicPoint = null;
+    layers.update(shapes, null);
+    repaint = true;
   };
 
   const drawShape = (target: CanvasRenderingContext2D, shape: Shape) => {
     if (shape.tool === "mosaic") mosaicRenderer.drawShape(target, shape);
     else drawAnnotation(target, shape);
   };
-  const drawCurrent = (target: CanvasRenderingContext2D) => {
-    if (!current) return;
-    if (current.tool === "mosaic") target.drawImage(activeMosaicCanvas, 0, 0);
-    else drawShape(target, current);
-  };
   const rasterizeAnnotations = () => {
-    annotationCanvas.width = sourceCanvas.width;
-    annotationCanvas.height = sourceCanvas.height;
-    annotationContext.clearRect(0, 0, annotationCanvas.width, annotationCanvas.height);
-    shapes.forEach((shape) => {
-      drawShape(annotationContext, shape);
-    });
+    layers.update(shapes, null);
+    repaint = true;
   };
 
   const render = () => {
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(sourceCanvas, 0, 0);
-    context.drawImage(annotationCanvas, 0, 0);
-    drawCurrent(context);
+    const damage = layers.update(shapes, current);
+    const full = repaint || tool === "crop" || selectedIndex !== null || damage === "full";
+    repaint = false;
+    if (!full && !damage) return;
+    const area = !full && damage ? damage : { x: 0, y: 0, w: canvas.width, h: canvas.height };
+    const x = Math.max(0, area.x),
+      y = Math.max(0, area.y);
+    const w = Math.min(canvas.width, area.x + area.w) - x;
+    const h = Math.min(canvas.height, area.y + area.h) - y;
+    if (w <= 0 || h <= 0) return;
+    context.save();
+    context.beginPath();
+    context.rect(x, y, w, h);
+    context.clip();
+    context.clearRect(x, y, w, h);
+    context.drawImage(sourceCanvas, x, y, w, h, x, y, w, h);
+    layers.paint(context, { x, y, w, h });
     if (selectedIndex !== null && shapes[selectedIndex]) {
       const box = shapeBBox(shapes[selectedIndex]);
       context.strokeStyle = "#3fa9f5";
       context.lineWidth = 2;
       context.strokeRect(box.x - 3, box.y - 3, box.w + 6, box.h + 6);
     }
-    cropOverlay.refreshImage();
+    context.restore();
+    if (tool === "crop") cropOverlay.refreshImage();
     toolbar.refreshHistory(history.canUndo, history.canRedo);
   };
+
+  const paint = createFrameUpdate(() => render());
 
   const cropOverlay = createCropOverlay({
     canvas,
@@ -217,6 +249,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     textStart = null;
     textInput.value = "";
     textInput.classList.add("hidden");
+    textInput.classList.remove("editing");
+    textFrame.classList.add("hidden");
   };
   const commitTextInput = () => {
     const text = textInput.value.trim();
@@ -243,27 +277,64 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
     hideTextInput();
   };
-  const beginTextInput = (point: Pt) => {
-    commitTextInput();
+  const layoutTextInput = () => {
+    if (!textStart) return;
     const canvasBox = canvas.getBoundingClientRect();
     const workspaceBox = workspace.getBoundingClientRect();
+    const scale = canvasBox.width / canvas.width;
+    if (scale <= 0) return;
+    const fontSize = textStyle.fontSize * scale;
+    const lineHeight = fontSize * 1.2;
+    // 1px 边框 + 8px/6px 内边距；输入文字与 Canvas 的起点保持一致。
+    const insetX = 9;
+    const insetY = 7;
+    const defaultWidth = 180;
+    const defaultHeight = Math.max(44, lineHeight + insetY * 2);
+    const x = canvasBox.left - workspaceBox.left + textStart.x * scale;
+    const y = canvasBox.top - workspaceBox.top + textStart.y * scale;
+    const left = Math.max(4, Math.min(x - insetX, workspaceBox.width - defaultWidth - 8));
+    const top = Math.max(4, Math.min(y - insetY, workspaceBox.height - defaultHeight - 8));
+    textStart.x = (workspaceBox.left + left + insetX - canvasBox.left) / scale;
+    textStart.y = (workspaceBox.top + top + insetY - canvasBox.top) / scale;
+    const lines = textInput.value.split("\n");
+    context.font = annotationFont(textStyle.fontSize);
+    const textWidth = Math.max(...lines.map((line) => context.measureText(line).width)) * scale;
+    const maxWidth = Math.max(1, workspaceBox.width - left - 8);
+    const maxHeight = Math.max(1, workspaceBox.height - top - 8);
+    const width = Math.min(Math.max(defaultWidth, textWidth + insetX * 2), maxWidth);
+    textInput.style.font = annotationFont(fontSize);
+    textInput.style.lineHeight = "1.2";
+    textInput.style.color = textStyle.color;
+    textInput.style.left = `${workspace.scrollLeft + left}px`;
+    textInput.style.top = `${workspace.scrollTop + top}px`;
+    textInput.style.width = `${width}px`;
+    // 横向溢出时也给滚动条留出高度，不让它遮住当前行。
+    textInput.style.height = "auto";
+    const height = Math.max(
+      defaultHeight,
+      lines.length * lineHeight + insetY * 2,
+      textInput.scrollHeight + 2,
+    );
+    textInput.style.height = `${Math.min(height, maxHeight)}px`;
+    for (const property of ["left", "top", "width", "height"] as const)
+      textFrame.style[property] = textInput.style[property];
+  };
+  const beginTextInput = (point: Pt) => {
+    commitTextInput();
     textStart = point;
     textStyle = { color: color.value, fontSize: sizes.fontSize };
     textInput.value = "";
-    textInput.style.font = annotationFont(textStyle.fontSize * (canvasBox.width / canvas.width));
-    textInput.style.lineHeight = "1.2";
-    textInput.style.color = textStyle.color;
-    const x = canvasBox.left - workspaceBox.left + point.x * (canvasBox.width / canvas.width);
-    const y = canvasBox.top - workspaceBox.top + point.y * (canvasBox.height / canvas.height);
-    const inputWidth = Math.min(260, Math.max(0, workspaceBox.width - 32));
-    textInput.style.left = `${workspace.scrollLeft + Math.max(0, Math.min(x, workspaceBox.width - inputWidth - 8))}px`;
-    textInput.style.top = `${workspace.scrollTop + Math.max(0, Math.min(y, workspaceBox.height - 74))}px`;
     textInput.classList.remove("hidden");
+    textInput.classList.add("editing");
+    textFrame.classList.remove("hidden");
+    layoutTextInput();
     // pointerdown 的默认动作要先走完，之后 textarea 才能拿到焦点，故延到下一个任务。
     window.setTimeout(() => {
       if (textStart === point) textInput.focus({ preventScroll: true });
     }, 0);
   };
+  textInput.addEventListener("input", layoutTextInput);
+  window.addEventListener("resize", layoutTextInput);
   textInput.addEventListener("blur", commitTextInput);
   textInput.addEventListener("keydown", (event) => {
     event.stopPropagation();
@@ -278,6 +349,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   });
 
   const setTool = (next: EditorTool) => {
+    paint.discard();
     commitTextInput();
     cropOverlay.cancel();
     tool = next;
@@ -286,6 +358,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     resetActiveMosaic();
     selectedIndex = null;
     toolbar.setActiveTool(next);
+    mosaicCursor.refresh();
     render();
   };
 
@@ -432,8 +505,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
     commitTextInput();
     if (dirty && !window.confirm(options.translate("editor.discardConfirm"))) return;
     loader.cancel();
+    paint.discard();
     toolbar.closePanels();
     options.root.classList.add("hidden");
+    mosaicCursor.reset();
     options.onClose();
   };
 
@@ -447,6 +522,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
     canvas.setPointerCapture(event.pointerId);
     if (tool === "select") {
+      repaint = true;
       selectedIndex =
         shapes
           .map((shape, index) => ({ shape, index }))
@@ -467,8 +543,6 @@ export function createImageEditorController(options: ImageEditorControllerOption
     dragging = true;
     if (tool === "mosaic") {
       resetActiveMosaic();
-      activeMosaicPoint = point;
-      mosaicRenderer.drawSegment(activeMosaicContext, point, point, mosaicBlockSize(current));
       render();
     }
   });
@@ -479,44 +553,32 @@ export function createImageEditorController(options: ImageEditorControllerOption
       current.end = point;
       if (current.points) {
         const previous = current.points[current.points.length - 1];
-        if (current.tool === "mosaic" && activeMosaicPoint) {
-          mosaicRenderer.drawSegment(
-            activeMosaicContext,
-            activeMosaicPoint,
-            point,
-            mosaicBlockSize(current),
-          );
-          activeMosaicPoint = point;
-        }
-        const minDistance = current.tool === "mosaic" ? 2 : 1;
+        const minDistance = current.tool === "mosaic" ? 0 : 1;
         if (Math.hypot(point.x - previous.x, point.y - previous.y) >= minDistance) {
           current.points.push(point);
         }
       }
     }
-    render();
+    paint.push(undefined);
   });
   canvas.addEventListener("pointerup", (event) => {
     if (!dragging) return;
+    paint.discard();
     dragging = false;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     if (current) {
       if (current.points) {
         const point = displayPoint(event);
         const previous = current.points[current.points.length - 1];
-        if (current.tool === "mosaic" && activeMosaicPoint) {
-          mosaicRenderer.drawSegment(
-            activeMosaicContext,
-            activeMosaicPoint,
-            point,
-            mosaicBlockSize(current),
-          );
-        }
+        current.end = point;
         if (Math.hypot(point.x - previous.x, point.y - previous.y) > 0) current.points.push(point);
       }
       if (
         Math.abs(current.end.x - current.start.x) > 1 ||
-        Math.abs(current.end.y - current.start.y) > 1
+        Math.abs(current.end.y - current.start.y) > 1 ||
+        ((current.tool === "mosaic" || current.tool === "pen") &&
+          (current.points?.length ?? 0) > 1) ||
+        current.tool === "mosaic"
       ) {
         checkpoint();
         shapes.push(current);
@@ -554,6 +616,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     if (!nextImage) return false;
     cropOverlay.cancel();
     entry = nextEntry;
+    mosaicCursor.reset();
     translate();
     image = nextImage;
     shapes = [];

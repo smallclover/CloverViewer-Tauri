@@ -36,21 +36,26 @@ test("screenshot preview and export use image pixels regardless of interface sca
   const { createEditorCanvasRenderer } = require("../../.unit-test-dist/screenshot/editor-renderer.js");
   const previousDocument = global.document;
   const stamps = [];
-  global.document = { createElement: () => ({ getContext: () => new Proxy({
-    getImageData: () => ({ data: [0, 0, 0, 255] }),
-  }, { get: (target, key) => target[key] ?? (() => {}) }) }) };
+  global.document = { createElement: () => {
+    const canvas = { width: 0, height: 0 };
+    canvas.getContext = () => new Proxy({ canvas }, { get: (target, key) => target[key] ?? (() => {}) });
+    return canvas;
+  } };
   try {
     const shape = { start: { x: 100, y: 100 }, end: { x: 200, y: 200 }, color: "#f00", strokeWidth: 3 };
     for (const scale of [1, 1.25, 2]) {
-      const context = { strokeRect: () => {}, fillText: () => {}, fillRect: (...args) => stamps.push(args) };
-      const renderer = createEditorCanvasRenderer({ context, getScreens: () => [], getScale: () => scale,
+      const context = { canvas: { width: 200, height: 200 }, strokeRect: () => {}, fillText: () => {},
+        save: () => {}, restore: () => {}, clearRect: () => {}, drawImage: (...args) => stamps.push(args.slice(5)) };
+      for (const key of ["beginPath", "moveTo", "arc", "closePath", "clip"]) context[key] = () => {};
+      const image = {};
+      const renderer = createEditorCanvasRenderer({ context, getScreens: () => [{ image, x: 0, y: 0, w: 200, h: 200 }], getScale: () => scale,
         mosaicWidth: 16, drawMagnifier: () => {} });
       renderer.drawShape(context, { ...shape, tool: "rect" });
       assert.equal(context.lineWidth, 3);
       renderer.drawShape(context, { ...shape, tool: "text", fontSize: 48, text: "Hello" });
       assert.ok(context.font.startsWith("600 48px"));
       renderer.drawShape(context, { ...shape, tool: "mosaic", blockSize: 24, points: [shape.start] });
-      assert.deepEqual(stamps.at(-1), [88, 88, 24, 24]);
+      assert.deepEqual(stamps.at(-1), [87, 87, 26, 26]);
     }
   } finally { global.document = previousDocument; }
 });
@@ -69,13 +74,14 @@ test("screenshot text input matches the scaled preview and captures its own size
   const listeners = {};
   const timers = [];
   const shapes = [];
-  const element = { style: {}, value: "", classList: {
+  const element = { style: {}, value: "", scrollHeight: 0, classList: {
     add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
   }, addEventListener: (name, handler) => { listeners[name] = handler; }, focus: () => {} };
   const source = readFileSync(resolve(__dirname, "../../src/screenshot/text-input.ts"), "utf8");
   const exports = {};
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
-    exports, document: { createElement: () => element }, setTimeout: callback => timers.push(callback),
+    exports, document: { createElement: tag => tag === "textarea" ? element : { style: {}, appendChild: () => {} } },
+    window: { addEventListener: () => {} }, setTimeout: callback => timers.push(callback),
     require: () => require("../../.unit-test-dist/image-editor/annotation-style.js"),
   });
   const style = { color: "#f00", strokeWidth: 2, fontSize: 32 };
@@ -83,7 +89,7 @@ test("screenshot text input matches the scaled preview and captures its own size
   const input = exports.createTextInputController({ uiLayer: { appendChild: () => {} },
     root: { getBoundingClientRect: () => ({ width: 960, height: 540 }) }, context,
     getCanvasSize: () => ({ width: 1920, height: 1080 }), getStyle: () => style,
-    getScale: () => 2, onCommit: shape => shapes.push(shape), onRender: () => {} });
+    getScale: () => 2, getPrompt: () => "Enter annotation text:", onCommit: shape => shapes.push(shape), onRender: () => {} });
   input.show({ x: 100, y: 80 });
   assert.ok(element.style.font.startsWith("600 16px"));
   style.fontSize = 72; style.color = "#000";

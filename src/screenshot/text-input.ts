@@ -14,6 +14,7 @@ interface TextInputControllerOptions {
   getCanvasSize: () => { width: number; height: number };
   getStyle: () => TextStyle;
   getScale: () => number;
+  getPrompt: () => string;
   onCommit: (shape: Shape) => void;
   onRender: () => void;
 }
@@ -26,28 +27,79 @@ export function createTextInputController({
   getCanvasSize,
   getStyle,
   getScale,
+  getPrompt,
   onCommit,
   onRender,
 }: TextInputControllerOptions) {
   const element = document.createElement("textarea");
   element.id = "text-input";
+  element.className = "annotation-text-input";
+  element.rows = 1;
+  element.wrap = "off";
+  element.spellcheck = false;
+  const frame = document.createElement("div");
+  frame.id = "text-input-frame";
+  frame.className = "annotation-text-frame";
+  frame.ariaHidden = "true";
+  for (const position of ["top-left", "top-right", "bottom-left", "bottom-right"]) {
+    const corner = document.createElement("span");
+    corner.className = `annotation-text-corner ${position}`;
+    frame.appendChild(corner);
+  }
   uiLayer.appendChild(element);
+  uiLayer.appendChild(frame);
   let start: Pt | null = null;
   let style: TextStyle;
 
-  const show = (point: Pt) => {
+  const layout = () => {
+    if (!start || !element.classList.contains("editing")) return;
     const rootBox = root.getBoundingClientRect();
     const canvasSize = getCanvasSize();
-    const cssX = point.x * (rootBox.width / canvasSize.width);
-    const cssY = point.y * (rootBox.height / canvasSize.height);
+    if (canvasSize.width <= 0 || canvasSize.height <= 0 || !rootBox.width || !rootBox.height)
+      return;
+    const scaleX = rootBox.width / canvasSize.width;
+    const scaleY = rootBox.height / canvasSize.height;
+    const fontSize = style.fontSize / getScale();
+    const lineHeight = fontSize * 1.2;
+    const insetX = 9;
+    const insetY = 7;
+    const defaultWidth = 180;
+    const defaultHeight = Math.max(44, lineHeight + insetY * 2);
+    const left = Math.max(4, Math.min(start.x * scaleX - insetX, rootBox.width - defaultWidth - 8));
+    const top = Math.max(
+      4,
+      Math.min(start.y * scaleY - insetY, rootBox.height - defaultHeight - 8),
+    );
+    start.x = (left + insetX) / scaleX;
+    start.y = (top + insetY) / scaleY;
+    const lines = element.value.split("\n");
+    context.font = annotationFont(style.fontSize);
+    const textWidth =
+      Math.max(...lines.map((line) => context.measureText(line).width)) / getScale();
+    element.style.left = `${left}px`;
+    element.style.top = `${top}px`;
+    element.style.color = style.color;
+    element.style.font = annotationFont(fontSize);
+    element.style.width = `${Math.min(Math.max(defaultWidth, textWidth + insetX * 2), rootBox.width - left - 8)}px`;
+    element.style.height = "auto";
+    const height = Math.max(
+      defaultHeight,
+      lines.length * lineHeight + insetY * 2,
+      element.scrollHeight + 2,
+    );
+    element.style.height = `${Math.min(height, rootBox.height - top - 8)}px`;
+    for (const property of ["left", "top", "width", "height"] as const)
+      frame.style[property] = element.style[property];
+  };
+
+  const show = (point: Pt) => {
     start = { ...point };
     style = { ...getStyle() };
     element.value = "";
-    element.style.left = `${cssX}px`;
-    element.style.top = `${cssY}px`;
-    element.style.color = style.color;
-    element.style.font = annotationFont(style.fontSize / getScale());
+    element.ariaLabel = getPrompt();
+    element.placeholder = element.ariaLabel;
     element.classList.add("editing");
+    layout();
     onRender();
     // 等 mouse 事件完成后再聚焦，否则 blur 会抢先关闭输入框。
     const activeStart = start;
@@ -55,6 +107,8 @@ export function createTextInputController({
       if (start === activeStart && element.classList.contains("editing")) element.focus();
     }, 0);
   };
+  element.addEventListener("input", layout);
+  window.addEventListener("resize", layout);
 
   const commit = () => {
     if (!element.classList.contains("editing")) return;

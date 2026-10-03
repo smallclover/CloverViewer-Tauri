@@ -1,0 +1,12 @@
+.mosaic-cursor {
+  position: absolute;
+  z-index: 5;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #181818, inset 0 0 0 1px #181818;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.mosaic-cursor[hidden] { display: none; }
+.mosaic-cursor-active { cursor: none !important; }

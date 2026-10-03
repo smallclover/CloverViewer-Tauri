@@ -7,8 +7,10 @@ const { resolve } = require("node:path");
 const { runInNewContext } = require("node:vm");
 const ts = require("typescript");
 
-function draw(tool, end, moves = [end]) {
+function draw(tool, end, moves = [end], overlap = false) {
   const shapes = [];
+  if (overlap) shapes.push({ tool: "mosaic", start: { x: 50, y: 50 }, end: { x: 150, y: 50 },
+    points: [{ x: 50, y: 50 }, { x: 150, y: 50 }], color: "#f00", strokeWidth: 16, blockSize: 16 });
   const history = new ShapeHistory();
   let currentShape = null;
   const controller = createEditorInputController({
@@ -28,7 +30,7 @@ function draw(tool, end, moves = [end]) {
     isTextEditing: () => false,
     showTextInput: () => {},
     isScrollActive: () => false,
-    hitTestShapes: () => null,
+    hitTestShapes: () => overlap ? 0 : null,
     hitHandle: () => null,
     pickWindowAt: async () => null,
     minShapeSize: 4,
@@ -50,6 +52,12 @@ function draw(tool, end, moves = [end]) {
   }
   return { shapes, history };
 }
+
+test("a single mosaic click retains its round stamp in undo history", () => {
+  const { shapes } = draw("mosaic", { x: 50, y: 50 }, []);
+  assert.equal(shapes.length, 1);
+  assert.equal(shapes[0].points.length, 1);
+});
 
 test("releasing horizontal, vertical and near-axis arrows retains them in undo history", () => {
   for (const end of [
@@ -73,6 +81,14 @@ test("clicks and arrows shorter than the minimum do not create history entries",
     assert.deepEqual(shapes, []);
     assert.equal(history.undo(shapes), null);
   }
+});
+
+test("mosaic paints a new stroke over an existing annotation instead of moving that annotation", () => {
+  const { shapes } = draw("mosaic", { x: 150, y: 50 }, undefined, true);
+  assert.equal(shapes.length, 2);
+  assert.deepEqual(shapes[0].points, [{ x: 50, y: 50 }, { x: 150, y: 50 }]);
+  assert.deepEqual(shapes[1].points, [{ x: 50, y: 50 }, { x: 150, y: 50 }]);
+  assert.equal(shapes[1].blockSize, 10);
 });
 
 test("rectangles and ellipses still require both dimensions to reach the minimum", () => {

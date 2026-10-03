@@ -1,0 +1,42 @@
+/* 图片编辑与截图共用的透明文字输入框及四角标记。 */
+.annotation-text-input {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  display: none;
+  width: 180px;
+  min-height: 0;
+  padding: 6px 8px;
+  resize: none;
+  overflow: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  color: var(--text-input-fg);
+  caret-color: var(--text-input-accent);
+  border: 1px dashed var(--text-input-accent);
+  border-radius: 4px;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  font: 600 16px/1.2 "Segoe UI", system-ui, sans-serif;
+  pointer-events: auto;
+}
+.annotation-text-input::placeholder { color: var(--text-input-fg-dim); font: 400 13px/1.2 "Segoe UI", system-ui, sans-serif; }
+.annotation-text-input.editing { display: block; }
+.annotation-text-frame { position: absolute; z-index: 4; display: none; pointer-events: none; }
+.annotation-text-input.editing + .annotation-text-frame { display: block; }
+.annotation-text-corner {
+  position: absolute;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--text-input-accent);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 45%);
+}
+.annotation-text-corner.top-left { left: -4px; top: -4px; }
+.annotation-text-corner.top-right { right: -4px; top: -4px; }
+.annotation-text-corner.bottom-left { left: -4px; bottom: -4px; }
+.annotation-text-corner.bottom-right { right: -4px; bottom: -4px; }

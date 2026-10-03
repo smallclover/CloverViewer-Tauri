@@ -1,7 +1,8 @@
+import { createCanvasMosaicRenderer } from "../image-editor/canvas-mosaic-renderer";
+import { createAnnotationLayers } from "./annotation-layers";
 import { drawAnnotation } from "./annotation-renderer";
-import { type Pt, type Rect, shapeBBox, shapeHandles, type Shape } from "./geometry";
-import { forEachMosaicStamp } from "./mosaic";
-import { blitScreenRegion, drawScreenBase, type ScreenImage } from "./screen-compositor";
+import { type Pt, type Rect, type Shape, shapeBBox, shapeHandles } from "./geometry";
+import { drawScreenBase, type ScreenImage } from "./screen-compositor";
 import { drawSelectionFrame } from "./selection-frame";
 
 export interface EditorRenderFrame {
@@ -30,11 +31,52 @@ export function createEditorCanvasRenderer({
   mosaicWidth,
   drawMagnifier,
 }: EditorCanvasRendererOptions) {
-  const sampleCanvas = document.createElement("canvas");
-  sampleCanvas.width = 1;
-  sampleCanvas.height = 1;
-  const sampleContext = sampleCanvas.getContext("2d");
-  if (!sampleContext) throw new Error("Canvas 2D context is unavailable");
+  const sourceCanvas = document.createElement("canvas");
+  const sourceContext = sourceCanvas.getContext("2d");
+  if (!sourceContext) throw new Error("Canvas 2D context is unavailable");
+  const mosaic = createCanvasMosaicRenderer(sourceCanvas);
+  let sourceScreens: ScreenImage[] = [];
+  let sourceReady = false;
+  let previousFrame: unknown[] = [];
+  const ensureSource = () => {
+    const screens = getScreens();
+    const width = Math.max(
+      1,
+      context.canvas?.width ?? 0,
+      ...screens.map((screen) => screen.x + screen.w),
+    );
+    const height = Math.max(
+      1,
+      context.canvas?.height ?? 0,
+      ...screens.map((screen) => screen.y + screen.h),
+    );
+    const changed =
+      !sourceReady ||
+      sourceCanvas.width !== width ||
+      sourceCanvas.height !== height ||
+      sourceScreens.length !== screens.length ||
+      screens.some((screen, index) => {
+        const previous = sourceScreens[index];
+        return (
+          !previous ||
+          screen.image !== previous.image ||
+          screen.x !== previous.x ||
+          screen.y !== previous.y ||
+          screen.w !== previous.w ||
+          screen.h !== previous.h
+        );
+      });
+    if (changed) {
+      sourceCanvas.width = width;
+      sourceCanvas.height = height;
+      drawScreenBase(sourceContext, screens);
+      sourceScreens = screens.map((screen) => ({ ...screen }));
+      sourceReady = true;
+      mosaic.reset();
+      layers.reset();
+      previousFrame = [];
+    }
+  };
 
   const drawMosaic = (target: CanvasRenderingContext2D, shape: Shape) => {
     const points = shape.points;
@@ -43,42 +85,39 @@ export function createEditorCanvasRenderer({
       1,
       Math.round(shape.blockSize ?? (shape.strokeWidth || mosaicWidth)),
     );
-    const paintDot = (x: number, y: number) => {
-      const sourceX = x - blockSize / 2;
-      const sourceY = y - blockSize / 2;
-      blitScreenRegion(
-        sampleContext,
-        getScreens(),
-        sourceX,
-        sourceY,
-        blockSize,
-        blockSize,
-        0,
-        0,
-        1,
-        1,
-      );
-      const pixel = sampleContext.getImageData(0, 0, 1, 1).data;
-      target.fillStyle = `rgba(${pixel[0]},${pixel[1]},${pixel[2]},${(pixel[3] / 255).toFixed(3)})`;
-      target.fillRect(sourceX, sourceY, blockSize, blockSize);
-    };
-    forEachMosaicStamp(points, blockSize, (point) => paintDot(point.x, point.y));
+    ensureSource();
+    mosaic.drawShape(target, { ...shape, blockSize });
   };
 
   const drawShape = (target: CanvasRenderingContext2D, shape: Shape) => {
     if (shape.tool === "mosaic") drawMosaic(target, shape);
     else drawAnnotation(target, shape);
   };
+  const layers = createAnnotationLayers({
+    getSize: () => ({ width: sourceCanvas.width, height: sourceCanvas.height }),
+    drawShape,
+    drawMosaicSegment: mosaic.drawSegment,
+  });
 
-  const drawSelectionMask = (canvas: HTMLCanvasElement, selection: Rect | null) => {
+  const drawSelectionMask = (region: Rect, selection: Rect | null) => {
     if (!selection || selection.w <= 0 || selection.h <= 0) return;
     context.fillStyle = "rgba(0,0,0,0.5)";
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillRect(region.x, region.y, region.w, region.h);
     context.save();
     context.beginPath();
     context.rect(selection.x, selection.y, selection.w, selection.h);
     context.clip();
-    drawScreenBase(context, getScreens());
+    context.drawImage(
+      sourceCanvas,
+      region.x,
+      region.y,
+      region.w,
+      region.h,
+      region.x,
+      region.y,
+      region.w,
+      region.h,
+    );
     context.restore();
   };
 
@@ -106,18 +145,81 @@ export function createEditorCanvasRenderer({
     magnifierPoint,
     windowHover,
   }: EditorRenderFrame) => {
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    drawScreenBase(context, getScreens());
-    drawSelectionMask(canvas, selection);
-    for (const shape of shapes) drawShape(context, shape);
-    if (currentShape) drawShape(context, currentShape);
+    ensureSource();
+    const damage = layers.update(shapes, currentShape);
+    const frame = [
+      canvas.width,
+      canvas.height,
+      selection?.x,
+      selection?.y,
+      selection?.w,
+      selection?.h,
+      selectedIndex,
+      getScale(),
+      windowHover?.x,
+      windowHover?.y,
+      windowHover?.w,
+      windowHover?.h,
+      magnifierPoint?.x,
+      magnifierPoint?.y,
+    ];
+    const sameFrame =
+      frame.length === previousFrame.length &&
+      frame.every((value, index) => value === previousFrame[index]);
+    previousFrame = frame;
+    if (sameFrame && damage === null && !magnifierPoint) return;
+    const full = !sameFrame || damage === "full" || !!magnifierPoint;
+    const area = !full && damage ? damage : { x: 0, y: 0, w: canvas.width, h: canvas.height };
+    const x = Math.max(0, area.x),
+      y = Math.max(0, area.y);
+    const right = Math.min(canvas.width, area.x + area.w);
+    const bottom = Math.min(canvas.height, area.y + area.h);
+    const region = { x, y, w: right - x, h: bottom - y };
+    if (region.w <= 0 || region.h <= 0) return;
+    context.save();
+    context.beginPath();
+    context.rect(region.x, region.y, region.w, region.h);
+    context.clip();
+    context.clearRect(region.x, region.y, region.w, region.h);
+    context.drawImage(
+      sourceCanvas,
+      region.x,
+      region.y,
+      region.w,
+      region.h,
+      region.x,
+      region.y,
+      region.w,
+      region.h,
+    );
+    drawSelectionMask(region, selection);
+    context.save();
+    if (selection) {
+      context.beginPath();
+      context.rect(selection.x, selection.y, selection.w, selection.h);
+      context.clip();
+    }
+    layers.paint(context, region);
+    context.restore();
     if (selection && selection.w > 0 && selection.h > 0) {
       drawSelectionFrame(context, selection, getScale());
     }
     if (selectedIndex !== null && shapes[selectedIndex]) drawSelectedHandles(shapes[selectedIndex]);
     if (magnifierPoint) drawMagnifier(context, magnifierPoint.x, magnifierPoint.y);
     if (windowHover) drawSelectionFrame(context, windowHover, getScale());
+    context.restore();
   };
 
-  return { drawShape, render };
+  return {
+    drawShape,
+    render,
+    reset: () => {
+      sourceReady = false;
+      sourceScreens = [];
+      previousFrame = [];
+      sourceCanvas.width = sourceCanvas.height = 0;
+      mosaic.reset();
+      layers.reset();
+    },
+  };
 }

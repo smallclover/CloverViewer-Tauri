@@ -95,6 +95,7 @@ test("screenshot mosaic reuses immutable capture samples through drawing, commit
     };
     renderer.render(frame);
     const source = canvases[1];
+    assert.equal(renderer.background, source);
     const isSample = (args) => args.length === 6 && args[0] === "drawImage" && args[1] === source;
     const grid = canvases.find((item) => item.getContext().calls.some(isSample));
     assert.ok(grid);
@@ -125,6 +126,17 @@ test("screenshot mosaic reuses immutable capture samples through drawing, commit
     const newGrid = canvases.filter((item) => item.getContext().calls.some(isSample)).at(-1);
     assert.notEqual(newGrid, grid);
     assert.equal(newGrid.getContext().calls.filter(([name]) => name === "drawImage").length, 4);
+    const beforeSelection = canvas.getContext().calls.length;
+    for (let index = 0; index < 120; index++) renderer.render({ ...frame, shapes: [shape], currentShape: null,
+      selection: { x: index, y: index, w: 150 - index, h: 150 - index },
+      magnifierPoint: { x: index, y: index }, windowHover: { x: 0, y: 0, w: index, h: index },
+    });
+    assert.equal(canvas.getContext().calls.length, beforeSelection, "selection and magnifier motion do not repaint annotations or copy the desktop");
+    assert.equal(canvas.getContext().calls.some(([name, image]) => name === "drawImage" && image === source), false);
+    renderer.setVisible(true);
+    assert.equal(source.hidden, false);
+    renderer.setVisible(false);
+    assert.equal(source.hidden, true, "scroll capture must hide the static background");
     renderer.reset();
     assert.equal(source.width, 0);
     assert.equal(newGrid.width, 0);

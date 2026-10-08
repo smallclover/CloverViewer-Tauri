@@ -95,6 +95,17 @@ impl ScreenshotStore {
     pub fn end_capture(&self) {
         *self.capturing.lock().unwrap() = false;
     }
+
+    pub(crate) fn capture_bounds(&self, capture_id: u64) -> Option<(i32, i32, u32, u32)> {
+        let capture = self.data.lock().unwrap();
+        let data = &capture.as_ref()?.data;
+        (data.capture_id == capture_id).then_some((
+            data.min_x,
+            data.min_y,
+            data.total_width,
+            data.total_height,
+        ))
+    }
 }
 
 /// 截图窗口前端拉取截屏数据
@@ -544,16 +555,14 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
 #[tauri::command]
 pub fn screenshot_ui_ready(app: AppHandle, capture_id: u64) -> bool {
     let store = app.state::<ScreenshotStore>();
-    if !store
-        .data
-        .lock()
-        .unwrap()
-        .as_ref()
-        .is_some_and(|capture| capture.data.capture_id == capture_id)
-    {
+    let Some(bounds) = store.capture_bounds(capture_id) else {
         return false;
-    }
+    };
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
+        if !crate::screenshot_window::content_matches(&w, bounds).unwrap_or(false) {
+            tracing::warn!("截图窗口尚未覆盖完整桌面，拒绝显示 capture_id={capture_id}");
+            return false;
+        }
         if w.show().is_err() {
             return false;
         }

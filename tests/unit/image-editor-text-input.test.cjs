@@ -68,7 +68,8 @@ async function setup() {
       if (name === "./image-editor-loader") return { createImageEditorLoader: () => ({
         load: async () => ({ naturalWidth: 2000, naturalHeight: 1000 }), cancel: () => {}, isLoading: () => false,
       }) };
-      if (name === "../image-editor/crop-overlay") return { createCropOverlay: () => ({ refreshImage: () => {}, cancel: () => {} }) };
+      if (name === "../image-editor/crop-overlay") return { createCropOverlay: () => ({ update: () => {}, refreshImage: () => {}, cancel: () => {} }) };
+      if (name === "../image-editor/crop-viewport") return { createCropViewport: () => ({ fit: () => {}, begin: () => {}, end: () => {} }) };
       if (name === "../image-editor/mosaic-cursor") return { createMosaicCursor: () => ({ refresh: () => {}, reset: () => {} }) };
       if (name === "../image-editor/annotation-renderer") return { drawAnnotation: (_target, shape) => drawn.push(shape) };
       if (name === "../image-editor/annotation-layers") {

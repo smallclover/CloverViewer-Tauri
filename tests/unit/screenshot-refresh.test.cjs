@@ -89,7 +89,7 @@ test("refresh during startup is coalesced and never runs two screenshot loads to
   assert.equal(calls.filter((call) => call === "show").length, 1);
 });
 
-function setupLoader(data, loadScreenshotScreens = async () => [], overrides = {}) {
+function setupLoader(data, loadScreenshotScreens = async () => [], overrides = {}, waitViewport = async () => true) {
   const calls = [];
   const classes = new Set();
   const exports = {};
@@ -105,6 +105,7 @@ function setupLoader(data, loadScreenshotScreens = async () => [], overrides = {
         calls.push("close");
       } };
       if (name === "./screenshot-loader") return { loadScreenshotScreens, releaseScreenshotScreens: () => {} };
+      if (name === "./viewport-ready") return { waitForScreenshotViewport: waitViewport };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     document: { body: { classList: { add: name => classes.add(name), remove: name => classes.delete(name) } } },
@@ -199,6 +200,49 @@ test("closing during initial window detection cannot show the cancelled screensh
 test("failed pixel transfer closes only its own capture and never marks a blank frame ready", async () => {
   const { controller, calls, classes } = setupLoader(screenshotData, async () => {
     throw new Error("Screenshot session has expired");
+  });
+  assert.equal(await controller.load(), null);
+  assert.deepEqual(calls, ["close"]);
+  assert.equal(classes.has("ready"), false);
+});
+
+test("a delayed multi-monitor viewport stays hidden until both native and CSS geometry are ready", async () => {
+  const sized = deferred();
+  const started = deferred();
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async ({ isCurrent }) => {
+    started.resolve();
+    await sized.promise;
+    return isCurrent();
+  });
+  const loading = controller.load();
+  await started.promise;
+  assert.equal(classes.has("ready"), false);
+  assert.deepEqual(calls, []);
+  sized.resolve();
+  assert.equal(await loading, 1);
+  assert.equal(classes.has("ready"), true);
+});
+
+test("closing during viewport alignment prevents a late ready or session reset", async () => {
+  const sized = deferred();
+  const started = deferred();
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async ({ isCurrent }) => {
+    started.resolve();
+    await sized.promise;
+    return isCurrent();
+  });
+  const loading = controller.load();
+  await started.promise;
+  controller.cancel();
+  sized.resolve();
+  assert.equal(await loading, null);
+  assert.deepEqual(calls, []);
+  assert.equal(classes.has("ready"), false);
+});
+
+test("a permanently squeezed viewport closes its capture instead of showing a distorted desktop", async () => {
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async () => {
+    throw new Error("Screenshot viewport did not match the captured desktop");
   });
   assert.equal(await controller.load(), null);
   assert.deepEqual(calls, ["close"]);

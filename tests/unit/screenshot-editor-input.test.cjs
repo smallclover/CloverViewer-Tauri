@@ -195,6 +195,17 @@ function hoverSetup(pick = async () => ({ x: -750, y: 40, width: 100, height: 12
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const windowHover = { x: 50, y: 40, w: 100, h: 120 };
 
+test("selection release uses the final pointer even if the last movement was not delivered", async () => {
+  for (const hover of [false, true]) {
+    const fixture = hoverSetup();
+    if (hover) await fixture.controller.initializeCursor({ x: 80, y: 90 });
+    fixture.controller.onMouseDown({ button: 0, clientX: 40, clientY: 45 });
+    fixture.controller.onMouseUp({ button: 0, clientX: 120, clientY: 160 });
+    assert.deepEqual(plain(fixture.selection()), { x: 80, y: 90, w: 160, h: 230 });
+    assert.equal(fixture.controller.getFrameState().dragMode, "none");
+  }
+});
+
 test("interface zoom preserves native window coordinates and physical selection dimensions", async () => {
   for (const zoom of [1, 1.1, 1.25, 1.5]) {
     const fixture = hoverSetup(undefined, zoom);

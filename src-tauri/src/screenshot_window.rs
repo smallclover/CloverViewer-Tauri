@@ -73,7 +73,48 @@ fn align_content(
     if window.inner_size()? != size {
         window.set_size(size)?;
     }
+    // HWND 与 WebView2 的尺寸更新不是同一件事：隐藏窗口复用时，子视图可能保留旧范围。
+    let webview: &tauri::Webview = window.as_ref();
+    let actual = webview.bounds()?;
+    let scale = window.scale_factor()?;
+    if actual.size.to_physical::<u32>(scale) != size
+        || actual.position.to_physical::<i32>(scale) != PhysicalPosition::new(0, 0)
+    {
+        webview.set_bounds(tauri::Rect {
+            position: PhysicalPosition::new(0, 0).into(),
+            size: size.into(),
+        })?;
+    }
     Ok(())
+}
+
+pub(crate) fn content_matches(
+    window: &WebviewWindow,
+    (x, y, width, height): DesktopBounds,
+) -> tauri::Result<bool> {
+    let size = PhysicalSize::new(width, height);
+    let webview: &tauri::Webview = window.as_ref();
+    let actual = webview.bounds()?;
+    let scale = window.scale_factor()?;
+    Ok(window.inner_position()? == PhysicalPosition::new(x, y)
+        && window.inner_size()? == size
+        && actual.size.to_physical::<u32>(scale) == size
+        && actual.position.to_physical::<i32>(scale) == PhysicalPosition::new(0, 0))
+}
+
+#[tauri::command]
+pub fn sync_screenshot_window(app: AppHandle, capture_id: u64) -> Result<Option<bool>, String> {
+    let store = app.state::<ScreenshotStore>();
+    let Some(bounds) = store.capture_bounds(capture_id) else {
+        return Ok(None);
+    };
+    let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
+        return Ok(None);
+    };
+    align_content(&window, bounds).map_err(|error| error.to_string())?;
+    content_matches(&window, bounds)
+        .map(Some)
+        .map_err(|error| error.to_string())
 }
 
 pub fn ensure_window(

@@ -4,6 +4,7 @@ import {
   releaseScreenshotScreens,
   type LoadedScreenshotScreen,
 } from "./screenshot-loader";
+import { waitForScreenshotViewport } from "./viewport-ready";
 
 interface ScreenshotLoadControllerOptions {
   root: HTMLElement;
@@ -25,10 +26,21 @@ export function createScreenshotLoadController(options: ScreenshotLoadController
     const data = await getScreenshotData();
     // 启动预热阶段没有截图数据，保持已就绪的页面隐藏且空闲。
     if (!data || current !== revision) return null;
-    let screens: LoadedScreenshotScreen[];
+    let screens: LoadedScreenshotScreen[] = [];
     try {
       screens = await loadScreenshotScreens(data);
+      if (
+        !(await waitForScreenshotViewport({
+          root: options.root,
+          data,
+          isCurrent: () => current === revision,
+        }))
+      ) {
+        releaseScreenshotScreens(screens);
+        return null;
+      }
     } catch (error) {
+      releaseScreenshotScreens(screens);
       if (current !== revision) return null;
       console.error("Loading screenshot pixels failed", error);
       await closeScreenshot(false, data.capture_id);

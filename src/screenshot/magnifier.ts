@@ -1,4 +1,5 @@
 import { blitScreenRegion, type ScreenImage } from "./screen-compositor";
+import type { Rect } from "./geometry";
 
 const GRID_SIZE = 15;
 const PIXEL_SIZE = 10;
@@ -54,18 +55,43 @@ export function createMagnifierRenderer({
   const sampleCanvas = document.createElement("canvas");
   sampleCanvas.width = GRID_SIZE;
   sampleCanvas.height = GRID_SIZE;
-  const sampleContext = sampleCanvas.getContext("2d");
+  const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
   if (!sampleContext) throw new Error("Canvas 2D context is unavailable");
   let warnedZeroSample = false;
+  let sampledScreens: ScreenImage[] = [];
+  let sampleX = Number.NaN,
+    sampleY = Number.NaN;
+  let cachedSample: Uint8ClampedArray | null = null;
 
   const sample = (centerX: number, centerY: number): Uint8ClampedArray | null => {
     const half = Math.floor(GRID_SIZE / 2);
     const sourceX = Math.round(centerX) - half;
     const sourceY = Math.round(centerY) - half;
+    const screens = getScreens();
+    if (
+      cachedSample &&
+      sourceX === sampleX &&
+      sourceY === sampleY &&
+      screens.length === sampledScreens.length &&
+      screens.every((screen, index) => {
+        const previous = sampledScreens[index];
+        return (
+          screen.image === previous.image &&
+          screen.x === previous.x &&
+          screen.y === previous.y &&
+          screen.w === previous.w &&
+          screen.h === previous.h
+        );
+      })
+    )
+      return cachedSample;
+    if (sampleCanvas.width !== GRID_SIZE || sampleCanvas.height !== GRID_SIZE) {
+      sampleCanvas.width = sampleCanvas.height = GRID_SIZE;
+    }
     sampleContext.clearRect(0, 0, GRID_SIZE, GRID_SIZE);
     blitScreenRegion(
       sampleContext,
-      getScreens(),
+      screens,
       sourceX,
       sourceY,
       GRID_SIZE,
@@ -79,8 +105,13 @@ export function createMagnifierRenderer({
     try {
       data = sampleContext.getImageData(0, 0, GRID_SIZE, GRID_SIZE).data;
     } catch {
+      cachedSample = null;
       return null;
     }
+    sampleX = sourceX;
+    sampleY = sourceY;
+    sampledScreens = screens.map((screen) => ({ ...screen }));
+    cachedSample = data;
     if (!warnedZeroSample && data.every((value, index) => index % 4 !== 3 || value === 0)) {
       warnedZeroSample = true;
       console.warn("[screenshot] magnifier sampled only transparent pixels", { sourceX, sourceY });
@@ -94,15 +125,10 @@ export function createMagnifierRenderer({
     return centerColorHex(data);
   };
 
-  const draw = (context: CanvasRenderingContext2D, pointerX: number, pointerY: number) => {
-    const data = sample(pointerX, pointerY);
-    if (!data) return;
-
-    const half = Math.floor(GRID_SIZE / 2);
+  const getBox = (pointerX: number, pointerY: number): Rect => {
     const gridLogicalSize = GRID_SIZE * PIXEL_SIZE;
     const viewport = getViewport();
     const scale = getScale();
-    const cssScale = viewport.width / Math.max(viewport.width * scale, 1);
     const pointerCssX = pointerX / scale;
     const pointerCssY = pointerY / scale;
 
@@ -112,8 +138,28 @@ export function createMagnifierRenderer({
     const cardCssHeight = gridLogicalSize + INFO_HEIGHT;
     if (cardCssX + cardCssWidth > viewport.width) cardCssX = pointerCssX - OFFSET - cardCssWidth;
     if (cardCssY + cardCssHeight > viewport.height) cardCssY = pointerCssY - OFFSET - cardCssHeight;
+    return {
+      x: Math.max(0, Math.min(cardCssX, Math.max(0, viewport.width - cardCssWidth))),
+      y: Math.max(0, Math.min(cardCssY, Math.max(0, viewport.height - cardCssHeight))),
+      w: cardCssWidth,
+      h: cardCssHeight,
+    };
+  };
 
-    const physical = (value: number) => value / cssScale;
+  const draw = (context: CanvasRenderingContext2D, pointerX: number, pointerY: number) => {
+    const data = sample(pointerX, pointerY);
+    if (!data) return;
+    const half = Math.floor(GRID_SIZE / 2);
+    const gridLogicalSize = GRID_SIZE * PIXEL_SIZE;
+    const scale = getScale();
+    const {
+      x: cardCssX,
+      y: cardCssY,
+      w: cardCssWidth,
+      h: cardCssHeight,
+    } = getBox(pointerX, pointerY);
+
+    const physical = (value: number) => value * scale;
     context.save();
     context.setLineDash([]);
     context.fillStyle = "#ffffff";
@@ -128,18 +174,25 @@ export function createMagnifierRenderer({
     context.fill();
 
     const blockSize = physical(PIXEL_SIZE);
-    for (let gridY = 0; gridY < GRID_SIZE; gridY += 1) {
-      for (let gridX = 0; gridX < GRID_SIZE; gridX += 1) {
-        const offset = (gridY * GRID_SIZE + gridX) * 4;
-        context.fillStyle = `rgb(${data[offset]},${data[offset + 1]},${data[offset + 2]})`;
-        context.fillRect(
-          physical(cardCssX) + gridX * blockSize,
-          physical(cardCssY) + gridY * blockSize,
-          blockSize,
-          blockSize,
-        );
-      }
-    }
+    context.fillStyle = "#000000";
+    context.fillRect(
+      physical(cardCssX),
+      physical(cardCssY),
+      physical(gridLogicalSize),
+      physical(gridLogicalSize),
+    );
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+      sampleCanvas,
+      0,
+      0,
+      GRID_SIZE,
+      GRID_SIZE,
+      physical(cardCssX),
+      physical(cardCssY),
+      physical(gridLogicalSize),
+      physical(gridLogicalSize),
+    );
 
     context.strokeStyle = "rgba(0,0,0,0.31)";
     context.lineWidth = 1;
@@ -217,5 +270,15 @@ export function createMagnifierRenderer({
     context.restore();
   };
 
-  return { draw, colorAt };
+  return {
+    draw,
+    colorAt,
+    getBox,
+    reset: () => {
+      sampledScreens = [];
+      cachedSample = null;
+      warnedZeroSample = false;
+      sampleCanvas.width = sampleCanvas.height = 0;
+    },
+  };
 }

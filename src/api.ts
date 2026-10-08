@@ -186,6 +186,10 @@ export const getScreenshotFrame = (captureId: number, screenIndex: number) =>
 /** 提前备好隐藏的截图 WebView：不抓屏、不改动焦点。 */
 export const prepareScreenshotWindow = () => invoke<void>("prepare_screenshot_window");
 
+/** 对齐截图窗口与 WebView：true 已对齐，false 尚在调整，null 会话已结束。 */
+export const syncScreenshotWindow = (captureId: number) =>
+  invoke<boolean | null>("sync_screenshot_window", { captureId });
+
 /** 前端把截图渲染完成后通知后端：此时才显示截图窗口（避免冷启动白屏/锁屏） */
 export const screenshotUiReady = (captureId: number) =>
   invoke<boolean>("screenshot_ui_ready", { captureId });

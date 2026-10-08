@@ -14,6 +14,7 @@
     "src/viewer/image-source.ts",
     "src/viewer/image-editor-loader.ts",
     "src/image-editor/crop-selection.ts",
+    "src/image-editor/crop-viewport.ts",
     "src/image-editor/frame-update.ts",
     "src/image-editor/mosaic-cursor.ts",
     "src/ui/update-controller.ts",
@@ -29,6 +30,8 @@
     "src/screenshot/text-input.ts",
     "src/screenshot/mosaic.ts",
     "src/screenshot/magnifier.ts",
+    "src/screenshot/magnifier-overlay.ts",
+    "src/screenshot/selection-overlay.ts",
     "src/screenshot/overlay-layout.ts",
     "src/screenshot/resize.ts",
     "src/screenshot/screen-compositor.ts"

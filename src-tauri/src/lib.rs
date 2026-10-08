@@ -155,6 +155,7 @@ pub fn run() {
             screenshot::get_screenshot_data,
             screenshot::get_screenshot_frame,
             screenshot_window::prepare_screenshot_window,
+            screenshot_window::sync_screenshot_window,
             screenshot::take_scroll_start_mode,
             screenshot::close_screenshot,
             screenshot::finish_screenshot,

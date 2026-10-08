@@ -32,6 +32,7 @@ import {
 import { createLanSharePanel } from "./screenshot/lan-share-panel";
 import { refreshScreenshotConfig, startScreenshotLifecycle } from "./screenshot/lifecycle";
 import { createMagnifierRenderer } from "./screenshot/magnifier";
+import { createMagnifierOverlay } from "./screenshot/magnifier-overlay";
 import { placeScrollOverlay } from "./screenshot/overlay-layout";
 import { createHelpPanel } from "./screenshot/panels";
 import { createScreenshotActionController } from "./screenshot/screenshot-action-controller";
@@ -50,6 +51,7 @@ import { createScrollCaptureStartPanel } from "./screenshot/scroll-capture-panel
 import { createScrollCaptureSession } from "./screenshot/scroll-capture-session";
 import { createTextInputController } from "./screenshot/text-input";
 import { createToolbar } from "./screenshot/toolbar";
+import { createSelectionOverlay } from "./screenshot/selection-overlay";
 import { createViewportBounds } from "./screenshot/viewport";
 
 // 截图标注器：交互绘制、放大镜、滚动截图与导出的组合根
@@ -89,7 +91,8 @@ const editorSession = createEditorSession({ color: DEFAULT_COLOR, strokeWidth: s
 // ---------- 放大镜 ----------
 let magnifierActive = true; // 读 config.magnifier_enabled，main() 里覆盖
 let experimentalAutoScrollEnabled = false;
-let copiedAt = 0; // 最近一次复制色值的时间戳
+let copiedAt = -Infinity; // 最近一次复制色值的时间戳
+let copyColorNoticeTimer: number | undefined;
 
 // ---------- DOM 引用 ----------
 function requiredElement<T extends HTMLElement>(id: string): T {
@@ -240,14 +243,15 @@ const magnifier = createMagnifierRenderer({
   getCopyColorHotkey: () => copyColorHotkey,
   getCopiedAt: () => copiedAt,
 });
-const drawMagnifier = magnifier.draw;
+const magnifierOverlay = createMagnifierOverlay({ root, renderer: magnifier, getScale: physScale });
+const selectionOverlay = createSelectionOverlay({ root, canvas, getViewport: viewportBounds.get });
 const editorRenderer = createEditorCanvasRenderer({
   context: ctx,
   getScreens: screenSources,
   getScale: physScale,
   mosaicWidth: sizes.blockSize,
-  drawMagnifier,
 });
+root.prepend(editorRenderer.background);
 const editorPaint = createFrameUpdate(() => render());
 
 screenshotActions = createScreenshotActionController({
@@ -274,9 +278,12 @@ screenshotActions = createScreenshotActionController({
 function render() {
   const input = editorInput?.getFrameState();
   mosaicCursor?.update(input?.overUI ? null : (input?.lastMousePos ?? null));
+  editorRenderer.setVisible(!scrollActive());
   // 滚动截图进行中/已完成：只画「压暗 + 选区挖空 + 外框」，不画底图/标注/工具栏。
   // 选区挖空是硬要求——后端按屏幕像素捕获，覆盖窗在选区里必须完全透明。
   if (scrollActive()) {
+    selectionOverlay.hide();
+    magnifierOverlay.hide();
     renderScrollOverlay();
     scrollPositioner.position();
     return;
@@ -288,27 +295,29 @@ function render() {
       : editorSession.selection;
   editorRenderer.render({
     canvas,
-    selection: selRect,
     shapes: editorSession.shapes,
     currentShape: editorSession.currentShape,
     selectedIndex: editorSession.selectedIndex,
-    // 滚动截图（包括待框选阶段）不需要取色；普通截图则允许放大镜跨过工具栏、
-    // 提示框等浮层继续跟随鼠标。画布在 UI 层下方，因此不会遮挡这些控件。
-    magnifierPoint:
-      magnifierActive &&
-      editorSession.tool !== "mosaic" &&
-      scroll.phase === "idle" &&
-      input?.lastMousePos
-        ? input.lastMousePos
-        : null,
-    windowHover:
-      input?.hoverWin &&
+  });
+  selectionOverlay.update(
+    selRect,
+    input?.hoverWin &&
       !editorSession.selection &&
       !editorSession.tool &&
       (input.dragMode === "none" || input.dragMode === "pending-win")
-        ? input.hoverWin
-        : null,
-  });
+      ? input.hoverWin
+      : null,
+  );
+  // 滚动截图（包括待框选阶段）不需要取色；普通截图则允许放大镜跨过工具栏、
+  // 提示框等浮层继续跟随鼠标。画布在 UI 层下方，因此不会遮挡这些控件。
+  magnifierOverlay.update(
+    magnifierActive &&
+      editorSession.tool !== "mosaic" &&
+      scroll.phase === "idle" &&
+      input?.lastMousePos
+      ? input.lastMousePos
+      : null,
+  );
 
   editorUi.sync();
 
@@ -331,7 +340,7 @@ function redo() {
 editorInput = createEditorInputController({
   root,
   getRootBounds: viewportBounds.get,
-  canvas,
+  canvas: root,
   getBounds: () => ({ totalW, totalH, minX, minY }),
   getScreens: () => screens,
   getSelection: () => editorSession.selection,
@@ -416,6 +425,11 @@ bindEditorShortcuts({
     void copyText(hex);
     copiedAt = performance.now();
     render();
+    if (copyColorNoticeTimer !== undefined) window.clearTimeout(copyColorNoticeTimer);
+    copyColorNoticeTimer = window.setTimeout(() => {
+      copyColorNoticeTimer = undefined;
+      if (document.body.classList.contains("ready") && !scrollActive()) render();
+    }, 1500);
   },
   onUndo: undo,
   onRedo: redo,
@@ -694,9 +708,15 @@ function hideFloatingPanels() {
 }
 
 // 事件绑定 + 初始化
-canvas.addEventListener("mousedown", editorInput.onMouseDown);
+root.addEventListener("mousedown", (event) => {
+  if ((event.target as HTMLElement).closest(".ui-interactive, #text-input")) return;
+  editorInput.onMouseDown(event);
+});
 window.addEventListener("mousemove", editorInput.onMouseMove);
-window.addEventListener("mouseup", editorInput.onMouseUp);
+window.addEventListener("mouseup", (event) => {
+  editorInput.onMouseUp(event);
+  if (event.button === 0) editorPaint.flush();
+});
 window.addEventListener("resize", () => {
   viewportBounds.invalidate();
   if (document.body.classList.contains("ready")) render();
@@ -706,6 +726,11 @@ function resetScreenshotSession() {
   viewportBounds.invalidate();
   editorPaint.discard();
   editorRenderer.reset();
+  selectionOverlay.hide();
+  magnifierOverlay.reset();
+  if (copyColorNoticeTimer !== undefined) window.clearTimeout(copyColorNoticeTimer);
+  copyColorNoticeTimer = undefined;
+  copiedAt = -Infinity;
   screenshotActions.reset();
   clearScreenshotNotice();
   root.querySelectorAll(":scope > img").forEach((element) => {

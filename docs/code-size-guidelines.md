@@ -42,23 +42,25 @@
 - CSS：按页面或组件分组，统一保留设计 token/全局变量，避免按单条属性机械分文件。
 - 先提取低耦合、已有测试覆盖的部分；每次拆分后保持行为不变，并补充模块级测试。
 
-## 当前基线（2026-10-03）
+## 当前基线（2026-10-08）
 
 按物理行数盘点，以下项目自有源码文件超过 500 行。它们目前都未达到 1,000 有效代码行，不需要仅因行数安排拆分：
 
 | 文件 | 物理行 | 建议关注点 |
 | --- | ---: | --- |
-| `src/screenshot.ts` | 882 | 截图窗口组合入口；新增交互优先放入 `src/screenshot/` 中对应模块。 |
+| `src/screenshot.ts` | 907 | 截图窗口组合入口；新增交互优先放入 `src/screenshot/` 中对应模块。 |
 | `src/main.ts` | 798 | 主窗口组合入口；新增查看器逻辑优先放入 `src/viewer/` 或 `src/ui/`。 |
-| `src-tauri/src/screenshot.rs` | 567 | 截图原生实现；屏幕像素与窗口创建已提取为独立模块。 |
+| `src-tauri/src/screenshot.rs` | 576 | 截图原生实现；屏幕像素与窗口创建已提取为独立模块。 |
 | `src-tauri/src/scroll_capture/platform.rs` | 692 | 滚动截图平台交互；保持平台调用与算法边界。 |
 | `src-tauri/src/scroll_capture/tauri.rs` | 645 | 滚动截图命令桥接；新增算法放入领域模块。 |
-| `src/viewer/image-editor-controller.ts` | 652 | 图片编辑会话与导出；裁切、工具栏、加载和共用标注图层已提取为独立模块。 |
+| `src/viewer/image-editor-controller.ts` | 674 | 图片编辑会话与导出；裁切、预览居中、工具栏、加载和共用标注图层已提取为独立模块。 |
 | `src-tauri/src/mcp/mod.rs` | 553 | MCP 入口与组装；新增协议实现放入子模块。 |
 
 `src/live2d-framework/` 是引入的框架源码，不按项目自有业务文件的行数目标拆分。多语言静态数据同样属于上文的例外。
 
 页面骨架文件（`index.html`、`screenshot.html`）不计入本规范的统计口径。主窗口样式已由 `src/styles.css` 入口按职责拆分到 `src/styles/`；截图覆盖窗样式同样由 `src/styles/screenshot.css` 入口按基础、工具栏、编辑 UI、分享、滚动截图与提示拆分到 `src/styles/screenshot/`。
+
+裁剪预览布局独立放在 `src/image-editor/crop-viewport.ts`；截图选区、放大镜和显示前尺寸校验分别放在 `src/screenshot/selection-overlay.ts`、`magnifier-overlay.ts` 与 `viewport-ready.ts`，避免把新的显示职责继续塞进入口文件。
 
 以上文件均不要求一次性重写。只有出现明确的职责、测试或修改冲突问题时，才安排小步、可验证的提取。
 

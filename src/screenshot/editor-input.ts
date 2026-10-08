@@ -14,7 +14,8 @@ export type DragMode = "none" | "select" | "move" | "resize" | "move-selection" 
 
 interface EditorInputOptions {
   root: HTMLElement;
-  canvas: HTMLCanvasElement;
+  /** 接收输入并显示鼠标样式的表面，可以是画布或覆盖层根节点。 */
+  canvas: HTMLElement;
   getRootBounds?: () => DOMRect;
   getBounds: () => { totalW: number; totalH: number; minX: number; minY: number };
   getScreens: () => readonly { x: number; y: number; w: number; h: number }[];
@@ -356,6 +357,17 @@ export function createEditorInputController(options: EditorInputOptions) {
 
   function onMouseUp(event: MouseEvent) {
     if (event.button !== 0) return;
+    const finalPoint = physPos(event);
+    lastMousePos = finalPoint;
+    if (
+      dragMode === "pending-win" &&
+      dragStart &&
+      Math.hypot(finalPoint.x - dragStart.x, finalPoint.y - dragStart.y) > 3
+    ) {
+      pendingWinSelect = null;
+      hoverWin = null;
+      dragMode = "select";
+    }
     if (dragMode === "pending-win") {
       if (pendingWinSelect) options.setSelection({ ...pendingWinSelect });
       pendingWinSelect = null;
@@ -366,6 +378,7 @@ export function createEditorInputController(options: EditorInputOptions) {
       return;
     }
     if (dragMode === "select") {
+      dragCur = finalPoint;
       const rect = dragStart && dragCur ? normRect(dragStart, dragCur) : null;
       options.setSelection(
         rect && rect.w >= options.minShapeSize && rect.h >= options.minShapeSize ? rect : null,

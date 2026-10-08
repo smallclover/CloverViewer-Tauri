@@ -20,6 +20,8 @@ interface CropLayout {
   height: number;
   sx: number;
   sy: number;
+  offsetX: number;
+  offsetY: number;
 }
 
 const cursors: Record<CropTarget, string> = {
@@ -73,17 +75,21 @@ export function createCropOverlay(options: CropOverlayOptions) {
   let drag: { id: number; start: Pt; origin: Rect; target: CropTarget } | null = null;
 
   const update = () => {
-    const active = options.isActive(),
-      crop = options.getCrop();
-    overlay.classList.toggle("hidden", !active && !crop);
+    const active = options.isActive();
+    overlay.classList.toggle("hidden", !active);
     overlay.classList.toggle("active", active);
-    const visible = !!layout && (active || !!crop);
+    const visible = !!layout && active;
     canvas.classList.toggle("image-crop-preview-source", visible);
     if (!visible || !layout) return;
-    preview.prepare(layout.width, layout.height);
+    preview.prepare(layout.width, layout.height, {
+      x: -layout.offsetX / layout.sx,
+      y: -layout.offsetY / layout.sy,
+      w: layout.width / layout.sx,
+      h: layout.height / layout.sy,
+    });
     const selection = rect();
-    const x = selection.x * layout.sx,
-      y = selection.y * layout.sy;
+    const x = selection.x * layout.sx + layout.offsetX,
+      y = selection.y * layout.sy + layout.offsetY;
     const w = selection.w * layout.sx,
       h = selection.h * layout.sy;
     Object.assign(frame.style, {
@@ -92,27 +98,38 @@ export function createCropOverlay(options: CropOverlayOptions) {
       width: `${w}px`,
       height: `${h}px`,
     });
-    preview.clip(y, Math.max(0, layout.width - x - w), Math.max(0, layout.height - y - h), x);
+    preview.clip(
+      Math.max(0, y),
+      Math.max(0, layout.width - x - w),
+      Math.max(0, layout.height - y - h),
+      Math.max(0, x),
+    );
   };
   const refreshLayout = () => {
     const box = canvas.getBoundingClientRect(),
       parent = workspace.getBoundingClientRect();
+    const left = Math.max(box.left, parent.left),
+      top = Math.max(box.top, parent.top);
+    const width = Math.max(0, Math.min(box.right, parent.right) - left),
+      height = Math.max(0, Math.min(box.bottom, parent.bottom) - top);
     layout =
-      box.width && box.height
+      box.width && box.height && width && height
         ? {
             left: box.left,
             top: box.top,
-            width: box.width,
-            height: box.height,
+            width,
+            height,
             sx: box.width / canvas.width,
             sy: box.height / canvas.height,
+            offsetX: box.left - left,
+            offsetY: box.top - top,
           }
         : null;
     Object.assign(overlay.style, {
-      left: `${box.left - parent.left + workspace.scrollLeft}px`,
-      top: `${box.top - parent.top + workspace.scrollTop}px`,
-      width: `${box.width}px`,
-      height: `${box.height}px`,
+      left: `${left - parent.left + workspace.scrollLeft}px`,
+      top: `${top - parent.top + workspace.scrollTop}px`,
+      width: `${width}px`,
+      height: `${height}px`,
     });
     update();
   };

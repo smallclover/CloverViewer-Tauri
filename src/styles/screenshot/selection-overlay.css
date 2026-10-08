@@ -1,0 +1,19 @@
+.screenshot-background { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+#overlay-canvas { z-index: 1; cursor: inherit; }
+.screenshot-selection-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.screenshot-selection-mask { position: absolute; left: 0; top: 0; width: 1px; height: 1px; background: rgba(0, 0, 0, .5); transform-origin: 0 0; }
+.screenshot-selection-frame { position: absolute; left: 0; top: 0; }
+.screenshot-selection-border { position: absolute; inset: 1px; border: 3px solid #00ff00; box-sizing: border-box; }
+.screenshot-selection-handle { position: absolute; width: 8px; height: 8px; background: #00ff00; }
+.selection-nw { left: 0; top: 0; }
+.selection-ne { right: 0; top: 0; }
+.selection-se { right: 0; bottom: 0; }
+.selection-sw { left: 0; bottom: 0; }
+.selection-n { left: 50%; top: 0; transform: translateX(-50%); }
+.selection-s { left: 50%; bottom: 0; transform: translateX(-50%); }
+.selection-e { right: 0; top: 50%; transform: translateY(-50%); }
+.selection-w { left: 0; top: 50%; transform: translateY(-50%); }
+.screenshot-selection-label { position: absolute; left: 4px; top: 4px; padding: 3px 4px; color: #00ff00; background: rgba(0, 0, 0, .55); font: 600 13px/1 monospace; white-space: nowrap; }
+.screenshot-magnifier-overlay { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; }
+#ui-layer { z-index: 4; }
+.screenshot-background[hidden], .screenshot-selection-overlay[hidden], .screenshot-selection-overlay [hidden], .screenshot-magnifier-overlay[hidden] { display: none; }

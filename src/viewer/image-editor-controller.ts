@@ -8,6 +8,7 @@ import {
   mosaicBlockSize,
 } from "../image-editor/canvas-mosaic-renderer";
 import { createCropOverlay } from "../image-editor/crop-overlay";
+import { createCropViewport } from "../image-editor/crop-viewport";
 import { createFrameUpdate } from "../image-editor/frame-update";
 import {
   cloneShape,
@@ -58,6 +59,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
   workspace.className = "image-editor-workspace";
   const canvas = document.createElement("canvas");
   canvas.className = "image-editor-canvas";
+  const surface = document.createElement("div");
+  surface.className = "image-editor-surface";
+  surface.append(canvas);
   const textInput = document.createElement("textarea");
   textInput.className = "image-editor-text-input annotation-text-input hidden";
   textInput.rows = 1;
@@ -71,7 +75,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     corner.className = `annotation-text-corner ${position}`;
     textFrame.append(corner);
   }
-  workspace.append(canvas, textInput, textFrame);
+  workspace.append(surface, textInput, textFrame);
   options.root.replaceChildren(workspace);
   const toolbar = createEditorToolbar({
     workspace,
@@ -134,6 +138,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     selectedIndex = null;
     rebuildSource();
     rasterizeAnnotations();
+    cropViewport.fit();
   };
 
   const translate = () => {
@@ -212,13 +217,25 @@ export function createImageEditorController(options: ImageEditorControllerOption
 
   const paint = createFrameUpdate(() => render());
 
+  const cropViewport = createCropViewport({
+    canvas,
+    surface,
+    getCrop: () => crop,
+    isCropping: () => tool === "crop",
+    onLayout: () => {
+      cropOverlay.refreshImage();
+      mosaicCursor.reset();
+      layoutTextInput();
+    },
+  });
   const cropOverlay = createCropOverlay({
     canvas,
-    workspace,
+    workspace: surface,
     getCrop: () => crop,
     isActive: () => tool === "crop",
     onBegin: () => {
       cropSnapshot = snapshot();
+      cropViewport.begin();
     },
     onChange: (next) => {
       crop = next;
@@ -240,6 +257,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
         }
       }
       cropSnapshot = null;
+      cropViewport.end();
       cropOverlay.update();
       toolbar.refreshHistory(history.canUndo, history.canRedo);
     },
@@ -358,6 +376,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     resetActiveMosaic();
     selectedIndex = null;
     toolbar.setActiveTool(next);
+    cropViewport.fit();
+    cropOverlay.update();
     mosaicCursor.refresh();
     render();
   };
@@ -394,6 +414,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     rasterizeAnnotations();
     dirty = true;
     render();
+    cropViewport.fit();
   };
 
   const undo = () => {
@@ -636,6 +657,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     onReady();
     options.root.classList.remove("hidden");
     toolbar.updateLayout();
+    cropViewport.fit();
     toolbar.initializeSizes(canvas.getBoundingClientRect().width / canvas.width);
     cropOverlay.refreshImage();
     return true;

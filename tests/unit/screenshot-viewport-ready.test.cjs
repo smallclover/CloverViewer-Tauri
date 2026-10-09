@@ -7,7 +7,7 @@ const ts = require("typescript");
 const exportsGuard = {};
 runInNewContext(ts.transpileModule(readFileSync(resolve(__dirname, "../../src/screenshot/viewport-ready.ts"), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
-}).outputText, { exports: exportsGuard, require: () => ({}) });
+}).outputText, { exports: exportsGuard, require: () => ({}), window: { devicePixelRatio: 1 } });
 const { waitForScreenshotViewport } = exportsGuard;
 const data = { capture_id: 7, total_width: 3840, total_height: 1080 };
 
@@ -25,13 +25,41 @@ test("a double-screen capture cannot use a single-screen CSS viewport, even if t
 });
 
 test("DPI and interface zoom may scale both viewport axes uniformly", async () => {
-  for (const scale of [1, 1.25, 1.5, 2]) {
+  for (const scale of [1, 1.25, 1.5, 1.65, 1.875, 2]) {
     let pauses = 0;
     assert.equal(await waitForScreenshotViewport({ data, isCurrent: () => true,
       root: { getBoundingClientRect: () => ({ width: 3840 / scale, height: 1080 / scale }) },
+      getPixelRatio: () => scale,
       sync: async () => true, pause: async () => pauses++,
     }), true);
     assert.equal(pauses, 0);
+  }
+});
+
+test("a stale viewport with the correct aspect ratio cannot squeeze the desktop into one screen", async () => {
+  let size = { width: 1920, height: 540 };
+  let pauses = 0;
+  assert.equal(await waitForScreenshotViewport({ data, isCurrent: () => true,
+    root: { getBoundingClientRect: () => size }, getPixelRatio: () => 1,
+    sync: async () => true,
+    pause: async () => { if (++pauses === 2) size = { width: 3840, height: 1080 }; },
+  }), true);
+  assert.equal(pauses, 2);
+});
+
+test("resolution and DPI changes require a new stable viewport for each capture", async () => {
+  for (const [width, height, scale] of [[4480, 1440, 1], [6400, 2160, 1.5], [3840, 1080, 1.25]]) {
+    let reads = 0;
+    let pauses = 0;
+    assert.equal(await waitForScreenshotViewport({ data: { ...data, total_width: width, total_height: height },
+      isCurrent: () => true, getPixelRatio: () => scale,
+      root: { getBoundingClientRect: () => ++reads === 1
+        ? { width: width / scale / 2, height: height / scale / 2 }
+        : { width: width / scale, height: height / scale } },
+      sync: async () => true, pause: async () => pauses++,
+    }), true);
+    assert.equal(reads, 3);
+    assert.equal(pauses, 1);
   }
 });
 

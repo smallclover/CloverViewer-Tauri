@@ -66,7 +66,11 @@ export function createSelectionOverlay({ root, canvas, getViewport }: SelectionO
     masks.forEach((mask, index) => {
       mask.hidden = !selection;
       const area = regions[index];
-      mask.style.transform = `translate(${area.x}px, ${area.y}px) scale(${area.w}, ${area.h})`;
+      // 直接布局实际尺寸：混合 DPI 下放大 1px 元素会把像素取整误差一并放大。
+      mask.style.left = `${area.x}px`;
+      mask.style.top = `${area.y}px`;
+      mask.style.width = `${area.w}px`;
+      mask.style.height = `${area.h}px`;
     });
     frame.style.transform = `translate(${x}px, ${y}px)`;
     frame.style.width = `${right - x}px`;

@@ -2,10 +2,10 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createSelectionOverlay } = require("../../.unit-test-dist/screenshot/selection-overlay.js");
 
-function setup() {
+function setup(scale = 2) {
   let writes = 0;
-  let width = 1920;
-  let height = 1080;
+  let width = 3840 / scale;
+  let height = 2160 / scale;
   const elements = [];
   const createElement = () => {
     const element = { children: [], hidden: false, textContent: "", style: new Proxy({}, {
@@ -35,11 +35,11 @@ test("selection mask uses CSS geometry while the size label keeps original pixel
   assert.equal(f.frame.style.width, "500px");
   assert.equal(f.frame.style.height, "400px");
   assert.equal(f.label.textContent, "1000x800");
-  assert.deepEqual(f.masks.map(mask => mask.style.transform), [
-    "translate(0px, 0px) scale(1920, 100)",
-    "translate(0px, 500px) scale(1920, 580)",
-    "translate(0px, 100px) scale(200, 400)",
-    "translate(700px, 100px) scale(1220, 400)",
+  assert.deepEqual(f.masks.map(mask => [mask.style.left, mask.style.top, mask.style.width, mask.style.height]), [
+    ["0px", "0px", "1920px", "100px"],
+    ["0px", "500px", "1920px", "580px"],
+    ["0px", "100px", "200px", "400px"],
+    ["700px", "100px", "1220px", "400px"],
   ]);
   assert.ok(f.masks.every(mask => !mask.hidden));
   const writes = f.writes();
@@ -49,6 +49,28 @@ test("selection mask uses CSS geometry while the size label keeps original pixel
   f.overlay.update(selection, null);
   assert.equal(f.frame.style.transform, "translate(100px, 50px)");
   assert.equal(f.label.textContent, "1000x800");
+});
+
+test("fractional DPI masks cover only the outside, with no overlap or magnified 1px geometry", () => {
+  for (const scale of [1, 1.25, 1.5, 1.65, 1.875, 2]) {
+    const f = setup(scale);
+    const rect = { x: 431, y: 187, w: 948, h: 681 };
+    f.overlay.update(rect, null);
+    const masks = f.masks.map(mask => {
+      assert.equal(mask.style.transform, undefined);
+      return { x: parseFloat(mask.style.left) * scale, y: parseFloat(mask.style.top) * scale,
+        w: parseFloat(mask.style.width) * scale, h: parseFloat(mask.style.height) * scale };
+    });
+    const epsilon = 1e-8;
+    for (const mask of masks) {
+      assert.ok(mask.w >= 0 && mask.h >= 0);
+      const overlapW = Math.min(mask.x + mask.w, rect.x + rect.w) - Math.max(mask.x, rect.x);
+      const overlapH = Math.min(mask.y + mask.h, rect.y + rect.h) - Math.max(mask.y, rect.y);
+      assert.ok(overlapW <= epsilon || overlapH <= epsilon);
+    }
+    assert.ok(Math.abs(masks.reduce((area, mask) => area + mask.w * mask.h, 0) -
+      (3840 * 2160 - rect.w * rect.h)) < epsilon);
+  }
 });
 
 test("window hover has a frame without dimming, and reset restores the full input plane", () => {

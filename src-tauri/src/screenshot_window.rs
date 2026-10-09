@@ -62,30 +62,30 @@ fn corrected_outer_position(
 fn align_content(
     window: &WebviewWindow,
     (x, y, width, height): DesktopBounds,
-) -> tauri::Result<()> {
+) -> tauri::Result<bool> {
     let target = PhysicalPosition::new(x, y);
     if let Some(position) =
         corrected_outer_position(window.outer_position()?, window.inner_position()?, target)
     {
         window.set_position(position)?;
+        // 移动可能触发 DPI 调整；等下一次同步读取实际 HWND，再决定尺寸。
+        return Ok(false);
     }
     let size = PhysicalSize::new(width, height);
     if window.inner_size()? != size {
         window.set_size(size)?;
+        // Windows 的 SetWindowPos 是异步的，不能用旧 HWND 尺寸设置子视图比例。
+        return Ok(false);
     }
     // HWND 与 WebView2 的尺寸更新不是同一件事：隐藏窗口复用时，子视图可能保留旧范围。
     let webview: &tauri::Webview = window.as_ref();
-    let actual = webview.bounds()?;
-    let scale = window.scale_factor()?;
-    if actual.size.to_physical::<u32>(scale) != size
-        || actual.position.to_physical::<i32>(scale) != PhysicalPosition::new(0, 0)
-    {
-        webview.set_bounds(tauri::Rect {
-            position: PhysicalPosition::new(0, 0).into(),
-            size: size.into(),
-        })?;
-    }
-    Ok(())
+    // 即使子 HWND 范围正确，WebView2 controller 也可能仍用旧范围。
+    // 父窗已对齐后重写 bounds，同时恢复 Tauri 的子视图自动缩放比例为 1。
+    webview.set_bounds(tauri::Rect {
+        position: PhysicalPosition::new(0, 0).into(),
+        size: size.into(),
+    })?;
+    content_matches(window, (x, y, width, height))
 }
 
 pub(crate) fn content_matches(
@@ -111,8 +111,7 @@ pub fn sync_screenshot_window(app: AppHandle, capture_id: u64) -> Result<Option<
     let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
         return Ok(None);
     };
-    align_content(&window, bounds).map_err(|error| error.to_string())?;
-    content_matches(&window, bounds)
+    align_content(&window, bounds)
         .map(Some)
         .map_err(|error| error.to_string())
 }

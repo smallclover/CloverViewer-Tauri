@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CloverViewer —— 免费开源的 Windows 图片查看器与长截图工具（Tauri 2）</title>
+    <title>CloverViewer — 免费开源的 Windows 图片查看器与截图工具</title>
     <meta
       name="description"
       content="CloverViewer 是一款免费开源的 Windows 图片查看器与截图工具：网格/单图双视图、多屏截图与标注、滚动长截图、Live2D 桌宠、Windows 原生 OCR 取字，并内置 MCP Server 让 AI 客户端直接截图看屏幕。基于 Tauri 2，MIT 协议。"
@@ -11,16 +11,13 @@
     <meta name="author" content="smallclover" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <link rel="canonical" href="https://smallclover.github.io/CloverViewer-Tauri/" />
-    <meta name="theme-color" content="#0c1a11" />
+    <meta name="theme-color" content="#f7faf8" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="CloverViewer" />
     <meta property="og:url" content="https://smallclover.github.io/CloverViewer-Tauri/" />
     <meta property="og:locale" content="zh_CN" />
-    <meta
-      property="og:title"
-      content="CloverViewer —— 免费开源的 Windows 图片查看器与长截图工具"
-    />
+    <meta property="og:title" content="CloverViewer —— 免费开源的 Windows 图片查看器与长截图工具" />
     <meta
       property="og:description"
       content="图片浏览、多屏截图标注、滚动长截图、OCR 取字与内置 MCP Server，全部装进一个轻量的 Windows 应用。基于 Tauri 2，MIT 开源。"
@@ -31,10 +28,7 @@
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="CloverViewer：免费开源的 Windows 图片查看器与截图工具"
-    />
+    <meta property="og:image:alt" content="CloverViewer：免费开源的 Windows 图片查看器与截图工具" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta
@@ -89,371 +83,595 @@
       }
     </script>
 
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "CloverViewer 是免费的吗？可以商用吗？",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "免费且开源，协议为 MIT。个人使用、公司内部使用和二次开发都可以，只需保留版权声明。"
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "支持哪些 Windows 版本？",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Windows 10 / 11，依赖系统自带的 WebView2 运行时。安装包是 NSIS 的 per-user 安装，不需要管理员权限，也可以直接使用便携版 CloverViewer.exe。"
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "CloverViewer 会把我浏览的图片或截图上传吗？",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "不会上传到第三方服务。图片浏览、截图、标注、长截图拼接和 OCR 全部在本机完成，应用没有账号体系，也不收集使用数据。若你主动创建局域网分享，图片会仅在同一网络内临时传给持有链接的设备；此外，只有你在「设置 → 软件更新」中点「检查更新」时，应用才会访问 GitHub Releases。"
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "长截图（滚动截图）支持所有应用吗？",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "不保证 100% 成功。默认是手动滚动优先：你按自己的节奏滚动，程序逐帧配准并只把验证通过的新内容追加进长图；自动注入滚动是设置里的试验功能，默认关闭。失败或中途停止时已捕获的部分会保留。"
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "CloverViewer 和其它截图工具有什么不同？",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "它把图片查看器和截图标注合在同一个免费开源应用里，并且内置 MCP Server，让 Claude Desktop 等 AI 客户端可以直接调用截图与 OCR。长截图输出中的每个像素都来自某一帧真实屏幕画面，而不是推算出来的。"
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "怎么让 Claude Desktop 用上 CloverViewer 的截图能力？",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "在 claude_desktop_config.json 中把 command 指向 CloverViewer.exe 并传入 --mcp 参数，即可调用 list_monitors、take_screenshot、get_screenshot、ocr_screenshot 与 delete_screenshot。"
-            }
-          }
-        ]
+    <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "免费吗？可以商用吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "免费且开源，采用 MIT 协议。个人使用、公司内部使用和二次开发都可以，只需保留版权声明。"
       }
-    </script>
+    },
+    {
+      "@type": "Question",
+      "name": "支持哪些系统？怎么安装？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "支持 Windows 10 / 11，需要 WebView2 运行时。在 GitHub Releases 下载 NSIS 安装包即可，无需管理员权限；也可以使用便携版 CloverViewer.exe。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "图片和截图会上传吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "不会上传到第三方服务。图片浏览、截图、标注、拼接和 OCR 都在本地完成。如果你主动创建局域网分享，持有链接的同一网络设备可以临时访问该图片；手动检查更新时会连接 GitHub Releases。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "滚动截图支持所有应用吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接；停止或失败时，已捕获部分会保留。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "AI 客户端怎么接入？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "在兼容的 MCP 客户端中，将命令指向 CloverViewer.exe 并传入 --mcp。也支持仅本机监听、需令牌的 HTTP 模式。具体配置与工具参数见 MCP 使用指南。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "与原版 CloverViewer 有什么关系？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "这是 CloverViewer 的 Tauri 2 重实现，采用 Rust 后端与 Web 前端。原版基于 egui；两者共用 %APPDATA%\\CloverViewer\\config.json 配置。"
+      }
+    }
+  ]
+}</script>
   </head>
   <body>
-    <a class="skip" href="#main">跳到主要内容</a>
-
+    <svg xmlns="http://www.w3.org/2000/svg" class="icon-defs" aria-hidden="true">
+      <defs>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" /></symbol>
+        <symbol id="i-down" viewBox="0 0 24 24">
+          <path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4" />
+        </symbol>
+        <symbol id="i-image" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <circle cx="8" cy="8" r="1.5" />
+          <path d="m3 17 6-6 4 4 3-3 5 5" />
+        </symbol>
+        <symbol id="i-crop" viewBox="0 0 24 24"><path d="M6 3v15h15M3 6h15v15M3 3l18 18" /></symbol>
+        <symbol id="i-scroll" viewBox="0 0 24 24">
+          <path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5M12 6v12m-3-3 3 3 3-3" />
+        </symbol>
+        <symbol id="i-text" viewBox="0 0 24 24">
+          <path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5M8 9V7h8v2m-4-2v10m-3 0h6" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" />
+          <path d="m8 12 3 3 5-6" />
+        </symbol>
+        <symbol id="i-share" viewBox="0 0 24 24">
+          <rect x="2" y="4" width="13" height="11" rx="2" />
+          <path d="M5 20h8m-4-5v5" />
+          <rect x="17" y="8" width="5" height="12" rx="1" />
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            d="M9 19c-4 1-4-2-6-2m12 5v-4c0-1-.3-2-1-2.5 3-.4 6-1.5 6-6 0-1.5-.5-2.7-1.5-3.7.2-1 .2-2.2-.2-3.3 0 0-1.3-.4-4.1 1.5a13 13 0 0 0-6.4 0C5 2.1 3.7 2.5 3.7 2.5c-.4 1.1-.4 2.3-.2 3.3C2.5 6.8 2 8 2 9.5c0 4.5 3 5.6 6 6-.7.5-1 1.5-1 2.5v4"
+          />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 24 24">
+          <path d="M12 5c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1Zm0 0v15" />
+        </symbol>
+        <symbol id="i-spark" viewBox="0 0 24 24">
+          <path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+        <symbol id="i-code" viewBox="0 0 24 24">
+          <path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18" />
+        </symbol>
+        <symbol id="i-windows" viewBox="0 0 24 24">
+          <path
+            d="M3 5h8v6H3zm10-1 8-1v8h-8zM3 13h8v6H3zm10 0h8v8l-8-1z"
+            fill="currentColor"
+            stroke="none"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <a class="skip" href="#main" data-copy="skip">跳到主要内容</a>
     <header class="topbar">
-      <a class="brand" href="./">
-        <img src="logo.png" width="32" height="32" alt="CloverViewer 应用图标" />
-        <span>CloverViewer</span>
-      </a>
-      <nav aria-label="页面导航">
-        <a href="#features">功能</a>
-        <a href="#scroll-capture">长截图</a>
-        <a href="#shortcuts">快捷键</a>
-        <a href="#faq">常见问题</a>
-        <a href="#docs">文档</a>
-        <a class="ghost" href="https://github.com/smallclover/CloverViewer-Tauri">GitHub</a>
-      </nav>
+      <div class="nav-shell">
+        <a class="brand" href="./" aria-label="CloverViewer"
+          ><img src="logo.png" width="42" height="42" alt="" /><span>CloverViewer</span></a
+        >
+        <nav data-copy-label="nav" aria-label="页面导航">
+          <a href="#features" class="nav-link"
+            ><span data-copy="features">功能</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          ><a href="#docs" class="nav-link"
+            ><span data-copy="guide">使用指南</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          ><a class="nav-link" href="https://github.com/smallclover/CloverViewer-Tauri">GitHub</a>
+        </nav>
+        <div class="nav-actions">
+          <select id="language" data-copy-label="language" aria-label="切换语言" hidden>
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+          </select><a
+            href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest"
+            class="button button-small"
+            ><span data-copy="download">下载</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-down"></use></svg></a
+          >
+        </div>
+      </div>
     </header>
-
     <main id="main">
       <section class="hero">
-        <img
-          class="hero-logo"
-          src="logo.png"
-          width="112"
-          height="112"
-          alt="CloverViewer —— 开源 Windows 图片查看器与长截图工具的应用图标"
-        />
-        <h1>免费开源的 Windows 图片查看器与长截图工具</h1>
-        <p class="lead">
-          CloverViewer 把<strong>图片浏览</strong>、<strong>多屏截图与标注</strong>、<strong>滚动长截图</strong>、<strong>Windows
-          原生 OCR 取字</strong>，以及一个面向 AI 的 <strong>MCP Server</strong> 装进同一个轻量应用。基于
-          <a href="https://tauri.app">Tauri 2</a>（Rust 后端 + Vite/TypeScript 前端）重写，MIT
-          协议开源，无广告、无捆绑、无需注册。
-        </p>
-        <p class="cta">
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <div class="badge">
+              <svg class="icon " aria-hidden="true"><use href="#i-windows"></use></svg
+              ><span data-copy="badge">免费开源 · Windows 10 / 11</span>
+            </div>
+            <h1>
+              <span data-copy="headline1">看见精彩，</span><br />
+              <span class="accent" data-copy="headline2">随手留住。</span>
+            </h1>
+            <p class="lead">
+              <span data-copy="lead">看图、截图、标注与取字，</span><br />
+              <span data-copy="lead2">一个应用就够了。</span>
+            </p>
+            <div class="hero-actions">
+              <a
+                href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest"
+                class="button"
+                ><span data-copy="downloadWindows">下载 Windows 版</span
+                ><svg class="icon " aria-hidden="true"><use href="#i-down"></use></svg></a
+              ><a
+                href="https://github.com/smallclover/CloverViewer-Tauri"
+                class="button button-outline"
+                ><span data-copy="source">查看源码</span
+                ><svg class="icon " aria-hidden="true"><use href="#i-github"></use></svg></a
+              >
+            </div>
+            <p class="reassurance" data-copy="reassurance">无需注册 · MIT 开源 · 本地处理</p>
+            <a href="#features" class="explore"
+              ><span data-copy="explore">探索更多功能</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+            >
+          </div>
+          <figure class="hero-showcase">
+            <div class="sage-shape" aria-hidden="true"></div>
+            <img
+              class="app-screenshot hero-screenshot"
+              src="assets/viewer.webp"
+              width="1437"
+              height="952"
+              fetchpriority="high"
+              data-copy-alt="viewerAlt"
+              alt="CloverViewer 真实图片查看界面，正在显示高山湖泊示例图片"
+            /><a class="capture-hint" href="#editing"
+              ><div class="icon-tile">
+                <svg class="icon " aria-hidden="true"><use href="#i-crop"></use></svg>
+              </div>
+              <div><strong data-copy="quick2">截图与标注</strong><kbd>Alt + S</kbd></div>
+              <svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+            >
+            <figcaption class="screenshot-caption" data-copy="screenshotLabel">
+              真实应用界面 · 示例图片由 AI 生成
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <div class="quick-strip">
+        <div class="container quick-grid">
+          <article class="quick-feature">
+            <div class="icon-tile">
+              <svg class="icon " aria-hidden="true"><use href="#i-image"></use></svg>
+            </div>
+            <div>
+              <h2 data-copy="quick1">流畅看图</h2>
+              <p data-copy="quick1Body">打开文件夹，轻松浏览。</p>
+            </div>
+          </article>
+          <article class="quick-feature">
+            <div class="icon-tile">
+              <svg class="icon " aria-hidden="true"><use href="#i-crop"></use></svg>
+            </div>
+            <div>
+              <h2 data-copy="quick2">截图与标注</h2>
+              <p data-copy="quick2Body">圈出重点，表达更清楚。</p>
+            </div>
+          </article>
+          <article class="quick-feature">
+            <div class="icon-tile">
+              <svg class="icon " aria-hidden="true"><use href="#i-scroll"></use></svg>
+            </div>
+            <div>
+              <h2 data-copy="quick3">滚动长截图</h2>
+              <p data-copy="quick3Body">超出一屏，也能留住。</p>
+            </div>
+          </article>
+          <article class="quick-feature">
+            <div class="icon-tile">
+              <svg class="icon " aria-hidden="true"><use href="#i-text"></use></svg>
+            </div>
+            <div>
+              <h2 data-copy="quick4">OCR 取字</h2>
+              <p data-copy="quick4Body">图片里的文字，随手复制。</p>
+            </div>
+          </article>
+        </div>
+      </div>
+      <section id="features" class="section container">
+        <header class="section-heading">
+          <p class="eyebrow" data-copy="featureEyebrow">从浏览到分享</p>
+          <h2 data-copy="featureTitle">图片这件事，顺手就好。</h2>
+          <p class="section-lead" data-copy="featureLead">常用的工具放在一起，让每一步都更自然。</p>
+        </header>
+        <div class="feature-grid">
+          <article class="feature-card viewer-card">
+            <div class="card-copy">
+              <svg class="icon card-icon" aria-hidden="true"><use href="#i-image"></use></svg>
+              <h3 data-copy="viewTitle">一张张看，也一览无余。</h3>
+              <p data-copy="viewBody">
+                网格与单图视图自由切换。缩放、旋转、翻转，查看图片尺寸与 EXIF，让细节尽收眼底。
+              </p>
+              <p class="small-tag" data-copy="viewTag">PNG / JPEG / GIF / BMP / WebP / TIFF</p>
+            </div>
+            <img
+              class="app-screenshot"
+              src="assets/viewer.webp"
+              width="1437"
+              height="952"
+              loading="lazy"
+              data-copy-alt="viewerAlt"
+              alt="CloverViewer 真实图片查看界面，正在显示高山湖泊示例图片"
+            />
+          </article>
+          <article id="editing" class="feature-card edit-card">
+            <div class="card-copy">
+              <svg class="icon card-icon" aria-hidden="true"><use href="#i-crop"></use></svg>
+              <h3 data-copy="editTitle">留住画面，也留下重点。</h3>
+              <p data-copy="editBody">
+                多屏截图、九宫格裁切、箭头与文字标注，配合马赛克和撤销重做。编辑完成，复制或导出
+                PNG、JPEG、WebP。
+              </p>
+              <p class="small-tag" data-copy="editTag">截图 · 裁切 · 标注 · 导出</p>
+            </div>
+            <img
+              class="app-screenshot"
+              src="assets/editor.webp"
+              width="1437"
+              height="952"
+              loading="lazy"
+              data-copy-alt="editorAlt"
+              alt="CloverViewer 真实图片编辑界面，显示裁切工具和标注工具栏"
+            />
+          </article>
+          <article id="scroll-capture" class="feature-card scroll-card">
+            <div class="card-copy">
+              <svg class="icon card-icon" aria-hidden="true"><use href="#i-scroll"></use></svg>
+              <h3 data-copy="scrollTitle">一屏装不下，就继续滚动。</h3>
+              <p data-copy="scrollBody">
+                框选区域，按自己的节奏滚动。逐帧拼接网页、聊天记录或长列表；停止时保留已捕获的内容。
+              </p>
+              <p class="fine" data-copy="scrollNote">手动滚动优先；自动滚动为可选试验功能。</p>
+              <a
+                href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/scroll-capture-v2.md"
+                class="text-link"
+                ><span data-copy="scrollLink">了解滚动长截图</span
+                ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+              >
+            </div>
+            <ol class="scroll-steps">
+              <li>
+                <span class="step-number">01</span><span data-copy="scrollStep1">框选区域</span
+                ><svg class="icon " aria-hidden="true"><use href="#i-crop"></use></svg>
+              </li>
+              <li>
+                <span class="step-number">02</span><span data-copy="scrollStep2">滚动内容</span
+                ><svg class="icon " aria-hidden="true"><use href="#i-scroll"></use></svg>
+              </li>
+              <li>
+                <span class="step-number">03</span><span data-copy="scrollStep3">保存长图</span
+                ><svg class="icon " aria-hidden="true"><use href="#i-down"></use></svg>
+              </li>
+            </ol>
+          </article>
+          <article class="feature-card ocr-card">
+            <div class="card-copy">
+              <svg class="icon card-icon" aria-hidden="true"><use href="#i-text"></use></svg>
+              <h3 data-copy="ocrTitle">让文字走出图片。</h3>
+              <p data-copy="ocrBody">
+                Windows 原生 OCR，识别中、英、日文字。提取后可直接复制，无需上传到在线识别服务。
+              </p>
+            </div>
+            <div class="ocr-demo">
+              <p class="ocr-input" data-copy="ocrSample">把灵感留在眼前。</p>
+              <div class="ocr-output">
+                <svg class="icon " aria-hidden="true"><use href="#i-text"></use></svg>
+                <div>
+                  <span class="fine" data-copy="ocrResult">识别结果</span>
+                  <p data-copy="ocrSample">把灵感留在眼前。</p>
+                </div>
+                <svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg>
+              </div>
+            </div>
+            <p class="small-tag" data-copy="ocrTag">中文 / English / 日本語</p>
+          </article>
+          <article class="feature-card share-card">
+            <div class="card-copy">
+              <svg class="icon card-icon" aria-hidden="true"><use href="#i-share"></use></svg>
+              <h3 data-copy="shareTitle">从电脑，到另一块屏幕。</h3>
+              <p data-copy="shareBody">
+                生成临时链接与二维码，让同一局域网里的设备预览、下载。支持有效期与一次下载后失效。
+              </p>
+              <p class="small-tag" data-copy="shareTag">临时分享 · 到期失效</p>
+            </div>
+            <div class="share-art" aria-hidden="true">
+              <svg class="icon " aria-hidden="true"><use href="#i-share"></use></svg
+              ><span class="connection-dot"></span><span class="connection-dot"></span
+              ><span class="connection-dot"></span
+              ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg>
+            </div>
+          </article>
+        </div>
+        <div class="extras">
+          <p data-copy="extraTitle">还有一些贴心的小事。</p>
+          <span
+            ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg
+            ><span data-copy="extra1">明暗主题与界面缩放</span></span
+          ><span
+            ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg
+            ><span data-copy="extra2">全局热键与系统托盘</span></span
+          ><span
+            ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg
+            ><span data-copy="extra3">可选 Live2D 桌宠</span></span
+          ><span
+            ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg
+            ><span data-copy="extra4">手动检查与签名验证更新</span></span
+          >
+        </div>
+      </section>
+      <section class="privacy-section">
+        <div class="container privacy-inner">
+          <div class="privacy-art" aria-hidden="true">
+            <svg class="icon " aria-hidden="true"><use href="#i-shield"></use></svg>
+          </div>
+          <div>
+            <p class="eyebrow" data-copy="privacyEyebrow">你的图片，留在你手里</p>
+            <h2 data-copy="privacyTitle">安心使用，从本地开始。</h2>
+            <p data-copy="privacyBody">
+              看图、截图、编辑与 OCR
+              都在本机完成。没有账号，也不收集使用数据。局域网分享由你主动创建，更新检查由你手动触发。
+            </p>
+            <a
+              href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE"
+              class="text-link"
+              ><span data-copy="privacyLink">阅读源码与 MIT 协议</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+            >
+          </div>
+        </div>
+      </section>
+      <section class="section container mcp-section">
+        <div>
+          <p class="eyebrow" data-copy="mcpEyebrow">给 AI 一双眼睛</p>
+          <h2 data-copy="mcpTitle">让 AI 看见你的屏幕。</h2>
+          <p class="section-lead" data-copy="mcpBody">
+            内置 MCP Server，让兼容的 AI 客户端调用截图与 OCR，少一点来回描述，多一点共同理解。
+          </p>
           <a
-            class="btn primary"
-            href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest"
-            >下载最新版</a
+            href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/mcp-guide.md"
+            class="text-link"
+            ><span data-copy="mcpLink">查看 MCP 接入指南</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
           >
-          <a class="btn" href="https://github.com/smallclover/CloverViewer-Tauri">查看源码</a>
-          <a class="btn" href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/CHANGELOG.md"
-            >更新日志</a
-          >
-        </p>
-        <ul class="chips">
-          <li>Windows 10 / 11</li>
-          <li>NSIS 安装包 · 免管理员</li>
-          <li>便携版单文件</li>
-          <li>简体中文 / English / 日本語</li>
-          <li>MIT License</li>
-        </ul>
-      </section>
-
-      <section id="features">
-        <h2>功能一览</h2>
-        <div class="cards">
-          <article class="card">
-            <h3>🖼️ 图片查看器</h3>
-            <p>
-              网格视图与单图视图随时切换；打开文件夹即加载全部图片，大目录使用虚拟滚动与缩略图
-              LRU 缓存，上千张图也不卡。滚轮缩放、拖拽平移、旋转翻转、←/→ 快速切换，并显示尺寸、
-              体积、修改时间与 EXIF（相机、ISO、光圈、快门、焦距、镜头）。没有图片时隐藏排序与缩略图大小控件。
-              优先解码当前图片，完成后平滑切换，快速连切不会显示过期结果。
-            </p>
-          </article>
-          <article class="card">
-            <h3>📸 截图与标注</h3>
-            <p>
-              跨屏拼接虚拟桌面截图，支持活动窗口吸附与区域框选；矩形、椭圆、箭头、画笔、马赛克、
-              文字六种标注，颜色、线粗、字号与马赛克色块大小可独立调整，Ctrl+Z / Ctrl+Y 撤销重做，Enter 直接复制到剪贴板或保存到桌面。
-              后台准备截图窗口，直接传输原始像素，显示前同步窗口与内容区域尺寸，减少等待及偶发画面压缩。
-              拖动选区时底图保持静态，遮罩、边框与放大镜独立更新，减少整幅画面重绘，导出保留原始像素。
-              透明文字框随内容自动伸缩，四角圆形标记清晰可见；马赛克光圈显示笔刷范围，连续涂抹原图固定色块，停笔后效果保持一致。
-            </p>
-          </article>
-          <article class="card">
-            <h3>✂️ 图片编辑</h3>
-            <p>
-              支持九宫格裁切、边角拖动与选区平移，框外显示灰调；松开鼠标后保留区域自动居中并调整预览比例，
-              拖动期间比例稳定，切换工具时收起辅助框。可旋转、标注、撤销重做，
-              并导出 PNG / JPEG / WebP 或覆盖原图。底部工具栏显示当前工具的参数，保存面板可选输出比例。
-            </p>
-          </article>
-          <article class="card">
-            <h3>📱 局域网临时分享</h3>
-            <p>
-              在图片右键菜单或截图标注工具中创建临时链接与二维码，让同一网络内的设备直接预览或下载。
-              可在设置中设定有效期和下载规则，内容只保存在应用内存，到期、下载一次或手动停止后立即失效。
-            </p>
-          </article>
-          <article class="card">
-            <h3>🧵 滚动长截图</h3>
-            <p>
-              框选一块可滚动区域后自己滚动，程序逐帧按重叠像素配准，只把验证通过的新内容拼进长图，
-              并自动跳过吸顶标题栏、吸底工具栏与固定侧栏。聊天记录、网页全文、长列表、代码 diff
-              都能变成一张图。
-            </p>
-          </article>
-          <article class="card">
-            <h3>🔍 OCR 文字识别</h3>
-            <p>
-              基于 Windows 原生 UWP OCR 引擎（<code>Windows.Media.Ocr</code>）识别中、英、日文字，
-              带灰度 + 2× 最近邻放大预处理，截图取字不需要把画面发给任何在线服务。
-            </p>
-          </article>
-          <article class="card">
-            <h3>🍀 Live2D 桌宠</h3>
-            <p>
-              可在设置中启用 Clover Girl 桌宠：待机、眨眼、定时点头和鼠标跟随让角色自然常驻桌面；
-              支持直接拖动位置与 60%–200% 大小滑杆，截图时自动隐藏。
-            </p>
-          </article>
-          <article class="card">
-            <h3>🤖 面向 AI 的 MCP Server</h3>
-            <p>
-              内置 <a href="https://modelcontextprotocol.io">Model Context Protocol</a> 服务，
-              Claude Desktop 等客户端可调用 <code>list_monitors</code>、<code>take_screenshot</code>、
-              <code>get_screenshot</code>、<code>ocr_screenshot</code>、<code>delete_screenshot</code>，
-              让 AI 直接看到报错窗口、设置页或终端输出。
-            </p>
-          </article>
-          <article class="card">
-            <h3>⚙️ 系统集成</h3>
-            <p>
-              标题栏菜单（文件 / 编辑 / 帮助）与「分类 + 搜索」的设置页；全局热键（默认 Alt+S 截图、
-              Alt+Shift+S 长截图）、系统托盘常驻、开机自启、单实例运行、明暗主题跟随系统，以及与旧版
-              egui 版共用的配置文件。设置还可配置局域网分享规则，或在缓存中查看临时长截图的占用、设置保留期或立即清理。
-              设置与图片编辑共用圆角下拉菜单，三语说明和工具栏适配窄窗口。
-              界面缩放可选 100% / 110% / 125% / 150%，立即同步查看器和截图界面。
-              手动更新持续显示下载进度，网络失败可重试，签名验证通过后才安装。
-            </p>
-          </article>
         </div>
-      </section>
-
-      <section id="scroll-capture">
-        <h2>滚动长截图是怎么做的</h2>
-        <p>
-          CloverViewer 的长截图默认<strong>由你控制滚动位置</strong>：程序只负责稳定取帧、配准、拼接和反馈。
-          每个被接受的帧都必须有足够的纹理证据和像素支持，未匹配、反向或重复的帧不会改写拼接基准；
-          结束采样同样要通过同一套门槛，所以末帧不会被重复追加。
-        </p>
-        <ul class="ticks">
-          <li><strong>输出可追溯</strong>：长图中的每个像素都来自某一帧真实屏幕截图，而不是推算出来的。</li>
-          <li><strong>固定栏只保留一份</strong>：吸顶标题栏来自首帧，吸底工具栏来自末帧，滚动条与固定侧栏自动忽略。</li>
-          <li><strong>中途也能续接</strong>：出现未匹配帧只是跳过，继续滚动后仍能从最后一个可信位置接着拼接。</li>
-          <li><strong>失败可解释</strong>：不可滚动、选区太矮、动画干扰等原因分别给出提示，Esc 停止时已捕获部分保留。</li>
-          <li><strong>自动滚动是试验功能</strong>：默认关闭，开启后由程序探测目标应用接受的滚动方式（滚轮消息 / 模拟滚轮 / PageDown / 滚动条）。</li>
-        </ul>
-      </section>
-
-      <section id="shortcuts">
-        <h2>常用快捷键</h2>
-        <div class="tables">
-          <div>
-            <h3>图片查看器</h3>
-            <table>
-              <thead>
-                <tr><th>快捷键</th><th>功能</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>← / →</td><td>上一张 / 下一张</td></tr>
-                <tr><td>滚轮</td><td>缩放（单图视图）</td></tr>
-                <tr><td>Ctrl+O</td><td>打开文件夹</td></tr>
-                <tr><td>R / H / V</td><td>旋转 / 水平翻转 / 垂直翻转</td></tr>
-              </tbody>
-            </table>
+        <div class="mcp-diagram" aria-hidden="true">
+          <div class="mcp-node">
+            <svg class="icon " aria-hidden="true"><use href="#i-spark"></use></svg><span>AI</span>
           </div>
-          <div>
-            <h3>截图工具</h3>
-            <table>
-              <thead>
-                <tr><th>快捷键</th><th>功能</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>Alt+S（可改）</td><td>全局唤起截图</td></tr>
-                <tr><td>Alt+Shift+S（可改）</td><td>直接进入滚动长截图</td></tr>
-                <tr><td>Enter</td><td>复制选区到剪贴板</td></tr>
-                <tr><td>Ctrl+Z / Ctrl+Y</td><td>撤销 / 重做标注</td></tr>
-                <tr><td>Alt+C（可改）</td><td>复制放大镜中心色值</td></tr>
-                <tr><td>Esc</td><td>取消截图 / 停止滚动捕获</td></tr>
-              </tbody>
-            </table>
+          <span class="mcp-line"></span><span class="mcp-label">MCP</span
+          ><span class="mcp-line"></span>
+          <div class="mcp-node">
+            <img src="logo.png" width="48" height="48" alt="" /><span>CloverViewer</span>
           </div>
         </div>
       </section>
-
-      <section id="install">
-        <h2>下载与安装</h2>
-        <ol class="steps">
-          <li>
-            到
-            <a href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest">Releases</a>
-            下载 <code>CloverViewer_x.y.z_x64-setup.exe</code>（NSIS 安装器，per-user 安装，不需要管理员权限）。
-          </li>
-          <li>也可以直接下载便携版 <code>CloverViewer.exe</code>，放在任意目录运行。</li>
-          <li>
-            系统要求：Windows 10 / 11（含 WebView2 运行时）；从源码构建需要
-            <a href="https://www.rust-lang.org/tools/install">Rust</a>、Node.js ≥ 18 与 Tauri 2 工具链。
-          </li>
-          <li>
-            支持的图片格式：PNG · JPEG · GIF · BMP · WebP · TIFF。
-          </li>
-        </ol>
-        <p class="note">
-          应用内更新已支持签名校验：从 v0.1.5 起可在「设置 → 软件更新」中检查、下载并自动重启安装；自 v0.1.8 起检查完全由你手动触发，应用不会在后台自动联网。
-        </p>
+      <section id="shortcuts" class="section container shortcut-section">
+        <header class="section-heading">
+          <p class="eyebrow" data-copy="shortcutEyebrow">少一步，更顺手</p>
+          <h2 data-copy="shortcutTitle">常用操作，触手可及。</h2>
+          <p class="section-lead" data-copy="shortcutNote">
+            截图、长截图与取色热键可以在设置中修改。
+          </p>
+        </header>
+        <div class="shortcut-grid">
+          <div class="shortcut"><kbd>Alt + S</kbd><span data-copy="key1">唤起截图</span></div>
+          <div class="shortcut">
+            <kbd>Alt + Shift + S</kbd><span data-copy="key2">开始滚动长截图</span>
+          </div>
+          <div class="shortcut"><kbd>Ctrl + O</kbd><span data-copy="key3">打开文件夹</span></div>
+          <div class="shortcut"><kbd>← / →</kbd><span data-copy="key4">上一张 / 下一张</span></div>
+          <div class="shortcut"><kbd>Enter</kbd><span data-copy="key5">复制截图选区</span></div>
+          <div class="shortcut">
+            <kbd>Ctrl + Z / Y</kbd><span data-copy="key6">撤销 / 重做标注</span>
+          </div>
+        </div>
       </section>
-
-      <section id="faq">
-        <h2>常见问题</h2>
-
-        <h3>CloverViewer 是免费的吗？可以商用吗？</h3>
-        <p>免费且开源，协议为 <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE">MIT</a>：个人使用、公司内部使用和二次开发都可以，只需保留版权声明。</p>
-
-        <h3>支持哪些 Windows 版本？</h3>
-        <p>Windows 10 / 11，依赖系统自带的 WebView2 运行时。安装包是 NSIS 的 per-user 安装，不需要管理员权限；也可以直接使用便携版 <code>CloverViewer.exe</code>。</p>
-
-        <h3>会把我浏览的图片或截图上传吗？</h3>
-        <p>不会上传到第三方服务。图片浏览、截图、标注、长截图拼接和 OCR 全部在本机完成，应用没有账号体系，也不收集使用数据。若你主动创建局域网分享，图片会仅在同一网络内临时传给持有链接的设备；此外，只有你在「设置 → 软件更新」中点「检查更新」时，应用才会访问 GitHub Releases 获取版本信息。</p>
-
-        <h3>长截图（滚动截图）支持所有应用吗？</h3>
-        <p>不保证 100% 成功。默认是手动滚动优先：你按自己的节奏滚动，程序逐帧配准并只把验证通过的新内容追加进长图；自动注入滚动属于设置里的试验功能，默认关闭。目标应用有粘性标题栏、动态内容或大面积动画时成功率会下降，失败或中途停止时已捕获的部分会保留。</p>
-
-        <h3>和其它截图工具有什么不同？</h3>
-        <p>它把「图片查看器」和「截图标注」合在同一个免费开源应用里，并且内置 MCP Server 让 AI 客户端可以直接调用截图与 OCR。长截图走的是「真实帧 + 重叠像素配准」路线：输出中的每个像素都来自某一帧真实屏幕画面，而不是推算出来的。</p>
-
-        <h3>和原版 CloverViewer（egui 版）是什么关系？</h3>
-        <p>本页介绍的是 Tauri 2 重实现：Rust 后端 + Web 前端（Vite + TypeScript + Canvas），界面由 egui 原生控件换成自定义无边框窗口。两者配置文件互通，共用 <code>%APPDATA%\CloverViewer\config.json</code>。原 egui 版见 <a href="https://github.com/smallclover/CloverViewer">smallclover/CloverViewer</a>。</p>
-
-        <h3>怎么让 Claude Desktop 用上截图能力？</h3>
-        <p>
-          在 <code>claude_desktop_config.json</code> 中配置 <code>CloverViewer.exe --mcp</code> 即可，
-          详见 <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/mcp-guide.md">MCP 使用指南</a>。
-          HTTP 模式需要显式提供 <code>--token</code>，只监听本机回环地址。
-        </p>
+      <section id="faq" class="section container faq-section">
+        <header class="section-heading">
+          <p class="eyebrow" data-copy="faqEyebrow">开始之前</p>
+          <h2 data-copy="faqTitle">你可能想知道。</h2>
+        </header>
+        <div class="faq-list">
+          <details>
+            <summary>
+              <span data-copy="faq1">免费吗？可以商用吗？</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
+            </summary>
+            <p data-copy="answer1">
+              免费且开源，采用 MIT 协议。个人使用、公司内部使用和二次开发都可以，只需保留版权声明。
+            </p>
+          </details>
+          <details>
+            <summary>
+              <span data-copy="faq2">支持哪些系统？怎么安装？</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
+            </summary>
+            <p data-copy="answer2">
+              支持 Windows 10 / 11，需要 WebView2 运行时。在 GitHub Releases 下载 NSIS
+              安装包即可，无需管理员权限；也可以使用便携版 CloverViewer.exe。
+            </p>
+          </details>
+          <details>
+            <summary>
+              <span data-copy="faq3">图片和截图会上传吗？</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
+            </summary>
+            <p data-copy="answer3">
+              不会上传到第三方服务。图片浏览、截图、标注、拼接和 OCR
+              都在本地完成。如果你主动创建局域网分享，持有链接的同一网络设备可以临时访问该图片；手动检查更新时会连接
+              GitHub Releases。
+            </p>
+          </details>
+          <details>
+            <summary>
+              <span data-copy="faq4">滚动截图支持所有应用吗？</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
+            </summary>
+            <p data-copy="answer4">
+              不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接；停止或失败时，已捕获部分会保留。
+            </p>
+          </details>
+          <details>
+            <summary>
+              <span data-copy="faq5">AI 客户端怎么接入？</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
+            </summary>
+            <p data-copy="answer5">
+              在兼容的 MCP 客户端中，将命令指向 CloverViewer.exe 并传入
+              --mcp。也支持仅本机监听、需令牌的 HTTP 模式。具体配置与工具参数见 MCP 使用指南。
+            </p>
+          </details>
+          <details>
+            <summary>
+              <span data-copy="faq6">与原版 CloverViewer 有什么关系？</span
+              ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
+            </summary>
+            <p data-copy="answer6">
+              这是 CloverViewer 的 Tauri 2 重实现，采用 Rust 后端与 Web 前端。原版基于
+              egui；两者共用 %APPDATA%\CloverViewer\config.json 配置。
+            </p>
+          </details>
+        </div>
       </section>
-
-      <section id="docs">
-        <h2>文档</h2>
-        <ul class="doclist">
-          <li>
-            <a href="https://github.com/smallclover/CloverViewer-Tauri#readme">README（三语言）</a>
-            —— 功能特性、安装、构建与快捷键总览。
-          </li>
-          <li>
-            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/CHANGELOG.md">CHANGELOG</a>
-            —— 每个版本的用户可见变化。
-          </li>
-          <li>
-            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/mcp-guide.md">MCP 使用指南</a>
-            —— 接入方式、工具参数、典型工作流与隐私说明。
-          </li>
-          <li>
-            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/architecture.md">项目架构</a>
-            —— 前端与 Rust 后端的目录职责、数据流与维护边界。
-          </li>
-          <li>
-            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/scroll-capture-v2.md">滚动截图 V2 设计</a>
-            —— 手动滚动优先的不变量与验证方式。
-          </li>
-          <li>
-            <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/auto-update.md">自动更新发布配置</a>
-            —— 签名密钥、Secrets 与验证步骤。
-          </li>
-        </ul>
+      <section id="docs" class="section container">
+        <header class="section-heading">
+          <p class="eyebrow" data-copy="docsEyebrow">需要更多细节？</p>
+          <h2 data-copy="docsTitle">从这里继续。</h2>
+        </header>
+        <div class="docs-grid">
+          <a
+            class="doc-link"
+            href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/README.md"
+            id="readme-link"
+            ><svg class="icon " aria-hidden="true"><use href="#i-book"></use></svg>
+            <div>
+              <h3 data-copy="readme">使用说明</h3>
+              <p data-copy="readmeBody">安装、完整功能与快捷键</p>
+            </div>
+            <svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          >
+          <a
+            class="doc-link"
+            href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/CHANGELOG.md"
+            ><svg class="icon " aria-hidden="true"><use href="#i-spark"></use></svg>
+            <div>
+              <h3 data-copy="changelog">更新日志</h3>
+              <p data-copy="changelogBody">看看每个版本的新变化</p>
+            </div>
+            <svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          >
+          <a
+            class="doc-link"
+            href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/mcp-guide.md"
+            ><svg class="icon " aria-hidden="true"><use href="#i-code"></use></svg>
+            <div>
+              <h3 data-copy="mcpDoc">MCP 指南</h3>
+              <p data-copy="mcpDocBody">连接 AI 客户端与使用工具</p>
+            </div>
+            <svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          >
+          <a
+            class="doc-link"
+            href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/architecture.md"
+            ><svg class="icon " aria-hidden="true"><use href="#i-image"></use></svg>
+            <div>
+              <h3 data-copy="architecture">项目架构</h3>
+              <p data-copy="architectureBody">了解代码与参与开发</p>
+            </div>
+            <svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          >
+        </div>
       </section>
-
-      <section id="english" lang="en">
-        <h2>English overview</h2>
-        <p>
-          CloverViewer is a free, open-source <strong>Windows image viewer and screenshot tool</strong>
-          built with <a href="https://tauri.app">Tauri 2</a> (Rust backend, Vite + TypeScript frontend).
-          It browses folders in a virtualized grid or a single-image view with EXIF details, captures
-          and annotates screenshots across multiple monitors, stitches
-          <strong>scrolling screenshots</strong> from real captured frames, extracts text with the
-          native Windows OCR engine (Chinese, English, Japanese), and ships a built-in
-          <strong>MCP Server</strong> so AI clients such as Claude Desktop can list monitors, take
-          screenshots and read on-screen text. Trilingual UI (简体中文 / English / 日本語), global
-          hotkeys, tray support and signed in-app updates are included. Background window preparation
-          and raw pixel transfer reduce capture startup time without changing image quality. Rounded
-          dropdowns support mouse and keyboard selection in both themes, with layouts that adapt to
-          narrow windows in all three languages. Image editing includes a rule-of-thirds crop grid,
-          movable selections, annotation controls and PNG / JPEG / WebP export. Interface scale is
-          selectable from 100% to 150% without changing capture pixels; updates show persistent
-          download progress, retry network failures and verify signatures before installation.
-          Screenshot and image editing share transparent text boxes that resize to fit their content,
-          with visible corner markers and continuous mosaic strokes whose brush-size ring matches the painted area.
-          Licensed under MIT.
-        </p>
-        <p>
-          <a class="btn" href="https://github.com/smallclover/CloverViewer-Tauri#readme">Read the English README</a>
-          <a class="btn primary" href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest">Download for Windows</a>
-        </p>
+      <section id="install" class="download-section">
+        <div class="container">
+          <img src="logo.png" width="64" height="64" alt="" loading="lazy" />
+          <h2 data-copy="finalTitle">下一张精彩，随手留住。</h2>
+          <p data-copy="finalBody">一个免费开源的 Windows 图片查看器与截图工具。</p>
+          <a href="https://github.com/smallclover/CloverViewer-Tauri/releases/latest" class="button"
+            ><span data-copy="downloadWindows">下载 Windows 版</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-down"></use></svg></a
+          >
+          <p class="fine" data-copy="installNote">
+            Windows 10 / 11 · 需要 WebView2 · 安装包与便携版
+          </p>
+        </div>
       </section>
     </main>
-
-    <footer>
-      <p>
-        CloverViewer-Tauri · <a href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE">MIT License</a>
-        · <a href="https://github.com/smallclover/CloverViewer-Tauri">GitHub</a>
-        · <a href="https://github.com/smallclover/CloverViewer-Tauri/releases">Releases</a>
-        · 作者 <a href="https://github.com/smallclover">smallclover</a>
-      </p>
-      <p class="fine">
-        CloverViewer 与 Windows、Microsoft 无隶属关系；Windows 是 Microsoft 的商标。页面提到的其它产品名称仅用于说明兼容性与用途。
+    <footer class="container">
+      <div class="footer-top">
+        <div>
+          <a class="brand" href="./"
+            ><img src="logo.png" width="32" height="32" alt="" /><span>CloverViewer</span></a
+          >
+          <p class="fine" data-copy="footerText">用心做一个顺手的小工具。</p>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/smallclover/CloverViewer-Tauri">GitHub</a
+          ><a
+            href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/LICENSE"
+            class="plain-link"
+            ><span data-copy="license">MIT 协议</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          ><a href="https://github.com/smallclover" class="plain-link"
+            ><span data-copy="author">作者 smallclover</span
+            ><svg class="icon " aria-hidden="true"><use href="#i-arrow"></use></svg></a
+          >
+        </div>
+      </div>
+      <p class="fine" data-copy="legal">
+        CloverViewer 与 Microsoft 无隶属关系。Windows 是 Microsoft 的商标。
       </p>
     </footer>
+    <script type="module" src="main.js"></script>
   </body>
 </html>

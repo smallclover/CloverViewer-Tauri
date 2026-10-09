@@ -72,8 +72,10 @@ Discord、微信等处的预览图，直接影响点击率。
 | 位置 | 内容 |
 | --- | --- |
 | `README.md` / `README.en.md` / `README.ja.md` | 标题与摘要含主关键词；新增「适合谁用 / Who It Is For / こんな用途に」匹配搜索意图；FAQ 覆盖常见长尾问题；「文档」表格形成内链；补全图片 `alt`；语言切换链接修复（原先 HTML 块内的 Markdown 链接不会渲染） |
-| `site/index.html` | 独立可索引介绍页：`<title>`、meta description、canonical、Open Graph / Twitter Card、JSON-LD `SoftwareApplication` + `FAQPage`、面向屏幕阅读器的跳转链接、中英双语内容 |
-| `site/styles.css` | 单文件样式，无外部字体与第三方脚本（不引入跟踪、不拖慢 LCP） |
+| `site/index.html` | 独立可索引介绍页：浅色产品展示、真实应用截图、`<title>`、meta description、canonical、Open Graph / Twitter Card、JSON-LD `SoftwareApplication` + `FAQPage`、跳转链接与原生 FAQ 折叠；禁用 JavaScript 时仍有完整中文内容 |
+| `site/content.js` / `site/main.js` | 中英日三语文案与语言切换，使用 URL 的 `lang` 参数保留语言；使用说明链接随语言切换，无第三方脚本与跟踪 |
+| `site/styles.css` | 响应式浅色样式，无外部字体；支持键盘焦点与减少动态效果偏好 |
+| `site/assets/` | WebP 产品截图与 AI 生成的示例图片，来源和生成提示词见目录内 README |
 | `site/robots.txt` / `site/sitemap.xml` | 允许抓取并声明 sitemap；发版时更新 `lastmod` |
 | `site/og-image.png` | 1200×630 分享预览图，同时用作社交预览与结构化数据配图 |
 | `.github/workflows/pages.yml` | 推送 `site/**` 自动发布 Pages |

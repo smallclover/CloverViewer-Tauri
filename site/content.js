@@ -34,7 +34,7 @@ export const translations = {
     featureTitle: "图片这件事，顺手就好。",
     featureLead: "常用的工具放在一起，让每一步都更自然。",
     viewTitle: "一张张看，也一览无余。",
-    viewBody: "网格与单图视图自由切换。缩放、旋转、翻转，查看图片尺寸与 EXIF，让细节尽收眼底。",
+    viewBody: "网格与单图视图自由切换，底部相邻图片预览可点击切图、随时收起。缩放、旋转、翻转，查看尺寸与 EXIF。",
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
     editTitle: "留住画面，也留下重点。",
     editBody:
@@ -152,7 +152,7 @@ export const translations = {
     featureLead: "The tools you use together, brought together.",
     viewTitle: "One at a time. Or all at once.",
     viewBody:
-      "Switch between a thumbnail grid and single-image view. Zoom, rotate, flip and inspect dimensions or EXIF to see every detail.",
+      "Switch between a thumbnail grid and single-image view. Click nearby previews to navigate, or hide the strip at any time. Zoom, rotate, flip and inspect dimensions or EXIF.",
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
     editTitle: "Keep the picture. Make the point.",
     editBody:
@@ -275,7 +275,7 @@ export const translations = {
     featureLead: "よく使う道具をひとつに。いつもの作業を自然に。",
     viewTitle: "一枚ずつも、一覧でも。",
     viewBody:
-      "グリッド表示と一枚表示を自由に切り替え。拡大・縮小、回転、反転、サイズや EXIF の確認で、細部まで見渡せます。",
+      "グリッド表示と一枚表示を自由に切り替え。下部のプレビューをクリックして前後の画像へ移動し、いつでも非表示にできます。拡大・縮小、回転、反転、サイズや EXIF の確認も。",
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
     editTitle: "画面を残して、要点を伝える。",
     editBody:

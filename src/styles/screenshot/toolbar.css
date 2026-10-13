@@ -14,6 +14,7 @@
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 .toolbar button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -32,14 +33,16 @@
   color: var(--s-btn-hover-fg);
 }
 .toolbar button:disabled { opacity: 0.5; cursor: wait; }
-.toolbar button:active {
-  transform: scale(0.9);
+.toolbar button:active:not(:disabled) {
+  transform: scale(0.96);
 }
 .toolbar button.active {
-  background: var(--s-accent-solid);
-  color: #fff;
-  box-shadow: 0 2px 8px var(--s-accent-shadow);
+  background: var(--s-accent-soft);
+  color: var(--s-accent);
 }
+.toolbar button.active:hover:not(:disabled) { background: color-mix(in srgb, var(--s-accent-soft) 65%, var(--s-btn-hover-bg)); color: var(--s-accent); }
+.toolbar button.active::after { content: ""; position: absolute; bottom: 3px; width: 12px; height: 2px; border-radius: 2px; background: var(--s-accent); }
+.toolbar button:focus-visible { outline: 2px solid var(--s-accent); outline-offset: 2px; }
 .toolbar button svg {
   width: 20px;
   height: 20px;
@@ -121,7 +124,7 @@
   transform: scale(1.12);
 }
 .palette .cell.sel {
-  outline: 2px solid #6fd07e;
+  outline: 2px solid var(--s-accent);
   outline-offset: 1px;
 }
 .palette .native {
@@ -155,7 +158,7 @@
 .width-list .row:hover {
   background: var(--s-row-hover-bg);
 }
-.width-list .row[aria-pressed="true"] { background: var(--s-accent-solid); color: #fff; }
+.width-list .row[aria-pressed="true"] { background: var(--s-accent-soft); color: var(--s-accent); }
 .size-hint { width: 170px; margin: 8px 4px 2px; font-size: 11px; line-height: 1.5; opacity: 0.75; }
 .size-heading { display: block; margin: 2px 8px 8px; font-size: 12px; font-weight: 600; }
 .width-list .row .bar {

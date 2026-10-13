@@ -117,12 +117,12 @@
   border: 1px solid var(--s-toolbar-border);
   border-radius: 999px;
   color: var(--s-fg-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.35;
   white-space: nowrap;
 }
 .sh-badge.ok { color: var(--s-accent); }
-.sh-badge.warn { color: #d8a13a; }
+.sh-badge.warn { color: var(--s-warning); }
 .sh-badge.recording { color: #e46467; }
 .sh-metrics {
   display: grid;
@@ -134,12 +134,12 @@
   padding: 6px 7px;
   border: 1px solid var(--s-toolbar-border);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--s-panel-bg) 84%, #000 16%);
+  background: var(--s-panel-muted);
 }
 .sh-metric-label {
   overflow: hidden;
   color: var(--s-fg-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;

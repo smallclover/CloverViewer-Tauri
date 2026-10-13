@@ -74,13 +74,25 @@ list_monitors → take_screenshot → AI 分析图片
 
 `take_screenshot` 的主要参数：
 
-- `mode`：`active_window`（默认）、`monitor`、`all_monitors` 或 `region`。
+- `mode`：`active_window`（不指定目标时的默认值）、`monitor`、`all_monitors` 或 `region`；兼容仅传 `monitor_id` 或 `monitor_index` 而省略 `mode` 的单屏截图调用。
 - `monitor_id`：来自 `list_monitors` 的当前显示器 ID；也兼容旧的 `monitor_index`，二者不能同时传入。
 - `region`：仅搭配 `mode: "region"`；使用虚拟桌面的物理像素坐标 `{ x, y, width, height }`，
   必须完整位于一个显示器内，可使用负坐标。
 - `delivery`：`image`（默认）、`path` 或 `both`。默认直接返回 PNG 图片内容和元数据；只有 MCP
   客户端确实能够访问 CloverViewer 所在机器的本地文件时，才应该请求 `path`。
 - `max_width`：图片交付的最大宽度，范围为 1–1920 像素；仅影响返回给客户端的图片，不影响保存的原图。
+
+结果元数据中的截图 ID 字段叫 `captureId`，后续工具的输入字段叫 `capture_id`：
+
+| 工具 | 输入 |
+| --- | --- |
+| `get_screenshot` | 必填 `capture_id`；可选 `delivery`、`max_width`，与截图工具的交付选项相同。 |
+| `ocr_screenshot` | 必填 `capture_id`；可选 `language: "zh" / "en" / "ja"`，省略时按系统语言选择。 |
+| `delete_screenshot` | 必填 `capture_id`。 |
+
+`delivery: "image"` 返回 PNG 图片内容和结构化元数据；`"both"` 额外包含服务端文件路径。
+`"path"` 仅返回路径文本，供能够读取服务端本地文件的兼容客户端使用，不返回图片或结构化截图 ID。
+需要围绕同一 ID 调用取图、OCR 或删除时，请用 `image` 或 `both` 取得 `captureId`。
 
 ## 示例提示词
 
@@ -91,8 +103,9 @@ list_monitors → take_screenshot → AI 分析图片
 
 ## 存储、隐私与限制
 
-- 截图保存在本机应用数据目录 `CloverViewer/mcp-captures`，默认保留 24 小时，总容量上限 512 MiB。
+- 截图保存在本机本地应用数据目录 `CloverViewer/mcp-captures`（Windows 通常为 `%LOCALAPPDATA%\CloverViewer\mcp-captures`），使用 24 小时保留期和 512 MiB 清理阈值。清理在保存或读取截图时触发，不是后台定时任务；新截图写入前执行清理，因此刚写入后目录可能暂时超过阈值。
 - `captureId` 仅在创建它的 MCP 服务进程存活期间可用；重启服务后需要重新截图。
+- 不同服务进程的 ID 索引独立，但使用同一个截图目录，目录容量清理可能让旧截图提前不可用；保留期与容量目前没有 CLI 配置项。设置 → 缓存的清理也不处理这个目录。
 - `delete_screenshot` 可在分析结束后立即移除截图。
 - 截图内容可能包含敏感数据。仅将 MCP 连接到你信任的 AI 客户端，并避免在提示词或日志中暴露 HTTP token。
 - OCR 返回文本；当前版本不返回逐行文字坐标。

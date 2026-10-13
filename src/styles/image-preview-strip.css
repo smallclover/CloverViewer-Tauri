@@ -1,0 +1,70 @@
+/* 恢复底部居中的悬浮缩略图，不为预览占用独立的画布空间。 */
+#image-preview-strip {
+  position: absolute;
+  z-index: 20;
+  bottom: 18px;
+  left: 50%;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  transform: translateX(-50%);
+}
+#image-preview-strip .image-preview {
+  flex: none;
+  width: 80px;
+  height: 60px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 7px;
+  background: var(--bg-hover);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--shadow) 58%, transparent);
+  cursor: pointer;
+  opacity: .7;
+  transform: translateY(0);
+  transition: width var(--motion-fast) ease, height var(--motion-fast) ease,
+    opacity var(--motion-fast) ease, border-color var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+#image-preview-strip .image-preview:hover { opacity: 1; transform: translateY(-3px); }
+#image-preview-strip .image-preview.active {
+  width: 96px;
+  height: 72px;
+  border-color: var(--accent);
+  opacity: 1;
+}
+#image-preview-strip .image-preview img { width: 100%; height: 100%; display: block; object-fit: cover; }
+#image-preview-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--fg-dim);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+#image-preview-toggle.active { color: var(--accent); background: var(--accent-soft); }
+#image-preview-toggle:hover { color: var(--accent); background: var(--bg-hover); }
+#image-preview-toggle .ic { width: 16px; height: 16px; }
+#image-preview-toggle:not(.active) .preview-toggle-chevron { transform: rotate(180deg); transform-origin: 12px 9.5px; }
+#image-preview-toggle:focus-visible,
+#image-preview-strip .image-preview:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 开关固定在状态栏左端，文件名过长时省略，不挤走操作入口。 */
+#statusbar { gap: 12px; padding-top: 3px; padding-bottom: 3px; }
+#status-leading { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
+#status-left, #status-right { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#status-group { min-width: 0; max-width: 65%; }
+#status-leading:has(#image-preview-toggle:not(.hidden)) #status-left { color: color-mix(in srgb, var(--fg-dim) 90%, var(--bg)); font-size: 11px; }
+

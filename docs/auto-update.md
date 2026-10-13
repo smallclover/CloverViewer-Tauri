@@ -1,31 +1,33 @@
-# 自动更新发布配置
+# 软件更新与发布签名配置
 
 CloverViewer 使用 Tauri Updater 与 GitHub Releases 分发 Windows 更新。客户端只会安装使用 Tauri 更新私钥签名、且能被内置公钥验证的安装包。
 
+检查更新由用户在「设置 → 常规 → 软件更新」中手动触发。本文说明签名配置和更新验证；发版授权、版本准备、推标签前确认及发布后检查统一按 [发布流程](release.md) 执行。
+
 ## 首次配置
 
-1. 已在仓库根目录生成第一对密钥：
+1. 仓库已配置更新公钥。以下命令仅用于尚未建立签名链路的新项目初始化，不应在日常发版时重复执行：
 
    ```powershell
    npm run tauri signer generate -- -w .tauri/cloverviewer.key
    ```
 
-   公钥已经写入 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`。若需要重新生成，请先确认尚未向用户发布使用当前公钥的版本。
+   公钥位置为 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`。已发布客户端使用这个公钥验签，后续版本应继续使用配套私钥。
 2. `.tauri/cloverviewer.key` 是私钥，已被 `.gitignore` 排除。将它离线备份到密码管理器；不要提交、不要发给他人。
 3. 在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 新建：
    - `TAURI_SIGNING_PRIVATE_KEY`：`.tauri/cloverviewer.key` 的完整文本内容。
-   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：仅当生成密钥时设置了密码才需要创建。本仓库当前生成的密钥没有密码，可不创建该 Secret。
-4. 使用下一版（建议 `v0.1.5`）触发既有发布流程。Actions 会上传 NSIS 安装包、其 `.sig` 签名，以及 `latest.json`。
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：仅当生成密钥时设置了密码才需要创建；未设置密码时可省略。
+4. 人类明确要求发布后，按 `docs/release.md` 准备本次版本并在推标签前确认。`.github/workflows/release.yml` 会上传 NSIS 安装包、其 `.sig` 签名，以及 `latest.json`；无需为签名配置另选固定版本号。
 
-## 验证首个自动更新版本
+## 验证更新链路
 
-1. 用旧版正常安装 `0.1.5`。
-2. 发布一个更高版本，例如 `0.1.6`。
-3. 启动 `0.1.5`，打开「设置 → 软件更新」，点「检查更新」，应出现更新确认。
-4. 确认后等待下载完成。Windows 会显示 NSIS 的小型进度窗口，完成后应用自动重启。
+1. 安装使用当前更新公钥的上一已发布版本，并记录关于页的版本号。
+2. 按发布流程发布一个更高版本，核对其安装包、`.sig` 与 `latest.json`。
+3. 启动上一版，打开「设置 → 常规 → 软件更新」，点「检查更新」，应出现新版本说明与更新确认。
+4. 确认后等待下载、验签和安装完成。Windows 会显示 NSIS 的小型进度窗口，完成后应用自动重启；核对关于页已显示新版版本号。
 
 > 更新检查自 v0.1.8 起完全由用户触发：应用不会在启动时或后台自动发起检查，
-> 因此也不会在用户不知情时产生网络请求。
+> 下载也需用户确认；这里描述的是更新链路，不包括用户主动创建的局域网分享或 MCP 接入。
 
 ## 客户端检查与下载
 

@@ -9,6 +9,7 @@
   --s-btn-hover-bg: rgba(255, 255, 255, 0.12);
   --s-btn-hover-fg: #ffffff;
   --s-accent: #4ea85c;
+  --s-accent-soft: rgba(78, 168, 92, 0.14);
   --s-accent-solid: #357b41;
   --s-accent-shadow: rgba(78, 168, 92, 0.5);
   --s-popup-bg: rgba(28, 30, 36, 0.92);
@@ -21,9 +22,11 @@
   --s-kbd-bg: rgba(255, 255, 255, 0.14);
   --s-kbd-border: rgba(255, 255, 255, 0.2);
   --s-panel-bg: rgba(28, 30, 36, 0.94);
+  --s-panel-muted: rgba(255, 255, 255, 0.05);
   --s-panel-header-bg: rgba(255, 255, 255, 0.05);
   --s-panel-title: #cfd1d8;
   --s-error: #ff8a8a;
+  --s-warning: #e7bd62;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -34,6 +37,7 @@
   --s-btn-hover-bg: rgba(0, 0, 0, 0.08);
   --s-btn-hover-fg: #111111;
   --s-accent: #3d8a49;
+  --s-accent-soft: rgba(61, 138, 73, 0.12);
   --s-accent-shadow: rgba(61, 138, 73, 0.4);
   --s-popup-bg: rgba(255, 255, 255, 0.96);
   --s-popup-border: rgba(0, 0, 0, 0.14);
@@ -45,16 +49,21 @@
   --s-kbd-bg: rgba(0, 0, 0, 0.07);
   --s-kbd-border: rgba(0, 0, 0, 0.18);
   --s-panel-bg: rgba(255, 255, 255, 0.97);
+  --s-panel-muted: rgba(0, 0, 0, 0.04);
   --s-panel-header-bg: rgba(0, 0, 0, 0.04);
-  --s-panel-title: #6e707a;
+  --s-panel-title: #26272d;
   --s-error: #b83232;
+  --s-warning: #8b5b05;
 }
 
 /* 初始化前隐藏：避免 CSS/JS 未就绪时 HTML 骨架裸渲染（元素挤在左上角）。
    loadScreenshot() 完成后由 JS 加 .ready 显示。 */
 body {
   visibility: hidden;
+  font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 13px;
 }
+button, input, select, textarea { font-family: inherit; }
 body.ready {
   visibility: visible;
 }

@@ -3,17 +3,45 @@
 .screenshot-selection-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .screenshot-selection-mask { position: absolute; background: rgba(0, 0, 0, .5); }
 .screenshot-selection-frame { position: absolute; left: 0; top: 0; }
-.screenshot-selection-border { position: absolute; inset: 1px; border: 3px solid #00ff00; box-sizing: border-box; }
-.screenshot-selection-handle { position: absolute; width: 8px; height: 8px; background: #00ff00; }
-.selection-nw { left: 0; top: 0; }
-.selection-ne { right: 0; top: 0; }
-.selection-se { right: 0; bottom: 0; }
-.selection-sw { left: 0; bottom: 0; }
-.selection-n { left: 50%; top: 0; transform: translateX(-50%); }
-.selection-s { left: 50%; bottom: 0; transform: translateX(-50%); }
-.selection-e { right: 0; top: 50%; transform: translateY(-50%); }
-.selection-w { left: 0; top: 50%; transform: translateY(-50%); }
-.screenshot-selection-label { position: absolute; left: 4px; top: 4px; padding: 3px 4px; color: #00ff00; background: rgba(0, 0, 0, .55); font: 600 13px/1 monospace; white-space: nowrap; }
+.screenshot-selection-border {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid #fff;
+  box-sizing: border-box;
+  /* 明暗两层连续轮廓，跨过白色窗口或深色桌面时都保留清晰边界。 */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
+}
+.screenshot-selection-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  border-radius: 2px;
+  background: #303633;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
+}
+/* 控制点以选区顶点或边中点为中心，与选区边缘对齐。 */
+.selection-nw { left: 0; top: 0; transform: translate(-50%, -50%); }
+.selection-ne { right: 0; top: 0; transform: translate(50%, -50%); }
+.selection-se { right: 0; bottom: 0; transform: translate(50%, 50%); }
+.selection-sw { left: 0; bottom: 0; transform: translate(-50%, 50%); }
+.selection-n { left: 50%; top: 0; transform: translate(-50%, -50%); }
+.selection-s { left: 50%; bottom: 0; transform: translate(-50%, 50%); }
+.selection-e { right: 0; top: 50%; transform: translate(50%, -50%); }
+.selection-w { left: 0; top: 50%; transform: translate(-50%, -50%); }
+.screenshot-selection-label {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 4px;
+  color: #fff;
+  background: rgba(22, 27, 25, .76);
+  font: 600 13px/1 monospace;
+  white-space: nowrap;
+}
 .screenshot-magnifier-overlay { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; }
 #ui-layer { z-index: 4; }
 .screenshot-background[hidden], .screenshot-selection-overlay[hidden], .screenshot-selection-overlay [hidden], .screenshot-magnifier-overlay[hidden] { display: none; }

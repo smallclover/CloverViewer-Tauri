@@ -9,5 +9,6 @@
 @import "./styles/settings.css";
 @import "./styles/update.css";
 @import "./styles/workspace.css";
+@import "./styles/image-preview-strip.css";
 @import "./styles/motion.css";
 @import "./styles/select.css";

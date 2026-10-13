@@ -1,4 +1,5 @@
 import type { ImageEntry, LanShareInfo } from "../api";
+import { uiIcon } from "../ui/icons";
 
 interface ImageShareControllerOptions {
   panel: HTMLElement;
@@ -26,8 +27,9 @@ export function createImageShareController(options: ImageShareControllerOptions)
     const close = document.createElement("button");
     close.className = "image-share-close";
     close.type = "button";
-    close.textContent = "×";
+    close.innerHTML = uiIcon("close");
     close.title = options.translate("shot.close");
+    close.setAttribute("aria-label", close.title);
     close.addEventListener("click", options.onClose);
     row.append(title, close);
     return row;

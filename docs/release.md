@@ -147,7 +147,8 @@ src-tauri/target/release/bundle/nsis/CloverViewer_x.y.z_x64-setup.exe
 最小冒烟（建议做，但不阻塞发布；明确跳过时必须在汇报里写明「已跳过」）：
 
 - [ ] 启动主窗口，标题栏三个菜单（文件 / 编辑 / 帮助）能展开、点空白与 Esc 能收起
-- [ ] 「编辑 → 设置」能搜索设置项、切分类，改语言三语即时生效
+- [ ] 「编辑 → 设置」能搜索设置项、切常规 / 查看 / 截图 / 快捷键 / 缓存分类，改语言三语即时生效
+- [ ] 单图预览条可点击切图；状态栏展开 / 收起与设置 → 查看同步，重新启动后保留选择
 - [ ] 设置 → 缓存：显示占用、能「立即清理」
 - [ ] `Alt+S` 截图 → 标注 → Enter 复制
 - [ ] `Alt+Shift+S` 长截图框选 → 手动滚动 → 生成结果并能「在查看器中打开」
@@ -155,7 +156,7 @@ src-tauri/target/release/bundle/nsis/CloverViewer_x.y.z_x64-setup.exe
 
 产物核对（替代冒烟的机械部分，必做）：
 
-- [ ] `bundle/nsis/CloverViewer_x.y.z_x64-setup.exe` 存在且体积量级正常（约 3.8 MB）
+- [ ] `bundle/nsis/CloverViewer_x.y.z_x64-setup.exe` 存在、非空；与上一版比较大小，并结合 Live2D 模型等打包资源的变化解释明显差异，不沿用旧版约 3.8 MB 的固定基准
 - [ ] 同名 `.sig` 存在（更新签名链路可用；本地签名需 `TAURI_SIGNING_PRIVATE_KEY` 指向私钥）
 - [ ] `target/release/cloverviewer-tauri.exe` 已生成
 
@@ -166,9 +167,10 @@ src-tauri/target/release/bundle/nsis/CloverViewer_x.y.z_x64-setup.exe
 ## 5. 阶段 D：提交与推送
 
 ```powershell
-git status                  # 必须干净（publish-release.ps1 会强制要求）
+git status                  # 核对本次改动与预期一致
 git add -A
-git commit -m "release: 0.1.10"
+git commit -m "release: X.Y.Z" # 替换为本次版本号
+git status                  # 提交后必须干净，发布脚本会强制要求
 git push origin main
 ```
 
@@ -195,8 +197,8 @@ git push origin main
 
 **不要用**：
 
-- `-MoveExistingTag`：已发布的标签被移动后，`releases/latest` 与用户已装的版本会错位。
-- `-PruneTags`：会删除历史标签（Release 本身不受影响，但历史追溯会断），除非明确要求清理。
+- `-MoveExistingTag`：发布任务不使用此开关。已发布的标签被移动后，`releases/latest` 与用户已装的版本会错位；失败恢复见第 10 节。
+- `-PruneTags`：发布任务不使用此开关，它会删除历史标签。保留历史发布记录，不能把脚本仍提供该参数当作清理授权。
 
 推送后 `release` 工作流会自动构建并创建 Release（约几分钟）。进度：
 `https://github.com/smallclover/CloverViewer-Tauri/actions`。
@@ -280,16 +282,16 @@ Invoke-RestMethod https://github.com/smallclover/CloverViewer-Tauri/releases/lat
 | --- | --- |
 | 阶段 B 预检失败 | 按 `release-check.mjs` 输出的「修复」逐条修；**不要**注释掉检查或删检查项 |
 | 阶段 C 构建失败 | 视为阻塞：修代码后再从阶段 B 重跑。NSIS 下载卡住见 README 的镜像章节 |
-| Actions 构建失败 | 看 `release` 工作流日志：版本不一致 → 改清单版本并重新提交后**移动标签**（此时 Release 尚未产生，可用 `-MoveExistingTag`）；签名失败 → 检查 `TAURI_SIGNING_PRIVATE_KEY` Secret |
-| Release 正文是兜底文案 | 说明 CHANGELOG 段落没被抽到（标题格式或版本号不符）。改 CHANGELOG → 提交 → 移动标签重发（Release 已存在时先在网页补正文） |
-| `latest.json` 缺失或版本不对 | `createUpdaterArtifacts` 或签名配置问题，会导致**所有客户端更新检查失败**，优先修复并重发 |
+| Actions 构建失败 | 先看 `release` 工作流日志。若标签指向的提交和版本正确、失败来自临时网络或 Secret 配置，可修复外部配置后重跑同一提交的工作流；若必须改清单或代码，使用新的更高版本重新走阶段 A–G，不移动既有标签 |
+| Release 正文是兜底文案 | 说明版本段落没被抽到（标题格式或版本号不符）。核对标签提交中的 CHANGELOG；已有正确段落时用它补齐 Release 正文，不移动标签或改写已发布段落。源段落缺失时说明原因，并在下一次发布修正准备流程 |
+| `latest.json` 缺失或版本不对 | 核对 `createUpdaterArtifacts`、签名配置和工作流产物，记录更新链路故障。需要修改代码或清单时发新的更高版本；不覆盖或删除已公开资产 |
 | 发布脚本在「推送 main」后直接退出（无 ERROR 提示） | 非交互环境下 git 的正常提示会被当成致命错误（v0.1.10 首次发布时踩到）。已改为所有 git 调用走 `Invoke-Git`；若仍复现，按顺序手动续跑（脚本此时已校验并创建好本地标签）：`git push origin main` → `git push origin refs/tags/vX.Y.Z` |
-| 标签打错（如 v0.1.91） | 若 Release 未产生：删标签重推正确标签。若已产生：删 Release 与标签，再发正确版本；**先确认没有用户装过** |
-| 发布后立刻发现严重 bug | 分两类：<br>① **已推送到客户端之前**（Release 刚创建、无人安装）：可删 Release 与标签回到上一版；<br>② **已可能被安装**：**不要**撤回，直接发 `vX.Y.Z+1` 修复 —— 自动更新只会向上，撤回无法把用户降级 |
+| 标签打错（如 v0.1.91） | 先确认是否已有公开 Release 和更新元数据；保留既有标签与公开发布记录，说明问题并以新的正确版本发布。若错误版本已被客户端识别，修复版本必须高于该版本，不能靠降版本恢复更新 |
+| 发布后立刻发现严重 bug | 保留公开 Release、标签和资产，使用更高版本发布修复并说明问题。不要以“应该无人安装”为由撤回或覆盖；自动更新只会向上，撤回无法把用户降级 |
 | 私钥丢失 | 无法挽回：现有客户端再也无法信任新包。只能让用户手动下载安装新签名密钥构建的版本（需公告） |
 
-**绝对不要做的事**：强推已发布的标签、在 Release 已公开后删除资产、把 `.tauri/cloverviewer.key`
-提交到仓库、把 token 写进任何文档或日志。
+**绝对不要做的事**：强推或移动已发布的标签、删除已公开的 Release 或资产、改写 CHANGELOG
+中已发布版本的段落、把 `.tauri/cloverviewer.key` 提交到仓库、把 token 写进任何文档或日志。
 
 ---
 

@@ -21,7 +21,7 @@
   gap: 2px;
   padding: 3px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--s-panel-bg) 82%, #000 18%);
+  background: var(--s-panel-muted);
 }
 .sh-mode-switch.manual-only { display: none; }
 .sh-mode-btn {
@@ -32,7 +32,7 @@
   background: transparent;
   color: var(--s-fg-dim);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
   cursor: pointer;
 }
@@ -48,7 +48,7 @@
   padding: 8px 9px;
   border: 1px solid var(--s-toolbar-border);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--s-panel-bg) 84%, #000 16%);
+  background: var(--s-panel-muted);
 }
 .sh-selection-card-head {
   display: flex;
@@ -60,13 +60,13 @@
 .sh-selection-card-state {
   overflow: hidden;
   color: var(--s-fg-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sh-selection-card-state.ok { color: var(--s-accent); }
-.sh-selection-card-state.warn { color: #d8a13a; }
+.sh-selection-card-state.warn { color: var(--s-warning); }
 .sh-selection-card-value {
   color: var(--s-panel-title);
   font-size: 14px;
@@ -82,6 +82,8 @@
   cursor: pointer;
   user-select: none;
 }
+.sh-option-row input { margin: 0; accent-color: var(--s-accent-solid); cursor: pointer; }
+.sh-option-row input:focus-visible { outline: 2px solid var(--s-accent); outline-offset: 2px; }
 #scroll-panel .sh-actions {
   flex-wrap: nowrap;
   margin-top: 0;
@@ -100,9 +102,9 @@
   -webkit-line-clamp: 4;
 }
 .sh-detail.on { display: -webkit-box; }
-.sh-detail.warn { color: #d8a13a; }
+.sh-detail.warn { color: var(--s-warning); }
 .sh-status.warn {
-  color: #d8a13a;
+  color: var(--s-warning);
 }
 .sh-status.err {
   color: var(--s-error);
@@ -160,7 +162,7 @@
   display: grid;
   grid-template-columns: minmax(210px, 1.35fr) minmax(180px, 1fr);
   overflow: hidden;
-  background: color-mix(in srgb, var(--s-panel-bg) 88%, #000 12%);
+  background: var(--s-panel-muted);
 }
 .sh-capture-side {
   display: flex;
@@ -178,7 +180,7 @@
   display: block;
   margin-bottom: 5px;
   color: var(--s-fg-dim);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: .03em;
   line-height: 1.2;
@@ -213,12 +215,12 @@
   min-width: 0;
   padding: 7px 6px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--s-panel-bg) 86%, var(--s-fg) 14%);
+  background: var(--s-panel-muted);
 }
 .sh-result-metric-label {
   display: block;
   color: var(--s-fg-dim);
-  font-size: 10px;
+  font-size: 11px;
 }
 .sh-result-metric strong {
   display: block;

@@ -1,16 +1,19 @@
 # SEO 与仓库元数据清单
 
 本文件说明 CloverViewer-Tauri 的可发现性（discoverability）优化：仓库内已经落地了什么、
-哪些只能在 GitHub 网页设置里手动完成、以及每次发版要顺手维护什么。
+哪些设置可按发布流程用 API 完成、哪些仍需人工，以及每次发版要顺手维护什么。
 
 目标关键词围绕「免费开源的 Windows 图片查看器 / 截图工具 / 滚动长截图 / OCR 取字 /
 面向 AI 的 MCP 截图服务」这几类真实搜索意图，不做关键词堆砌。
 
 ---
 
-## 1. 需要手动完成的仓库设置
+## 1. 仓库侧设置
 
 仓库 Description、Topics、Social preview 和 Pages 开关都是 GitHub 侧的元数据，无法通过提交文件修改。
+提供 `GITHUB_SETUP_TOKEN` 时，Description、Website、Topics 和 Pages Source 按 [发布流程](release.md)
+第 0 节的 API 步骤完成；没有 token 时交给维护者。Social preview 图片上传与搜索引擎站长工具
+仍按下文人工操作，不把修改本地文档视为已完成远端设置。
 
 ### 1.1 Description（Settings → General → Description）
 
@@ -48,8 +51,8 @@ Topics 是 GitHub 站内搜索与「Related repositories」的主要依据，也
 
 ### 1.4 Social preview（Settings → General → Social preview）
 
-上传 `site/og-image.png`（1200×630，仓库内已生成）。它决定链接在 Twitter/X、Slack、
-Discord、微信等处的预览图，直接影响点击率。
+上传 `site/og-image.png`（1200×630，仓库内已生成），用于 GitHub 仓库链接的 Social preview。
+介绍页自身的分享图片由 `site/index.html` 的 `og:image` / Twitter Card 指向同一文件；两处配置分别维护。
 
 ### 1.5 GitHub Pages（Settings → Pages）
 

@@ -1,8 +1,8 @@
 # tools/ —— 开发期验证脚本
 
-这里放的是**不参与应用构建**的验证工具。它们都只依赖 Node.js / PowerShell，不需要 WebView
-或 Tauri 运行时，因此可以在命令行里确定性复跑，用来把「拼接算式」和「浮层落位」这两类
-**纯逻辑**问题挡住——这两块恰恰是最容易改一处崩一处的地方。
+这里放的是**不参与应用构建**的验证素材与工具：Node.js 离线检查、浏览器验证页，以及需要
+真实 Windows 桌面的 WinForms 目标。Rust 滚动探针位于 `src-tauri/examples/`，需要 Rust 工具链
+和可交互桌面。当前拼接与浮层布局的自动回归检查分别由 Rust 单元测试和 `tests/unit/` 负责。
 
 ## scroll-probe/ —— 滚动截图的可复现素材与探针
 
@@ -16,20 +16,26 @@
 可先启动 `winforms-target.ps1`，再用 `scroll_probe` 对标题
 `cloverprobe-winforms-target` 进行探测，以复现标准控件的滚动注入验证。
 
-## 离线校验
+## 当前实现的自动检查
 
 ```powershell
-node tools/scroll-ui-geometry-check.cjs    # 浮层落位：面板/HUD 会不会压住捕获区、会不会漂到另一块屏
+cargo test --manifest-path src-tauri/Cargo.toml --lib   # 滚动拼接与配准
+npm run test:unit                                    # 前端布局、输入、渲染等单元测试
 ```
 
-*   滚动拼接的离线校验已迁入 Rust 单元测试（`scroll_capture::tests`）：它用合成帧验证位移、固定首尾栏、固定侧栏拒绝和重复帧拒绝。运行 `cargo test --lib`。
-*   `scroll-ui-geometry-check.cjs` 复刻 `src/screenshot.ts` 的浮层落位逻辑，
-    喂的是真实的多屏参数（主屏 2560×1440 + 竖屏副屏 1440×2560，虚拟桌面 4000×2560）。
-    ⚠ 它是**独立实现**（不是 import 前端代码），所以前端落位逻辑改了以后要同步改它，
-    否则这份检查会退化成自说自话。
+*   `src-tauri/src/scroll_capture/tests.rs` 使用合成帧验证位移、固定首尾栏、固定侧栏旁正文的配准、白色正文不误判、重复帧拒绝和未匹配后继续拼接。
+*   `tests/unit/screenshot-overlay-layout.test.cjs` 直接导入编译后的 `src/screenshot/overlay-layout.ts`，验证普通选区工具栏和滚动截图面板的定位。调用入口分别为 `editor-ui-controller.ts` 与 `scroll-capture-layout.ts`，逻辑已不在 `src/screenshot.ts` 内。
 
-> 两个脚本都是「打印 + 目视判断」的形式，刻意没有做成断言式测试：它们要回答的是
-> 「在真实多屏几何下会落到哪」，而具体数值随环境变化。
+## 历史几何演示
+
+```powershell
+node tools/scroll-ui-geometry-check.cjs
+```
+
+该脚本保留早期 `clampAvoiding` 定位算法，以主屏 2560×1440、竖屏副屏 1440×2560、虚拟桌面
+4000×2560 的参数打印落点，供理解旧问题使用。它没有导入当前前端，算法也不同于现有
+`placeScrollOverlay`；输出不能证明当前布局正确。维护现有定位时，以直接覆盖产品模块的
+单元测试和真实桌面检查为准。
 
 ## Live2D 模型包校验
 

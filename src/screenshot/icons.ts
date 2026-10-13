@@ -1,38 +1,11 @@
 import { t } from "../i18n";
+import { iconSvg, UI_ICON_PATHS } from "../ui/icons";
 
 const ICONS: Record<string, string> = {
+  ...UI_ICON_PATHS,
   width:
     '<path d="M4 6h16" stroke-width="1"/><path d="M4 12h16" stroke-width="3"/><path d="M4 19h16" stroke-width="5"/>',
-  rect: '<rect x="4" y="5" width="16" height="14" rx="2"/>',
-  circle: '<circle cx="12" cy="12" r="7.5"/>',
-  // 双向端帽（贴齐 egui paint_arrow_icon：line + end 两侧各一段短斜线）
-  arrow: '<path d="M5 19 L19 5 M13 5 H19 V11"/>',
-  // 正弦波笔触（贴齐 egui paint_pencil_icon：base_y + sin(t·π·2.5)·h·0.25）。
-  // SVG 里用 3 段 Q/T 沿 x 等距升高抄此几何，比 lucide 钢笔更"画线"而
-  // 不是"持笔"。
-  pen: '<path d="M4 19 Q 6 7 8.5 13 T 12 12 T 15.5 13 T 20 5"/>',
-  // 马赛克：对角填充（左上 + 右下 fill="currentColor" stroke="none"），
-  // 另两角只描边（fill="none"），与原版 egui `paint_mosaic_icon` 的对角逻辑一致。
-  mosaic:
-    '<rect x="4" y="4" width="7" height="7" rx="1" fill="none"/>' +
-    '<rect x="13" y="4" width="7" height="7" rx="1" fill="none"/>' +
-    '<rect x="4" y="13" width="7" height="7" rx="1" fill="none"/>' +
-    '<rect x="13" y="13" width="7" height="7" rx="1" fill="none"/>' +
-    '<rect x="4" y="4" width="7" height="7" rx="1" fill="currentColor" stroke="none"/>' +
-    '<rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor" stroke="none"/>',
-  // 仅 T（贴齐 egui `paint_text_icon`：顶横 + 中竖，无底横脚）
-  text: '<path d="M5 5 V3 H19 V5 M12 3 V21"/>',
-  cancel: '<path d="M6 6 L18 18 M18 6 L6 18"/>',
-  // 双错位矩形 + 前层 fill="#fff"（白底覆盖，露出后层轮廓；工具栏白底背景下成立）
-  copy:
-    '<rect x="8" y="8" width="11" height="11" rx="1.5" fill="none"/>' +
-    '<rect x="5" y="5" width="11" height="11" rx="1.5" fill="#ffffff" stroke="none"/>' +
-    '<rect x="5" y="5" width="11" height="11" rx="1.5"/>',
-  // 保存：向下箭落入开口托盘（lucide download 风格），一眼即“保存/落盘”
-  save:
-    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
-    '<path d="M7 10l5 5 5-5"/>' +
-    '<path d="M12 15V3"/>',
+  cancel: UI_ICON_PATHS.close,
   open:
     '<path d="M4 19V6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>' +
     '<path d="m11 10 3 3-3 3M6 13h8"/>',
@@ -61,7 +34,7 @@ const ICONS: Record<string, string> = {
 };
 
 export function svgIcon(name: string): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+  return iconSvg(ICONS[name] ?? "");
 }
 
 export function makeBtn(icon: string, titleKey: string): HTMLButtonElement {

@@ -146,14 +146,14 @@ export function createSettingsController(options: SettingsControllerOptions) {
     render(true);
   };
 
-  const save = (partial: Partial<AppConfig>, silent = false) => {
+  const save = (partial: Partial<AppConfig>, silent = false, showSaved = true) => {
     const current = options.getConfig();
     if (!current) return;
     const next = { ...current, ...partial };
     options.setCurrentConfig(next);
     void setConfig(next)
       .then(() => {
-        if (!silent) options.toast(options.translate("toast.saved"), "success");
+        if (!silent && showSaved) options.toast(options.translate("toast.saved"), "success");
       })
       .catch(() => {
         if (!silent) options.toast(options.translate("toast.saveFailed"), "error");
@@ -282,10 +282,14 @@ export function createSettingsController(options: SettingsControllerOptions) {
     zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
   });
   zoom.addEventListener("change", () => save({ zoom_sensitivity: Number(zoom.value) }));
-  imagePreviewStrip.addEventListener("change", () => {
-    save({ image_preview_strip_enabled: imagePreviewStrip.checked });
+  const setImagePreviewStripEnabled = (enabled: boolean, showSaved = true) => {
+    imagePreviewStrip.checked = enabled;
+    save({ image_preview_strip_enabled: enabled }, false, showSaved);
     options.refreshImagePreviewStrip();
-  });
+  };
+  imagePreviewStrip.addEventListener("change", () =>
+    setImagePreviewStripEnabled(imagePreviewStrip.checked),
+  );
   magnifier.addEventListener("change", () => save({ magnifier_enabled: magnifier.checked }));
   experimentalAutoScroll.addEventListener("change", () =>
     save({ experimental_auto_scroll: experimentalAutoScroll.checked }),
@@ -436,6 +440,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
   return {
     open,
     close,
+    setImagePreviewStripEnabled,
     isOpen: () => !overlay.classList.contains("hidden"),
     closeIfOpen: () => {
       if (overlay.classList.contains("hidden")) return false;

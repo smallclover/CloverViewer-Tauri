@@ -35,6 +35,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+button, input, select, textarea { font-family: inherit; }
 
 /* 统一 WebView 滚动条：保留稳定槽位，但弱化原生轨道的厚重感。 */
 * {

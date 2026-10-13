@@ -1,4 +1,5 @@
 import type { ImageEntry } from "../api";
+import { uiIcon } from "../ui/icons";
 
 interface ImageOcrControllerOptions {
   panel: HTMLElement;
@@ -20,7 +21,7 @@ export function createImageOcrController(options: ImageOcrControllerOptions) {
   const close = document.createElement("button");
   close.className = "image-ocr-close";
   close.type = "button";
-  close.textContent = "×";
+  close.innerHTML = uiIcon("close");
   close.addEventListener("click", options.onClose);
   header.append(title, close);
 

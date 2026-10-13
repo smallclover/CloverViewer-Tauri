@@ -287,18 +287,27 @@ const gridController = createGridController({
 });
 const imagePreviewStripController = createImagePreviewStripController({
   strip: imagePreviewStrip,
+  toggle: $<HTMLButtonElement>("image-preview-toggle"),
   session: viewerSession,
   imageSource,
   getThumbnail,
   onSelect: openImageDetails,
+  onToggle: () =>
+    settingsController.setImagePreviewStripEnabled(
+      !(config?.image_preview_strip_enabled ?? true),
+      false,
+    ),
+  translate: t,
 });
 
 function applyImagePreviewStripState() {
   const visible = config?.image_preview_strip_enabled ?? true;
-  imagePreviewStrip.classList.toggle("hidden", !visible);
+  imagePreviewStripController.setVisible(visible);
   if (visible && viewerSession.viewMode === "single" && viewerSession.activeIndex >= 0) {
     imagePreviewStripController.render(viewerSession.activeIndex);
   }
+  singleImageController.applyTransform();
+  refreshStatus();
 }
 
 function showGrid() {
@@ -469,6 +478,9 @@ function leaveEdit() {
 
 // 刷新状态栏文案（语言切换时也会调用）
 function refreshStatus() {
+  imagePreviewStripController.setAvailable(
+    viewerSession.viewMode === "single" && viewerSession.activeIndex >= 0,
+  );
   if (
     viewerSession.viewMode === "single" &&
     viewerSession.activeIndex >= 0 &&
@@ -493,6 +505,7 @@ function refreshStatus() {
     statusRight.textContent = "";
     gridCount.classList.add("hidden");
   }
+  statusLeft.title = statusLeft.textContent ?? "";
 }
 
 window.addEventListener("resize", () => {

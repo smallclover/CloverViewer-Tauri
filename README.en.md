@@ -43,6 +43,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Large folders stay smooth**: virtualized grid scrolling with bounded thumbnail concurrency, request deduplication, and caching; queued work that leaves the visible range is skipped
 *   **Folder browsing**: opening a folder loads all images automatically; sorting and thumbnail-size controls appear only when images are available
 *   **Quick navigation**: ←/→ to switch; the current image takes priority over bounded adjacent-image preloading. Images transition smoothly after decoding, and rapid switching cannot display an obsolete selection
+*   **Nearby image previews**: a floating strip at the bottom of single-image view shows the current image and up to two neighbors on each side; click to switch images. The current item is larger, and narrow windows allow horizontal scrolling. The button before the filename in the status bar shows or hides the strip, remembers your choice and stays in sync with Settings → View without reserving separate canvas space
 *   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity; fit-to-window uses an arrow cursor, and draggable views use a hand cursor
 *   **Drag & drop open**: drag images or a folder directly into the window
 *   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens), with an option to open the containing folder
@@ -54,9 +55,9 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 ### 📸 Screenshot & Annotation
 
 *   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background, transfers raw pixels directly, and aligns the window and content area before showing the capture to reduce delay and occasional image compression. The background stays static while dragging the selection; masks, borders and the magnifier update independently to reduce full-image redraws. Exports retain the original pixels
-*   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended, while sticky headers, pinned footers and fixed sidebars are skipped. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
+*   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended. Detected fixed headers are kept from the first frame and footers from the last accepted frame. Fixed sidebar texture is ignored during registration, but sidebars are not automatically cropped out; selecting just the article body is recommended. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; stroke, font and block sizes are set independently in original image pixels (px), retaining each size when switching tools during a session. Image editing adapts initial sizes and presets to the preview scale so annotations stay clear on large images shown smaller; resizing the window preserves chosen sizes and existing annotations. Screenshots and image editing share a transparent text box with visible circular corner markers that resizes to fit its content. Mosaic uses a brush-size ring and continuous strokes over fixed blocks sampled from the original image, keeping the preview consistent after releasing the mouse
-*   **Color & line width**: long-press a tool icon to open the color palette
+*   **Color & size**: click the toolbar color swatch to open the palette; click the size button to choose stroke width, font size or mosaic block size for the current tool
 *   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
 *   **Export**: Enter to copy to clipboard / save to Desktop; the toolbar can open a regular screenshot directly in the viewer
@@ -96,8 +97,8 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
 *   **Desktop pet**: Displays a Live2D character with idle, blink, periodic nod, and mouse-follow behavior; it can be dragged, scaled from 60% to 200% in Settings, and automatically hides during screenshots. Right-click for screenshot, scrolling capture, main window, or quit.
-*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / LAN sharing / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, the desktop pet and its scale, the three global hotkeys, magnifier, minimize to tray, launch on startup, software updates and LAN-sharing rules
-*   **Temporary cache management**: Settings → Cache shows the file count and size of temporary long screenshots in `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand
+*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, nearby image previews, the desktop pet and its scale, the three global hotkeys, magnifier, minimize to tray, launch on startup and software updates; LAN-sharing rules are under Capture
+*   **Temporary cache management**: Settings → Cache shows the count and size of temporary PNGs created when opening ordinary screenshots, long screenshots or OCR results in the viewer under `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand; this does not clear thumbnails or MCP screenshot storage
 *   **Software updates**: checked manually; persistent download progress and errors identify each stage, network downloads get up to three attempts, and installation starts only after signature verification
 
 ## 🖼️ Supported Formats
@@ -122,7 +123,7 @@ Download `CloverViewer_x.y.z_x64-setup.exe` from [Releases](https://github.com/s
 
 ## 🛠️ Build from Source
 
-Prerequisites: [Rust](https://www.rust-lang.org/tools/install) + Node.js ≥ 18 + WebView2 Runtime (bundled with Windows 10/11).
+Prerequisites: [Rust](https://www.rust-lang.org/tools/install) + Node.js 24.x (compatible with the currently locked dependencies) + an installed WebView2 Runtime.
 
 ```shell
 npm install
@@ -158,6 +159,11 @@ npm run tauri build
 | ← / → | Previous / Next |
 | Mouse-wheel | Zoom (single-image view) |
 | Ctrl+O | Open folder |
+| Ctrl+E | Edit current image |
+| Tab | Switch grid / single-image view; move focus inside preview controls |
+| Esc | Return from single-image view to grid |
+| 0 / 1 | Fit to window / actual size |
+| R / H / V | Rotate / flip horizontally / flip vertically |
 
 ### Screenshot Tool
 
@@ -185,11 +191,11 @@ The code owned by this repository is free and open source under the [MIT license
 
 ### Which Windows versions are supported?
 
-Windows 10 and 11, relying on the WebView2 runtime that ships with the system. The installer is a per-user NSIS package that needs no administrator rights, and the portable `CloverViewer.exe` works as well.
+Windows 10 and 11 with WebView2 Runtime installed. The installer is a per-user NSIS package that needs no administrator rights, and the portable `CloverViewer.exe` works as well.
 
 ### Does it upload my images or screenshots?
 
-No. Image browsing, capture, annotation, long-screenshot stitching and OCR all happen locally; there is no account system and no usage data collection. The only network access is the update check, and it contacts GitHub Releases only when you press “Check for updates” under Settings → Software updates — there is no background auto-check.
+There is no automatic upload to third-party services. Image browsing, capture, annotation, long-screenshot stitching and OCR all happen locally; there is no account system and no usage data collection. A LAN share you create temporarily lets devices on the same network access the image using its link. When you enable MCP, screenshots can be delivered to your connected AI client. Software updates contact GitHub Releases only when you press “Check for updates” under Settings → General → Software updates, then download an installer after confirmation; there is no background auto-check.
 
 ### Does scrolling capture work in every app?
 
@@ -214,7 +220,9 @@ Configure `CloverViewer.exe --mcp` in `claude_desktop_config.json` as described 
 | [MCP guide](docs/mcp-guide.md) | Setup, tool parameters, typical workflows, privacy and limits |
 | [Architecture and directories](docs/architecture.md) | Frontend / Rust backend responsibilities, data flow and maintenance boundaries |
 | [Scrolling capture V2 design](docs/scroll-capture-v2.md) | Manual-scroll-first invariants, modules and verification |
-| [Auto-update release setup](docs/auto-update.md) | Signing keys, GitHub Secrets and update verification steps |
+| [Software updates and release signing](docs/auto-update.md) | Manual updates, signing keys, GitHub Secrets and update verification steps |
+| [Desktop pet assets](docs/desktop-pet-rigging.md) | Live2D model locations, runtime behavior and export checks |
+| [Screenshot selection optimization validation](docs/screenshot-selection-smoothness-validation.md) | Recorded behavior and drawing checks, and limits of desktop validation |
 | [Source file size guidelines](docs/code-size-guidelines.md) | Split thresholds, exceptions and current baseline |
 | [Release process](docs/release.md) | Maintainer runbook: version prep, preflight, build, publish, post-release verification and rollback |
 | [Repository SEO and metadata checklist](docs/seo.md) | Maintainer notes: keyword placement, topics/description, Pages and release checks |

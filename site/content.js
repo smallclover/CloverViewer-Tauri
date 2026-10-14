@@ -38,7 +38,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
     editTitle: "留住画面，也留下重点。",
     editBody:
-      "多屏截图、九宫格裁切、箭头与文字标注，配合马赛克和撤销重做。编辑完成，复制或导出 PNG、JPEG、WebP。",
+      "多屏截图与自定义选区边框，裁切、箭头与文字标注，配合马赛克和撤销重做。保存选项支持 PNG、JPEG、WebP 导出。",
     editTag: "截图 · 裁切 · 标注 · 导出",
     scrollTitle: "一屏装不下，就继续滚动。",
     scrollBody:
@@ -72,7 +72,7 @@ export const translations = {
     mcpLink: "查看 MCP 接入指南",
     shortcutEyebrow: "少一步，更顺手",
     shortcutTitle: "常用操作，触手可及。",
-    shortcutNote: "截图、长截图与取色热键可以在设置中修改。",
+    shortcutNote: "按 F1 查看完整快捷键说明；截图、长截图与取色热键可以在设置中修改。",
     key1: "唤起截图",
     key2: "开始滚动长截图",
     key3: "打开文件夹",
@@ -156,7 +156,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
     editTitle: "Keep the picture. Make the point.",
     editBody:
-      "Capture across monitors, crop with a thirds grid, add arrows and text, or hide details with mosaic. Undo, redo, copy or export as PNG, JPEG and WebP.",
+      "Capture across monitors with customizable selection borders. Crop, add arrows and text, use mosaic and undo/redo, then export PNG, JPEG or WebP from Save options.",
     editTag: "CAPTURE · CROP · ANNOTATE · EXPORT",
     scrollTitle: "When one screen isn't enough.",
     scrollBody:
@@ -194,7 +194,7 @@ export const translations = {
     shortcutEyebrow: "A SHORTER PATH",
     shortcutTitle: "Your everyday shortcuts.",
     shortcutNote:
-      "Capture, scrolling capture and color-picker hotkeys can be customized in settings.",
+      "Press F1 for the full shortcut guide. Capture, scrolling capture and color-picker hotkeys can be customized in settings.",
     key1: "Capture a screenshot",
     key2: "Start scrolling capture",
     key3: "Open a folder",
@@ -279,7 +279,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
     editTitle: "画面を残して、要点を伝える。",
     editBody:
-      "複数モニターのキャプチャ、三分割ガイドでの切り抜き、矢印や文字の注釈、モザイクに対応。元に戻す・やり直しのほか、コピーや PNG・JPEG・WebP 出力も。",
+      "複数画面の撮影と選択枠のカスタマイズ。切り抜き、矢印や文字、モザイク、元に戻す・やり直すに対応し、保存オプションから PNG・JPEG・WebP を書き出せます。",
     editTag: "キャプチャ · 切り抜き · 注釈 · 出力",
     scrollTitle: "一画面で足りなければ、スクロール。",
     scrollBody:
@@ -316,7 +316,7 @@ export const translations = {
     mcpLink: "MCP 接続ガイドを見る",
     shortcutEyebrow: "いつもの操作を、すばやく",
     shortcutTitle: "よく使うショートカット。",
-    shortcutNote: "キャプチャ、スクロールキャプチャ、色取得のホットキーは設定で変更できます。",
+    shortcutNote: "F1 でショートカット一覧を表示。キャプチャ、スクロールキャプチャ、色取得のホットキーは設定で変更できます。",
     key1: "スクリーンショットを開始",
     key2: "スクロールキャプチャを開始",
     key3: "フォルダを開く",

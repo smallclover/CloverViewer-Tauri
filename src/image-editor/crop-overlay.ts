@@ -191,6 +191,7 @@ export function createCropOverlay(options: CropOverlayOptions) {
   workspace.addEventListener("scroll", refreshLayout, { passive: true });
   return {
     update,
+    refreshLayout,
     refreshImage: () => {
       preview.invalidate();
       refreshLayout();

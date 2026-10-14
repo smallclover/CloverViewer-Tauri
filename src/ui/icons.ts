@@ -1,5 +1,12 @@
 /** 查看器、图片编辑与截图共用的线框图标；颜色始终由当前主题决定。 */
 export const UI_ICON_PATHS = {
+  keyboard:
+    '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M19 10h.01M7 14h.01M10 14h7"/>',
+  folder: '<path d="M3 7V5h7l2 2h9v12H3z"/>',
+  image:
+    '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m21 15-6-6-7 8-3-3-2 2"/>',
+  pencil: '<path d="m14 5 5 5M4 20l4-1L20 7l-4-4L4 15z"/>',
+  scan: '<path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/>',
   rect: '<rect x="4" y="5" width="16" height="14" rx="2"/>',
   circle: '<circle cx="12" cy="12" r="7.5"/>',
   arrow: '<path d="M5 19 19 5M13 5h6v6"/>',

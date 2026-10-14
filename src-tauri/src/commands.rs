@@ -32,6 +32,7 @@ pub fn set_config(app: tauri::AppHandle, store: State<'_, ConfigStore>, config: 
     if scale_changed {
         crate::ui_scale::apply_all(&app);
     }
+    crate::tray_menu::refresh(&app);
 }
 
 /// 启用或隐藏独立桌宠窗口。窗口创建可能等待 WebView2 的主线程回调，
@@ -192,6 +193,7 @@ pub fn set_show_screenshot_hotkey(
     cfg.hotkeys.show_screenshot = hotkey;
     store.replace(cfg.clone());
     crate::config::save_config(&cfg);
+    crate::tray_menu::refresh(&app);
     Ok(())
 }
 
@@ -226,6 +228,7 @@ pub fn set_scroll_capture_hotkey(
     cfg.hotkeys.scroll_capture = hotkey;
     store.replace(cfg.clone());
     crate::config::save_config(&cfg);
+    crate::tray_menu::refresh(&app);
     Ok(())
 }
 

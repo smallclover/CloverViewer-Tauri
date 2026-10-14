@@ -11,6 +11,10 @@ async function setup() {
   let frameId = 0;
   const drawn = [];
   const cleared = [];
+  const windowHandlers = new Map();
+  const confirmations = [];
+  let confirmationResolver = null;
+  let closed = 0;
   let active = null;
   let toolbarActions;
   let toolbar;
@@ -51,9 +55,24 @@ async function setup() {
   }).outputText, {
     exports,
     document: { createElement: element },
-    window: { addEventListener: () => {}, setTimeout: callback => timers.push(callback), confirm: () => true },
+    window: {
+      addEventListener: (name, handler) => {
+        const handlers = windowHandlers.get(name) ?? [];
+        handlers.push(handler);
+        windowHandlers.set(name, handlers);
+      },
+      setTimeout: callback => timers.push(callback),
+      confirm: () => { throw new Error("editor exit must use an in-app confirmation"); },
+    },
     require: name => {
       if (name === "@tauri-apps/plugin-dialog") return { save: async () => null };
+      if (name === "../image-editor/confirm-dialog") return { createEditorConfirmDialog: () => ({
+        isOpen: () => confirmationResolver !== null,
+        ask: request => {
+          confirmations.push(request);
+          return new Promise(resolve => { confirmationResolver = resolve; });
+        },
+      }) };
       if (name === "../image-editor/toolbar") return { createEditorToolbar: actions => {
         toolbarActions = actions;
         toolbar = { color: { value: "#ff0000" }, width: { addEventListener: () => {} }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
@@ -96,7 +115,7 @@ async function setup() {
   });
   const controller = exports.createImageEditorController({
     root, getEditableSource: async () => "", saveImage: async () => {}, translate: key => key,
-    onClose: () => {}, onSaved: () => {}, toast: () => {},
+    onClose: () => { closed++; }, onSaved: () => {}, toast: () => {},
   });
   await controller.open({ path: "image.png", name: "image.png" }, () => {});
   toolbarActions.setTool("text");
@@ -116,11 +135,76 @@ async function setup() {
     input.fire("keydown", event);
     return event;
   };
-  return { controller, input, canvas, click, key, drawn, cleared, toolbarActions, toolbar,
+  return { controller, input, canvas, click, key, drawn, cleared, toolbarActions, toolbar, root, confirmations,
+    closed: () => closed,
+    resolveConfirmation: async accepted => {
+      assert.ok(confirmationResolver);
+      const resolve = confirmationResolver;
+      confirmationResolver = null;
+      resolve(accepted);
+      await new Promise(resolve => setImmediate(resolve));
+    },
+    windowKey: overrides => {
+      const event = { key: "Escape", ctrlKey: false, preventDefault: () => {}, ...overrides };
+      for (const handler of windowHandlers.get("keydown") ?? []) handler(event);
+    },
     paint: () => { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback()); },
     resizePreview: scale => { previewScale = scale; },
     flush: () => { while (timers.length) timers.shift()(); }, focused: () => active === input };
 }
+
+test("Escape leaves an untouched editor without a discard prompt", async () => {
+  const fixture = await setup();
+  fixture.windowKey();
+  assert.equal(fixture.confirmations.length, 0);
+  assert.equal(fixture.closed(), 1);
+  assert.equal(fixture.root.classList.contains("hidden"), true);
+});
+
+test("Escape after annotation waits for confirmation; cancellation retains edits and repeated Escape cannot bypass it", async () => {
+  const fixture = await setup();
+  fixture.click();
+  fixture.input.value = "保留这条标注";
+  fixture.key();
+  fixture.windowKey();
+  fixture.windowKey();
+  await fixture.controller.close();
+  assert.equal(fixture.confirmations.length, 1);
+  assert.equal(fixture.confirmations[0].confirmLabel, "editor.discardAndExit");
+  assert.equal(fixture.confirmations[0].cancelLabel, "editor.continueEditing");
+  assert.equal(fixture.closed(), 0);
+  assert.equal(fixture.root.classList.contains("hidden"), false);
+  await fixture.resolveConfirmation(false);
+  assert.equal(fixture.closed(), 0);
+  assert.equal(fixture.drawn.at(-1).text, "保留这条标注");
+  fixture.windowKey();
+  assert.equal(fixture.confirmations.length, 2);
+  await fixture.resolveConfirmation(true);
+  assert.equal(fixture.closed(), 1);
+  assert.equal(fixture.root.classList.contains("hidden"), true);
+});
+
+test("closing from the toolbar preserves unfinished text before asking to discard it", async () => {
+  const fixture = await setup();
+  fixture.click();
+  fixture.input.value = "尚未提交的文字";
+  fixture.toolbarActions.close();
+  assert.equal(fixture.confirmations.length, 1);
+  assert.equal(fixture.drawn.at(-1).text, "尚未提交的文字");
+  assert.equal(fixture.closed(), 0);
+  await fixture.resolveConfirmation(false);
+  assert.equal(fixture.root.classList.contains("hidden"), false);
+});
+
+test("rotating an image also requires confirmation before Escape exits", async () => {
+  const fixture = await setup();
+  fixture.toolbarActions.rotate();
+  fixture.windowKey();
+  assert.equal(fixture.confirmations.length, 1);
+  assert.equal(fixture.closed(), 0);
+  await fixture.resolveConfirmation(false);
+  assert.equal(fixture.closed(), 0);
+});
 
 test("clicking the image keeps the text field open and focuses after pointer default handling", async () => {
   const fixture = await setup();

@@ -2,14 +2,14 @@ import type { Rect } from "./geometry";
 
 /** 缓存两张视口大小的位图；拖动时只改彩色预览的裁剪区域。 */
 export function createCropPreview(source: HTMLCanvasElement, root: HTMLElement) {
-  const gray = document.createElement("canvas");
+  const dim = document.createElement("canvas");
   const color = document.createElement("canvas");
-  gray.className = "image-crop-preview image-crop-gray";
+  dim.className = "image-crop-preview image-crop-dim";
   color.className = "image-crop-preview image-crop-color";
-  root.append(gray, color);
-  const grayContext = gray.getContext("2d"),
+  root.append(dim, color);
+  const dimContext = dim.getContext("2d"),
     colorContext = color.getContext("2d");
-  if (!grayContext || !colorContext) throw new Error("Canvas 2D is unavailable");
+  if (!dimContext || !colorContext) throw new Error("Canvas 2D is unavailable");
   let dirty = true;
   let regionKey = "";
   return {
@@ -22,11 +22,11 @@ export function createCropPreview(source: HTMLCanvasElement, root: HTMLElement) 
         h = Math.max(1, Math.ceil(height * ratio));
       const nextRegionKey = `${region.x},${region.y},${region.w},${region.h}`;
       if (!dirty && color.width === w && color.height === h && regionKey === nextRegionKey) return;
-      color.width = gray.width = w;
-      color.height = gray.height = h;
+      color.width = dim.width = w;
+      color.height = dim.height = h;
       colorContext.drawImage(source, region.x, region.y, region.w, region.h, 0, 0, w, h);
-      grayContext.filter = "grayscale(1) brightness(0.72)";
-      grayContext.drawImage(color, 0, 0);
+      dimContext.filter = "brightness(0.45)";
+      dimContext.drawImage(color, 0, 0);
       dirty = false;
       regionKey = nextRegionKey;
     },

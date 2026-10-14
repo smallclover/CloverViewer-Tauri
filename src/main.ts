@@ -3,6 +3,8 @@ import { applyI18n, setLang, t } from "./i18n";
 import { open } from "@tauri-apps/plugin-dialog";
 import { createToast, playEnterAnimation } from "./ui/presentation";
 import { createAboutController } from "./ui/about-controller";
+import { createAppMenuController } from "./ui/app-menu-controller";
+import { createShortcutDialog } from "./ui/shortcut-dialog";
 import { createContextMenuController } from "./ui/context-menu-controller";
 import { bindFileDrop, bindOpenImageBridge, showStartupNotices } from "./ui/app-bridges";
 import { createPageNavigationController } from "./ui/page-navigation-controller";
@@ -31,6 +33,7 @@ import {
   getImageInfo,
   getThumbnail,
   listImages,
+  listenTrayAction,
   openContainingFolder,
   prepareScreenshotWindow,
   readImageData,
@@ -38,10 +41,12 @@ import {
   saveEditedImage,
   startImageLanShare,
   stopLanShare,
+  startCapture,
 } from "./api";
 
 // ---------- 状态 ----------
 let config: AppConfig | null = null;
+let appMenu: ReturnType<typeof createAppMenuController> | undefined;
 const viewerSession = createViewerSession();
 
 const imageSource = createImageSourceResolver({ fileSrc, readImageData });
@@ -81,31 +86,6 @@ const navPrev = $<HTMLButtonElement>("nav-prev");
 const navNext = $<HTMLButtonElement>("nav-next");
 const dropOverlay = $("drop-overlay");
 const toastEl = $("toast");
-const enterEditButton = $<HTMLButtonElement>("btn-enter-edit");
-
-// 标题栏菜单：同一时间只展开一个，执行菜单项或按 Esc 后收起。
-const appMenus = Array.from(document.querySelectorAll<HTMLDetailsElement>("#toolbar .app-menu"));
-const closeMenus = (except?: HTMLDetailsElement) => {
-  for (const menu of appMenus) {
-    if (menu !== except) menu.open = false;
-  }
-};
-appMenus.forEach((menu) => {
-  menu.addEventListener("toggle", () => {
-    if (menu.open) closeMenus(menu);
-  });
-  menu.querySelectorAll<HTMLButtonElement>("button").forEach((item) => {
-    item.addEventListener("click", () => {
-      menu.open = false;
-    });
-  });
-});
-document.addEventListener("mousedown", (event) => {
-  if (!(event.target as HTMLElement).closest("#toolbar")) closeMenus();
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeMenus();
-});
 
 const toast = createToast(toastEl);
 const desktopPetController = createDesktopPetController({
@@ -324,7 +304,6 @@ function showGrid() {
   gridView.classList.toggle("hidden", !hasImages);
   singleView.classList.add("hidden");
   imageEditorView.classList.add("hidden");
-  enterEditButton.disabled = true;
   gridMenu.classList.toggle("hidden", !hasImages);
   gridDensityControl.classList.toggle("hidden", !hasImages);
   breadcrumb.classList.remove("hidden");
@@ -413,7 +392,6 @@ function showSingle(index: number) {
   gridView.classList.add("hidden");
   singleView.classList.remove("hidden");
   imageEditorView.classList.add("hidden");
-  enterEditButton.disabled = false;
   if (entering) playEnterAnimation(singleView);
   gridMenu.classList.add("hidden");
   gridDensityControl.classList.add("hidden");
@@ -440,7 +418,6 @@ function openImageDetails(index: number) {
 
 async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
   if (!entry) return;
-  enterEditButton.disabled = true;
   try {
     const opened = await imageEditor.open(entry, () => {
       singleImagePresenter.cancel();
@@ -466,8 +443,6 @@ async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]
     if (opened) refreshStatus();
   } catch (error) {
     toast(t("toast.openFailed", { msg: String(error) }), "error");
-  } finally {
-    enterEditButton.disabled = viewerSession.viewMode !== "single" || imageEditor.isOpening();
   }
 }
 
@@ -544,7 +519,8 @@ window.addEventListener("keydown", (e) => {
   if (e.defaultPrevented || imageEditor.isOpen()) return;
   if (e.ctrlKey && e.key.toLowerCase() === "o") {
     e.preventDefault();
-    void pickFolder();
+    if (e.shiftKey) void pickImage();
+    else void pickFolder();
     return;
   }
   if (e.ctrlKey && e.key.toLowerCase() === "e") {
@@ -602,9 +578,21 @@ async function pickFolder() {
   }
 }
 
+async function pickImage() {
+  const selected = await open({
+    multiple: false,
+    filters: [
+      {
+        name: t("menu.imageFiles"),
+        extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp", "tif", "tiff", "avif"],
+      },
+    ],
+  });
+  if (typeof selected === "string") await openFileOrFolder(selected);
+}
+
 // ---------- 事件绑定 ----------
 $("btn-open").addEventListener("click", () => void pickFolder());
-enterEditButton.addEventListener("click", () => void enterEdit());
 propsClose.addEventListener("click", closeProps);
 const closeGridMenus = () => {
   gridSortMenu.classList.add("hidden");
@@ -699,6 +687,7 @@ bindFileDrop(dropOverlay, openFileOrFolder);
 
 // ---------- 设置与更新 ----------
 function refreshViewerTranslations() {
+  appMenu?.refresh();
   gridController.refreshMenu();
   refreshStatus();
   if (
@@ -762,8 +751,66 @@ window.addEventListener("keydown", (event) => {
   if (pageNavigation.back()) event.preventDefault();
 });
 
+const shortcuts = createShortcutDialog({
+  translate: t,
+  onOpen: () => appMenu?.close(),
+  getHotkeys: () => ({
+    screenshot: config?.hotkeys.show_screenshot ?? "Alt+S",
+    scroll: config?.hotkeys.scroll_capture ?? "Alt+Shift+S",
+  }),
+});
+const openSettingsTab = (tab: string) => {
+  pageNavigation.showSettings();
+  settingsController.selectTab(tab);
+};
+appMenu = createAppMenuController({
+  toolbar: $("toolbar"),
+  translate: t,
+  getState: () => ({
+    edit: imageEditor.isOpen() || imageEditor.isOpening(),
+    screenshotHotkey: config?.hotkeys.show_screenshot ?? "Alt+S",
+    scrollHotkey: config?.hotkeys.scroll_capture ?? "Alt+Shift+S",
+  }),
+  run: async (action) => {
+    switch (action) {
+      case "open-image":
+        await pickImage();
+        break;
+      case "screenshot":
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => window.setTimeout(resolve, 0)),
+        );
+        await startCapture();
+        break;
+      case "scroll-screenshot":
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => window.setTimeout(resolve, 0)),
+        );
+        await startCapture(true);
+        break;
+      case "capture-settings":
+        openSettingsTab("capture");
+        break;
+      case "shortcuts":
+        shortcuts.open();
+        break;
+      case "update":
+        openSettingsTab("general");
+        await settingsController.checkForUpdate();
+        break;
+    }
+  },
+  onError: (error) => toast(t("menu.actionFailed", { msg: String(error) }), "error"),
+});
+
 // ---------- 启动 ----------
 (async () => {
+  await listenTrayAction((action) => {
+    if (action.action === "settings") {
+      if (imageEditor.isOpen()) toast(t("menu.finishEditing"));
+      else openSettingsTab("general");
+    }
+  });
   try {
     config = await getConfig();
     setLang(config.language);

@@ -81,6 +81,24 @@ impl Default for HotkeysConfig {
     }
 }
 
+#[derive(Default, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum SelectionBorderMode {
+    Custom,
+    #[default]
+    #[serde(other)]
+    Classic,
+}
+
+#[derive(Default, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum SelectionBorderStyle {
+    Solid,
+    #[default]
+    #[serde(other)]
+    Dashed,
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Config {
     #[serde(default)]
@@ -104,6 +122,12 @@ pub struct Config {
     pub minimize_on_close: bool,
     #[serde(default = "default_magnifier_enabled")]
     pub magnifier_enabled: bool,
+    #[serde(default)]
+    pub selection_border_mode: SelectionBorderMode,
+    #[serde(default = "default_selection_border_color")]
+    pub selection_border_color: String,
+    #[serde(default)]
+    pub selection_border_style: SelectionBorderStyle,
     /// 自动注入滚动在通用桌面应用中不可可靠地处理固定栏、弹窗和动态内容；默认关闭，
     /// 仅由用户在设置中明确启用后才暴露入口。
     #[serde(default)]
@@ -161,6 +185,9 @@ fn default_minimize_on_close() -> bool {
 fn default_magnifier_enabled() -> bool {
     true
 }
+fn default_selection_border_color() -> String {
+    "#ffffff".to_string()
+}
 fn default_desktop_pet_scale() -> u16 {
     100
 }
@@ -185,6 +212,9 @@ impl Default for Config {
             hotkeys: HotkeysConfig::default(),
             minimize_on_close: default_minimize_on_close(),
             magnifier_enabled: default_magnifier_enabled(),
+            selection_border_mode: SelectionBorderMode::default(),
+            selection_border_color: default_selection_border_color(),
+            selection_border_style: SelectionBorderStyle::default(),
             experimental_auto_scroll: false,
             screenshot_hides_main_window: false,
             desktop_pet_enabled: false,
@@ -299,6 +329,28 @@ mod tests {
             let json = serde_json::to_string(&config).unwrap();
             let restored: Config = serde_json::from_str(&json).unwrap();
             assert_eq!(restored.ui_scale, scale);
+            assert!(restored == config);
+        }
+    }
+
+    #[test]
+    fn selection_border_defaults_and_custom_preferences_survive_serialization() {
+        let legacy: Config = serde_json::from_str("{}").unwrap();
+        assert!(legacy.selection_border_mode == SelectionBorderMode::Classic);
+        assert!(legacy.selection_border_style == SelectionBorderStyle::Dashed);
+        assert_eq!(legacy.selection_border_color, "#ffffff");
+        let removed_style: Config =
+            serde_json::from_str(r#"{"selection_border_style":"dotted"}"#).unwrap();
+        assert!(removed_style.selection_border_style == SelectionBorderStyle::Dashed);
+        for style in [SelectionBorderStyle::Solid, SelectionBorderStyle::Dashed] {
+            let config = Config {
+                selection_border_mode: SelectionBorderMode::Custom,
+                selection_border_color: "#37c88b".into(),
+                selection_border_style: style,
+                ..Config::default()
+            };
+            let json = serde_json::to_string(&config).unwrap();
+            let restored: Config = serde_json::from_str(&json).unwrap();
             assert!(restored == config);
         }
     }

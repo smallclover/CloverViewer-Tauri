@@ -9,6 +9,7 @@ import {
 } from "../image-editor/canvas-mosaic-renderer";
 import { createCropOverlay } from "../image-editor/crop-overlay";
 import { createCropViewport } from "../image-editor/crop-viewport";
+import { createEditorConfirmDialog } from "../image-editor/confirm-dialog";
 import { createFrameUpdate } from "../image-editor/frame-update";
 import {
   cloneShape,
@@ -86,8 +87,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
     redo: () => redo(),
     saveAs: () => void saveAs(),
     overwrite: () => void overwrite(),
-    close: () => close(),
+    close: () => void close(),
   });
+  const confirmDialog = createEditorConfirmDialog({ workspace });
   const { color, sizes, format, outputScale } = toolbar;
 
   const context = canvas.getContext("2d");
@@ -116,6 +118,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let repaint = true;
   let dragging = false;
   let dirty = false;
+  let closing = false;
   const mosaicCursor = createMosaicCursor({
     surface: canvas,
     layer: workspace,
@@ -222,8 +225,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
     surface,
     getCrop: () => crop,
     isCropping: () => tool === "crop",
-    onLayout: () => {
-      cropOverlay.refreshImage();
+    onLayout: (animating) => {
+      if (animating) cropOverlay.refreshLayout();
+      else cropOverlay.refreshImage();
       mosaicCursor.reset();
       layoutTextInput();
     },
@@ -257,7 +261,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
         }
       }
       cropSnapshot = null;
-      cropViewport.end();
+      cropViewport.end(cancelled);
       cropOverlay.update();
       toolbar.refreshHistory(history.canUndo, history.canRedo);
     },
@@ -496,11 +500,14 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
   };
   const overwrite = async () => {
-    if (
-      !entry ||
-      !window.confirm(options.translate("editor.overwriteConfirm", { name: entry.name }))
-    )
-      return;
+    if (!entry) return;
+    const confirmed = await confirmDialog.ask({
+      title: options.translate("editor.overwriteTitle"),
+      message: options.translate("editor.overwriteConfirm", { name: entry.name }),
+      cancelLabel: options.translate("editor.cancelAction"),
+      confirmLabel: options.translate("editor.overwriteTitle"),
+    });
+    if (!confirmed) return;
     const extension = entry.name.split(".").pop()?.toLowerCase();
     const sourceFormat: EditedImageFormat | null =
       extension === "png"
@@ -521,16 +528,31 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
   };
 
-  const close = () => {
-    cropOverlay.cancel();
-    commitTextInput();
-    if (dirty && !window.confirm(options.translate("editor.discardConfirm"))) return;
-    loader.cancel();
-    paint.discard();
-    toolbar.closePanels();
-    options.root.classList.add("hidden");
-    mosaicCursor.reset();
-    options.onClose();
+  const close = async () => {
+    if (closing || confirmDialog.isOpen()) return;
+    closing = true;
+    try {
+      cropOverlay.cancel();
+      commitTextInput();
+      if (
+        dirty &&
+        !(await confirmDialog.ask({
+          title: options.translate("editor.discardTitle"),
+          message: options.translate("editor.discardConfirm"),
+          cancelLabel: options.translate("editor.continueEditing"),
+          confirmLabel: options.translate("editor.discardAndExit"),
+        }))
+      )
+        return;
+      loader.cancel();
+      paint.discard();
+      toolbar.closePanels();
+      options.root.classList.add("hidden");
+      mosaicCursor.reset();
+      options.onClose();
+    } finally {
+      closing = false;
+    }
   };
 
   canvas.addEventListener("pointerdown", (event) => {
@@ -612,7 +634,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     render();
   });
   window.addEventListener("keydown", (event) => {
-    if (options.root.classList.contains("hidden")) return;
+    if (options.root.classList.contains("hidden") || confirmDialog.isOpen()) return;
     if (event.ctrlKey && event.key.toLowerCase() === "z") {
       event.preventDefault();
       undo();
@@ -628,7 +650,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       render();
     } else if (event.key === "Escape") {
       event.preventDefault();
-      close();
+      if (!event.repeat) void close();
     }
   });
 

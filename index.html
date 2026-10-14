@@ -22,14 +22,11 @@
             <summary data-i18n="menu.file">文件</summary>
             <div class="app-menu-popover" role="menu">
               <button id="btn-open" type="button" role="menuitem" data-i18n-title="toolbar.openTitle"><span data-i18n="toolbar.open">打开文件夹</span><kbd>Ctrl+O</kbd></button>
+              <button id="btn-settings" type="button" role="menuitem" data-i18n="toolbar.settings">设置</button>
             </div>
           </details>
           <details class="app-menu">
-            <summary data-i18n="menu.edit">编辑</summary>
-            <div class="app-menu-popover" role="menu">
-              <button id="btn-enter-edit" type="button" role="menuitem" disabled><span data-i18n="toolbar.enterEdit">进入编辑模式</span><kbd>Ctrl+E</kbd></button>
-              <button id="btn-settings" type="button" role="menuitem" data-i18n="toolbar.settings">设置</button>
-            </div>
+            <summary data-i18n="menu.capture">截图</summary>
           </details>
           <details class="app-menu">
             <summary data-i18n="menu.help">帮助</summary>
@@ -356,6 +353,41 @@
                   <input id="set-experimental-auto-scroll" type="checkbox" />
                 </div>
               </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="capture">
+              <span class="settings-group-title" data-i18n="settings.selectionBorder">选区框外观</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-selection-border-mode" data-i18n="settings.selectionBorderMode">颜色模式</label>
+                    <span class="setting-desc" data-i18n="settings.selectionBorder.desc">保存后从下次截图生效，仅改变选区框的显示。</span>
+                  </div>
+                  <select id="set-selection-border-mode">
+                    <option value="classic" data-i18n="settings.selectionBorderClassic">经典黑白虚线</option>
+                    <option value="custom" data-i18n="settings.selectionBorderCustom">自定义</option>
+                  </select>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-selection-border-color" data-i18n="settings.selectionBorderColor">框线颜色</label>
+                    <span class="setting-desc" data-i18n="settings.selectionBorderCustomHint">选择自定义模式后可调整。</span>
+                  </div>
+                  <input id="set-selection-border-color" type="color" value="#ffffff" />
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-selection-border-style" data-i18n="settings.selectionBorderStyle">框线样式</label>
+                  </div>
+                  <select id="set-selection-border-style">
+                    <option value="solid" data-i18n="settings.selectionBorderSolid">实线</option>
+                    <option value="dashed" data-i18n="settings.selectionBorderDashed">虚线</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="capture">
               <span class="settings-group-title" data-i18n="settings.group.lanShare">局域网分享</span>
               <div class="settings-card">
                 <div class="setting-row">

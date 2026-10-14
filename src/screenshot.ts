@@ -811,6 +811,7 @@ async function restoreRunningScrollSession() {
 
 async function refreshConfig() {
   await refreshScreenshotConfig({
+    setSelectionBorderAppearance: selectionOverlay.setAppearance,
     setMagnifierEnabled: (enabled) => {
       magnifierActive = enabled;
     },

@@ -43,6 +43,7 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/installer-hooks.nsh",
         "installMode": "currentUser",
         "languages": ["SimpChinese", "English", "Japanese"],
         "displayLanguageSelector": true

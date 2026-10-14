@@ -1,16 +1,27 @@
 .screenshot-background { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 #overlay-canvas { z-index: 1; cursor: inherit; }
 .screenshot-selection-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
-.screenshot-selection-mask { position: absolute; background: rgba(0, 0, 0, .5); }
+.screenshot-selection-mask { position: absolute; background: rgba(0, 0, 0, .65); }
 .screenshot-selection-frame { position: absolute; left: 0; top: 0; }
 .screenshot-selection-border {
   position: absolute;
   inset: -1px;
-  border: 1px solid #fff;
   box-sizing: border-box;
-  /* 明暗两层连续轮廓，跨过白色窗口或深色桌面时都保留清晰边界。 */
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .8);
+  /* 清晰的黑白交替细线：白段 8px、黑段 4px，不使用模糊暗影。 */
+  background:
+    repeating-linear-gradient(to right, #fff 0 8px, #000 8px 12px) left top / 12px 1px repeat-x,
+    repeating-linear-gradient(to right, #fff 0 8px, #000 8px 12px) left bottom / 12px 1px repeat-x,
+    repeating-linear-gradient(to bottom, #fff 0 8px, #000 8px 12px) left top / 1px 12px repeat-y,
+    repeating-linear-gradient(to bottom, #fff 0 8px, #000 8px 12px) right top / 1px 12px repeat-y;
 }
+.screenshot-selection-overlay[data-border-mode="custom"] .screenshot-selection-border {
+  background:
+    repeating-linear-gradient(to right, var(--selection-border-color) 0 8px, transparent 8px 12px) left top / 12px 1px repeat-x,
+    repeating-linear-gradient(to right, var(--selection-border-color) 0 8px, transparent 8px 12px) left bottom / 12px 1px repeat-x,
+    repeating-linear-gradient(to bottom, var(--selection-border-color) 0 8px, transparent 8px 12px) left top / 1px 12px repeat-y,
+    repeating-linear-gradient(to bottom, var(--selection-border-color) 0 8px, transparent 8px 12px) right top / 1px 12px repeat-y;
+}
+.screenshot-selection-overlay[data-border-mode="custom"][data-border-style="solid"] .screenshot-selection-border { background: none; border: 1px solid var(--selection-border-color); }
 .screenshot-selection-handle {
   position: absolute;
   width: 8px;

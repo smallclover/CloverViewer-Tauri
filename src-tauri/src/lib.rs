@@ -2,7 +2,7 @@
 //!
 //! 从 CloverViewer (egui/eframe 版) 迁移的核心结构：
 //! - 单实例 + 二次启动唤起主窗口
-//! - 托盘（左键显示 / 右键菜单：显示、退出）
+//! - 托盘（左键显示 / 右键菜单：截图、滚动截图、设置与退出）
 //! - 全局热键 Alt+S 进截图、Alt+Shift+S 进滚动截图（被占用时自动降级）
 //! - 窗口位置/尺寸持久化（写入同一份 config.json）
 //! - minimize_on_close：关窗隐藏到托盘
@@ -25,14 +25,11 @@ mod screenshot_window;
 pub mod scroll_capture;
 mod startup;
 mod thumbnails;
+mod tray_menu;
 mod ui_scale;
 
 use config::ConfigStore;
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, RunEvent,
-};
+use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const MAIN_WINDOW: &str = "main";
@@ -134,6 +131,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
+            tray_menu::start_capture,
             commands::set_desktop_pet_enabled,
             commands::set_desktop_pet_scale,
             commands::get_desktop_pet_cursor_position,
@@ -300,37 +298,7 @@ pub fn run() {
                 }
             }
 
-            // 托盘
-            let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
-
-            TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("CloverViewer")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        show_main_window(app);
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        show_main_window(app);
-                    }
-                })
-                .build(app)?;
+            tray_menu::create(app)?;
 
             // 开机自启：每次启动同步一次注册表项（保证 exe 路径最新）
             if launch_on_startup {

@@ -1,4 +1,10 @@
+import type { AppConfig } from "../api";
 import type { Rect } from "./geometry";
+
+export type SelectionBorderAppearance = Pick<
+  AppConfig,
+  "selection_border_mode" | "selection_border_color" | "selection_border_style"
+>;
 
 interface SelectionOverlayOptions {
   root: HTMLElement;
@@ -82,5 +88,15 @@ export function createSelectionOverlay({ root, canvas, getViewport }: SelectionO
       ? `inset(${(y / height) * 100}% ${((width - right) / width) * 100}% ${((height - bottom) / height) * 100}% ${(x / width) * 100}%)`
       : "";
   };
-  return { update, hide, element };
+  const setAppearance = (config: SelectionBorderAppearance) => {
+    element.dataset.borderMode = config.selection_border_mode === "custom" ? "custom" : "classic";
+    element.dataset.borderStyle = config.selection_border_style === "solid" ? "solid" : "dashed";
+    element.style.setProperty(
+      "--selection-border-color",
+      /^#[0-9a-f]{6}$/i.test(config.selection_border_color)
+        ? config.selection_border_color
+        : "#ffffff",
+    );
+  };
+  return { update, hide, element, setAppearance };
 }

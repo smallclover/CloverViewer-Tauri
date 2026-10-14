@@ -44,4 +44,18 @@ CloverViewer 使用 Tauri Updater 与 GitHub Releases 分发 Windows 更新。�
 Windows 上由 updater 启动 NSIS、退出旧进程，并由安装程序完成重启，不再额外调用
 未注册的 process 插件。选择「稍后更新」或操作结束后释放 updater 资源。
 
+安装前的 `src-tauri/windows/installer-hooks.nsh` 在更新模式下最多等待约 10 秒，
+让旧进程释放安装目录中的可执行文件，再交给 Tauri 的 Restart Manager 检查。
+它只检查文件是否可写，不修改文件内容、不按进程名称强制结束程序；
+手动安装不经过这段等待，旧版客户端下载新安装器时也能使用这段处理。
+
+如果安装器提示「无法关闭 CloverViewer」，说明已经进入安装阶段。
+先从托盘菜单退出应用，并停止 AI 客户端启动的 CloverViewer MCP 服务，再重试安装。
+只关闭主窗口可能会隐藏到托盘；如果曾以管理员身份启动应用，请先退出该实例。
+持续占用或权限差异仍可能导致安装失败，等待机制不能解除这些占用。
+
+安装器等待逻辑可在 Windows 上用 `powershell -File tools/test-installer-wait.ps1` 验证；
+如 NSIS 不在默认缓存路径，通过 `-MakeNsis` 指定编译器。测试在独立临时目录编译
+实际安装钩子，覆盖无文件、无占用、解除占用、持续占用超时和手动安装跳过等待。
+
 更新私钥一旦遗失，已发布的客户端将无法信任新包；发布前务必确认离线备份可用。

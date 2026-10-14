@@ -126,31 +126,27 @@ export function createEditorToolbar(options: ToolbarOptions) {
   element.append(context, dock);
 
   const saving = group("saving", "editor.saveOptions");
-  const saveAs = button(
-    saving,
-    "editor.saveAs",
-    () => {
-      closePanels();
-      options.saveAs();
-    },
-    true,
-  );
-  saveAs.classList.add("image-editor-save-primary");
   const popup = document.createElement("div");
   popup.className = "image-editor-save-panel";
   popup.hidden = true;
   popup.id = "image-editor-save-panel";
   popup.setAttribute("role", "group");
-  const more = button(saving, "editor.saveOptions", () => {
-    if (!popup.hidden) {
-      closePanels();
-      return;
-    }
-    popup.hidden = false;
-    more.setAttribute("aria-expanded", "true");
-  });
-  more.setAttribute("aria-controls", popup.id);
-  more.setAttribute("aria-expanded", "false");
+  const saveOptions = button(
+    saving,
+    "editor.saveOptions",
+    () => {
+      if (!popup.hidden) {
+        closePanels();
+        return;
+      }
+      popup.hidden = false;
+      saveOptions.setAttribute("aria-expanded", "true");
+    },
+    true,
+  );
+  saveOptions.classList.add("image-editor-save-primary");
+  saveOptions.setAttribute("aria-controls", popup.id);
+  saveOptions.setAttribute("aria-expanded", "false");
   popup.append(translated("strong", "editor.saveOptions"));
   const format = document.createElement("select");
   format.className = "image-editor-select";
@@ -161,22 +157,30 @@ export function createEditorToolbar(options: ToolbarOptions) {
   outputScale.className = "image-editor-select";
   for (const value of [100, 75, 50, 25]) outputScale.append(new Option(`${value}%`, String(value)));
   field(popup, "editor.scale", outputScale);
-  button(
-    popup,
-    "editor.overwrite",
-    () => {
+  const saveActions = document.createElement("div");
+  saveActions.className = "image-editor-save-actions";
+  const saveAction = (key: string, hintKey: string, action: () => void) => {
+    const node = button(saveActions, key, () => {
       closePanels();
-      options.overwrite();
-    },
-    true,
-  );
+      action();
+    });
+    const text = document.createElement("span");
+    text.className = "image-editor-save-action-text";
+    const hint = translated("span", hintKey);
+    hint.className = "image-editor-save-hint";
+    text.append(translated("span", key), hint);
+    node.append(text);
+  };
+  saveAction("editor.saveAs", "editor.saveAsHint", options.saveAs);
+  saveAction("editor.overwrite", "editor.overwriteHint", options.overwrite);
+  popup.append(saveActions);
   saving.append(popup);
   options.workspace.append(element);
   const selects = [width, format, outputScale].map(createSelectControl);
 
   function closePanels() {
     popup.hidden = true;
-    more.setAttribute("aria-expanded", "false");
+    saveOptions.setAttribute("aria-expanded", "false");
     for (const select of selects) select.close();
   }
   document.addEventListener("pointerdown", (event) => {
@@ -188,7 +192,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
     event.preventDefault();
     event.stopPropagation();
     closePanels();
-    more.focus();
+    saveOptions.focus();
   });
 
   const refreshContext = () => {

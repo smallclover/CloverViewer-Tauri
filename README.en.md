@@ -44,16 +44,17 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Folder browsing**: opening a folder loads all images automatically; sorting and thumbnail-size controls appear only when images are available
 *   **Quick navigation**: ←/→ to switch; the current image takes priority over bounded adjacent-image preloading. Images transition smoothly after decoding, and rapid switching cannot display an obsolete selection
 *   **Nearby image previews**: a floating strip at the bottom of single-image view shows the current image and up to two neighbors on each side; click to switch images. The current item is larger, and narrow windows allow horizontal scrolling. The button before the filename in the status bar shows or hides the strip, remembers your choice and stays in sync with Settings → View without reserving separate canvas space
-*   **Smooth zoom**: mouse-wheel zoom + drag to pan, adjustable zoom sensitivity; fit-to-window uses an arrow cursor, and draggable views use a hand cursor
+*   **Smooth zoom**: wheel zoom, actual size and fit-to-window use smooth transitions; continuous scrolling stays centered on the cursor and dragging takes over immediately. Sensitivity is adjustable and reduced-motion preferences are respected. Fit-to-window uses an arrow cursor, and draggable views use a hand cursor
 *   **Drag & drop open**: drag images or a folder directly into the window
 *   **Image properties**: name / path / dimensions / size / modified time + EXIF (camera, ISO, aperture, shutter speed, focal length, lens), with an option to open the containing folder
 *   **Right-click menu**: copy image, copy path, view, edit image
 *   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
-*   **Image editing**: enter from the toolbar, Edit menu, or right-click menu; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete, undo/redo, and export PNG / JPEG / WebP or overwrite the source image. Cropping offers a rule-of-thirds grid, edge and corner handles, selection movement and a grayscale exterior; releasing the mouse centers and fits the retained area, with a stable scale during dragging and crop guides hidden when switching tools. The bottom toolbar shows parameters for the active tool, with format and output scale in the save panel
+*   **Image editing**: enter from the right-click menu or Ctrl+E; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete and undo/redo. Cropping offers a rule-of-thirds grid, edge and corner handles and selection movement; the exterior is dimmed while retaining its colors. Releasing the mouse smoothly centers and fits the retained area, with a stable scale during dragging. The bottom toolbar shows active-tool parameters; Save options provides format, output scale, save a copy and overwrite. Overwriting and discarding unsaved edits use an in-app confirmation
 
 ### 📸 Screenshot & Annotation
 
+*   **Selection appearance**: classic black-and-white dashes by default; Settings → Screenshot offers custom colors with dashed or solid lines, and a darker exterior mask makes the selection clearer
 *   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background, transfers raw pixels directly, and aligns the window and content area before showing the capture to reduce delay and occasional image compression. The background stays static while dragging the selection; masks, borders and the magnifier update independently to reduce full-image redraws. Exports retain the original pixels
 *   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended. Detected fixed headers are kept from the first frame and footers from the last accepted frame. Fixed sidebar texture is ignored during registration, but sidebars are not automatically cropped out; selecting just the article body is recommended. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; stroke, font and block sizes are set independently in original image pixels (px), retaining each size when switching tools during a session. Image editing adapts initial sizes and presets to the preview scale so annotations stay clear on large images shown smaller; resizing the window preserves chosen sizes and existing annotations. Screenshots and image editing share a transparent text box with visible circular corner markers that resizes to fit its content. Mosaic uses a brush-size ring and continuous strokes over fixed blocks sampled from the original image, keeping the preview consistent after releasing the mouse
@@ -90,9 +91,9 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly; synchronizes the page language and adapts settings descriptions and editing controls to narrow windows
 *   **Light/dark theme**: follow system / dark / light; settings and image editing share rounded dropdown menus with mouse and keyboard selection
 *   **Interface scale**: defaults to 100%; choose 110% / 125% / 150% in Settings → General → Language & appearance. The viewer and screenshot interface update immediately and remember your choice; screenshots keep their original pixel dimensions
-*   **Title-bar menus**: File (open folder) / Edit (settings) / Help (about CloverViewer); close them by clicking elsewhere or pressing Esc
+*   **Title-bar menus**: File (open image, open folder, settings) / Capture (screenshot, scrolling screenshot, capture settings) / Help (shortcuts, check for updates, about). F1 opens a two-column shortcut guide; click elsewhere or press Esc to close a menu
 *   **Global hotkey**: default **Alt+S** to summon the screenshot (available from tray; customizable)
-*   **System tray**: optionally minimize to tray on close
+*   **System tray**: optionally minimize to tray on close; the right-click menu provides the main window, screenshot, scrolling screenshot, settings and quit. Menu language and capture-hotkey hints follow your settings
 *   **Launch on startup**: writes `HKCU\...\Run` registry; `--startup` argument silently starts into tray
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
@@ -159,9 +160,11 @@ npm run tauri build
 | ← / → | Previous / Next |
 | Mouse-wheel | Zoom (single-image view) |
 | Ctrl+O | Open folder |
+| Ctrl+Shift+O | Open image |
 | Ctrl+E | Edit current image |
+| F1 | Open shortcut guide |
 | Tab | Switch grid / single-image view; move focus inside preview controls |
-| Esc | Return from single-image view to grid |
+| Esc | Return from single-image view to grid; leave image editing, asking first if changes are unsaved |
 | 0 / 1 | Fit to window / actual size |
 | R / H / V | Rotate / flip horizontally / flip vertically |
 

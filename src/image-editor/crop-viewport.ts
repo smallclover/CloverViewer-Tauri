@@ -27,12 +27,33 @@ interface CropViewportOptions {
   surface: HTMLElement;
   getCrop: () => Rect | null;
   isCropping: () => boolean;
-  onLayout: () => void;
+  onLayout: (animating: boolean) => void;
 }
+
+type ViewLayout = NonNullable<ReturnType<typeof fitCropViewport>>;
 
 export function createCropViewport(options: CropViewportOptions) {
   const { canvas, surface } = options;
   let dragging = false;
+  let displayed: ViewLayout | null = null;
+  let animationFrame: number | null = null;
+  let animationGeneration = 0;
+  const stopAnimation = () => {
+    animationGeneration++;
+    if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    animationFrame = null;
+  };
+  const applyLayout = (layout: ViewLayout, animating: boolean) => {
+    displayed = layout;
+    Object.assign(canvas.style, {
+      left: `${layout.left}px`,
+      top: `${layout.top}px`,
+      width: `${layout.width}px`,
+      height: `${layout.height}px`,
+    });
+    // 每帧同步裁剪框和视口大小的预览，保持手柄尺寸及指针映射一致。
+    options.onLayout(animating);
+  };
   const updateClip = () => {
     const crop = options.getCrop();
     canvas.style.clipPath =
@@ -40,9 +61,10 @@ export function createCropViewport(options: CropViewportOptions) {
         ? `inset(${(crop.y / canvas.height) * 100}% ${((canvas.width - crop.x - crop.w) / canvas.width) * 100}% ${((canvas.height - crop.y - crop.h) / canvas.height) * 100}% ${(crop.x / canvas.width) * 100}%)`
         : "";
   };
-  const updateLayout = () => {
+  const updateLayout = (animate = false) => {
     updateClip();
     if (dragging) return;
+    stopAnimation();
     const image = { w: canvas.width, h: canvas.height };
     const selection = options.getCrop() ?? { x: 0, y: 0, ...image };
     const layout = fitCropViewport(image, selection, {
@@ -50,23 +72,51 @@ export function createCropViewport(options: CropViewportOptions) {
       h: surface.clientHeight,
     });
     if (!layout) return;
-    Object.assign(canvas.style, {
-      left: `${layout.left}px`,
-      top: `${layout.top}px`,
-      width: `${layout.width}px`,
-      height: `${layout.height}px`,
-    });
-    options.onLayout();
+    const start = displayed;
+    if (
+      !animate ||
+      !start ||
+      typeof requestAnimationFrame !== "function" ||
+      (typeof matchMedia === "function" &&
+        matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+      (start.left === layout.left && start.top === layout.top && start.scale === layout.scale)
+    ) {
+      applyLayout(layout, false);
+      return;
+    }
+    const generation = animationGeneration;
+    let startedAt: number | null = null;
+    const step = (time: number) => {
+      if (generation !== animationGeneration) return;
+      animationFrame = null;
+      startedAt ??= time;
+      const progress = Math.min(1, (time - startedAt) / 220);
+      const eased = 1 - (1 - progress) ** 3;
+      const interpolate = (from: number, to: number) => from + (to - from) * eased;
+      applyLayout(
+        {
+          left: interpolate(start.left, layout.left),
+          top: interpolate(start.top, layout.top),
+          width: interpolate(start.width, layout.width),
+          height: interpolate(start.height, layout.height),
+          scale: interpolate(start.scale, layout.scale),
+        },
+        progress < 1,
+      );
+      if (progress < 1) animationFrame = requestAnimationFrame(step);
+    };
+    animationFrame = requestAnimationFrame(step);
   };
-  new ResizeObserver(updateLayout).observe(surface);
+  new ResizeObserver(() => updateLayout()).observe(surface);
   return {
-    fit: updateLayout,
+    fit: () => updateLayout(),
     begin: () => {
+      stopAnimation();
       dragging = true;
     },
-    end: () => {
+    end: (cancelled = false) => {
       dragging = false;
-      updateLayout();
+      updateLayout(!cancelled);
     },
   };
 }

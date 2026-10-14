@@ -35,6 +35,10 @@ export interface AppConfig {
   hotkeys: HotkeysConfig;
   minimize_on_close: boolean;
   magnifier_enabled: boolean;
+  /** 经典黑白虚线，或自定义颜色与线型。 */
+  selection_border_mode: "classic" | "custom";
+  selection_border_color: string;
+  selection_border_style: "solid" | "dashed";
   /** 默认关闭；开启后滚动截图面板才显示“自动滚动（试验）”。 */
   experimental_auto_scroll: boolean;
   screenshot_hides_main_window: boolean;
@@ -56,6 +60,14 @@ export interface AppConfig {
 export const getConfig = () => invoke<AppConfig>("get_config");
 
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
+
+/** 顶部菜单与托盘共用原有截图入口。 */
+export const startCapture = (scroll = false) => invoke<void>("start_capture", { scroll });
+export interface TrayAction {
+  action: "settings";
+}
+export const listenTrayAction = (handler: (action: TrayAction) => void): Promise<UnlistenFn> =>
+  listen<TrayAction>("tray-action", (event) => handler(event.payload));
 
 /** 显示或隐藏桌面小宠物，并把偏好写入应用配置。 */
 export const setDesktopPetEnabled = (enabled: boolean) =>

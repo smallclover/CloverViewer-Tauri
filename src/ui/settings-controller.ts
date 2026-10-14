@@ -53,6 +53,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const colorHotkey = element<HTMLInputElement>("set-color-hotkey");
   const scrollHotkey = element<HTMLInputElement>("set-scroll-hotkey");
   const magnifier = element<HTMLInputElement>("set-magnifier");
+  const borderMode = element<HTMLSelectElement>("set-selection-border-mode");
+  const borderColor = element<HTMLInputElement>("set-selection-border-color");
+  const borderStyle = element<HTMLSelectElement>("set-selection-border-style");
   const experimentalAutoScroll = element<HTMLInputElement>("set-experimental-auto-scroll");
   const minimize = element<HTMLInputElement>("set-minimize");
   const desktopPet = element<HTMLInputElement>("set-desktop-pet");
@@ -66,6 +69,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const selects = [
     language,
     theme,
+    borderMode,
+    borderStyle,
     uiScale,
     cacheRetention,
     lanShareDuration,
@@ -86,6 +91,11 @@ export function createSettingsController(options: SettingsControllerOptions) {
   let activeTab = "general";
   let clearingCache = false;
   let updateResolver: ((install: boolean) => void) | undefined;
+
+  const refreshBorderControls = () => {
+    borderColor.disabled = borderStyle.disabled = borderMode.value !== "custom";
+    for (const select of selects) select.refresh();
+  };
 
   const tabOf = (button: HTMLButtonElement) => button.dataset.settingsTab ?? "general";
 
@@ -190,6 +200,12 @@ export function createSettingsController(options: SettingsControllerOptions) {
     colorHotkey.value = config.hotkeys.copy_color;
     scrollHotkey.value = config.hotkeys.scroll_capture || "Alt+Shift+S";
     magnifier.checked = config.magnifier_enabled;
+    borderMode.value = config.selection_border_mode ?? "classic";
+    borderColor.value = /^#[0-9a-f]{6}$/i.test(config.selection_border_color)
+      ? config.selection_border_color
+      : "#ffffff";
+    borderStyle.value = config.selection_border_style === "solid" ? "solid" : "dashed";
+    refreshBorderControls();
     experimentalAutoScroll.checked = config.experimental_auto_scroll;
     minimize.checked = config.minimize_on_close;
     desktopPet.checked = config.desktop_pet_enabled;
@@ -291,6 +307,14 @@ export function createSettingsController(options: SettingsControllerOptions) {
     setImagePreviewStripEnabled(imagePreviewStrip.checked),
   );
   magnifier.addEventListener("change", () => save({ magnifier_enabled: magnifier.checked }));
+  borderMode.addEventListener("change", () => {
+    save({ selection_border_mode: borderMode.value as AppConfig["selection_border_mode"] });
+    refreshBorderControls();
+  });
+  borderColor.addEventListener("change", () => save({ selection_border_color: borderColor.value }));
+  borderStyle.addEventListener("change", () =>
+    save({ selection_border_style: borderStyle.value as AppConfig["selection_border_style"] }),
+  );
   experimentalAutoScroll.addEventListener("change", () =>
     save({ experimental_auto_scroll: experimentalAutoScroll.checked }),
   );
@@ -439,6 +463,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
 
   return {
     open,
+    selectTab,
+    checkForUpdate,
     close,
     setImagePreviewStripEnabled,
     isOpen: () => !overlay.classList.contains("hidden"),

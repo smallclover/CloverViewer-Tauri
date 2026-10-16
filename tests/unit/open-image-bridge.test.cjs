@@ -9,7 +9,7 @@ const compile = (source) => ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText;
 
-async function harness(ready = true) {
+async function harness(ready = true, opened = true) {
   const events = [];
   let receive;
   const toast = (message, kind, persistent) => events.push({ toast: message, kind, persistent });
@@ -30,7 +30,7 @@ async function harness(ready = true) {
   let bound;
   runInNewContext(compile(source.slice(start, end)), {
     bindOpenImageBridge: (...args) => { bound = bridge.bindOpenImageBridge(...args); },
-    openFileOrFolder: async (path) => events.push({ opened: path }),
+    openFileOrFolder: async (path) => { events.push({ opened: path }); return opened; },
     viewerSession: { images: [entry] },
     imageOcrController: {
       setResult: (path, text) => {
@@ -81,4 +81,11 @@ test("an OCR image that fails to display leaves an error instead of reporting su
   assert.equal(events.at(-1).kind, "error");
   assert.match(events.at(-1).toast, /toast.openFailed/);
   assert.equal(events.some((event) => event.hide), false);
+});
+
+test("cancelling an external image open does not report success or replace OCR content", async () => {
+  const {receive, events} = await harness(true, false);
+  await receive({path: "C:/captures/image.png", ocr_text: "Text"});
+  assert.equal(events.some(event => event.ocr || event.panel || event.kind === "success"), false);
+  assert.equal(events.at(-1).hide, true);
 });

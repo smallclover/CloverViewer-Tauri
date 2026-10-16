@@ -7,11 +7,15 @@
 //! - 窗口位置/尺寸持久化（写入同一份 config.json）
 //! - minimize_on_close：关窗隐藏到托盘
 
+mod atomic_file;
 mod commands;
 mod config;
 mod desktop_pet;
+mod hotkeys;
 mod image_info;
+mod image_io;
 mod image_scan;
+mod image_tasks;
 mod lan_share;
 pub mod mcp;
 mod ocr;
@@ -29,8 +33,7 @@ mod tray_menu;
 mod ui_scale;
 
 use config::ConfigStore;
-use tauri::{AppHandle, Manager, RunEvent};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 const MAIN_WINDOW: &str = "main";
 
@@ -101,6 +104,11 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
+fn request_app_exit(app: &AppHandle) {
+    show_main_window(app);
+    let _ = app.emit_to(MAIN_WINDOW, "app-exit-requested", ());
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = config::load_config();
@@ -121,6 +129,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(ConfigStore::new(config))
+        .manage(hotkeys::HotkeyBindings::default())
         .manage(desktop_pet::DesktopPetSwitchState::default())
         .manage(desktop_pet::DesktopPetMenuState::default())
         .manage(thumbnails::ThumbnailStore::new(512))
@@ -130,6 +139,8 @@ pub fn run() {
         .manage(StartupNotices::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
+            hotkeys::get_active_hotkeys,
+            commands::quit_app,
             commands::set_config,
             tray_menu::start_capture,
             commands::set_desktop_pet_enabled,
@@ -164,6 +175,7 @@ pub fn run() {
             lan_share::start_lan_share,
             lan_share::start_image_lan_share,
             lan_share::stop_lan_share,
+            lan_share::is_lan_share_active,
             ocr::ocr_image,
             scroll_capture::tauri::start_scroll_capture,
             scroll_capture::tauri::stop_scroll_capture,
@@ -229,74 +241,11 @@ pub fn run() {
                 ui_scale::apply(&win);
             }
 
-            // 注册全局截图热键（直接进入截图模式）
-            let gs = app.global_shortcut();
-            let hk_log = hotkey_show_screenshot.clone();
-            if let Err(e) =
-                gs.on_shortcut(hotkey_show_screenshot.as_str(), move |app, _sc, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        tracing::info!("热键触发: 截图 {hk_log}");
-                        screenshot::start_screenshot(app);
-                    }
-                })
-            {
-                tracing::warn!("热键 {hotkey_show_screenshot} 注册失败: {e}");
-            }
-
-            // 注册滚动截图专属热键（按下直接进「滚动截图待框选」态，省掉 Alt+S → S 两步）。
-            //
-            // 热键冲突在这类机器上是**常态**（微信/QQ/输入法/别的截图工具都在抢全局热键）：
-            // 被占用时按候选列表自动降级，并把「想用的 / 实际生效的」一并告诉前端去提示用户
-            // （PixPin 也是启动时提示冲突的做法）。注册不上也不影响其它入口（工具栏图标 / S 键）。
-            if hotkey_scroll_capture == hotkey_show_screenshot {
-                app.state::<StartupNotices>().push(StartupNotice {
-                    kind: "hotkey_conflict".into(),
-                    wanted: Some(hotkey_scroll_capture.clone()),
-                    used: None,
-                });
-                tracing::warn!("滚动截图热键与截图热键相同（{hotkey_scroll_capture}），跳过注册");
-            } else {
-                let mut candidates = vec![hotkey_scroll_capture.clone()];
-                for c in ["Alt+Shift+A", "Ctrl+Alt+S", "Ctrl+Shift+A", "Alt+Shift+Z"] {
-                    if !candidates.iter().any(|x| x == c) {
-                        candidates.push(c.to_string());
-                    }
-                }
-                let mut bound: Option<String> = None;
-                for (idx, cand) in candidates.iter().enumerate() {
-                    let cand_log = cand.clone();
-                    let r = gs.on_shortcut(cand.as_str(), move |app, _sc, event| {
-                        if event.state() == ShortcutState::Pressed {
-                            tracing::info!("热键触发: 滚动截图 {cand_log}");
-                            screenshot::start_scroll_screenshot(app);
-                        }
-                    });
-                    match r {
-                        Ok(_) => {
-                            if idx > 0 {
-                                app.state::<StartupNotices>().push(StartupNotice {
-                                    kind: "hotkey_fallback".into(),
-                                    wanted: Some(hotkey_scroll_capture.clone()),
-                                    used: Some(cand.clone()),
-                                });
-                                tracing::warn!(
-                                    "滚动截图热键 {hotkey_scroll_capture} 被占用，临时改用 {cand}"
-                                );
-                            }
-                            bound = Some(cand.clone());
-                            break;
-                        }
-                        Err(e) => tracing::warn!("滚动截图热键 {cand} 注册失败: {e}"),
-                    }
-                }
-                if bound.is_none() {
-                    app.state::<StartupNotices>().push(StartupNotice {
-                        kind: "hotkey_conflict".into(),
-                        wanted: Some(hotkey_scroll_capture.clone()),
-                        used: None,
-                    });
-                }
-            }
+            hotkeys::register_startup(
+                app.handle(),
+                &hotkey_show_screenshot,
+                &hotkey_scroll_capture,
+            );
 
             tray_menu::create(app)?;
 
@@ -403,7 +352,9 @@ pub fn run() {
             if let RunEvent::Exit = event {
                 // 退出时保存配置（窗口位置/尺寸等）
                 let store = app.state::<ConfigStore>();
-                config::save_config(&store.snapshot());
+                if let Err(error) = config::save_config(&store.snapshot()) {
+                    tracing::error!("保存退出配置失败: {error}");
+                }
             }
         });
 }

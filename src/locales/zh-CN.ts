@@ -297,6 +297,13 @@ export const zh = {
   "ctx.edit": "编辑图片",
   // 图片编辑器
   "editor.title": "编辑图片",
+  "editor.zoomIn": "放大预览",
+  "editor.exportHint":
+    "导出为静态图片，动态图仅保留一帧，不保留原始 EXIF/ICC。JPEG 使用 90% 质量，透明区域填白。",
+  "editor.zoomOut": "缩小预览",
+  "shot.shareExpired": "分享已失效，请重新生成链接。",
+  "shot.shareStopFailed": "停止失败，请重试",
+  "editor.zoomHelp": "滚轮缩放；按住空格或中键拖动平移；0 适应窗口，1 实际大小。",
   "editor.select": "选择",
   "editor.crop": "裁剪",
   "editor.rotate": "旋转",

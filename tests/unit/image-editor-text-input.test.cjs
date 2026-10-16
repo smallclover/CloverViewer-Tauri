@@ -85,10 +85,12 @@ async function setup() {
         return toolbar;
       } };
       if (name === "./image-editor-loader") return { createImageEditorLoader: () => ({
-        load: async () => ({ naturalWidth: 2000, naturalHeight: 1000 }), cancel: () => {}, isLoading: () => false,
+        load: async () => ({ naturalWidth: 2000, naturalHeight: 1000, removeAttribute() {} }), cancel: () => {}, isLoading: () => false,
       }) };
       if (name === "../image-editor/crop-overlay") return { createCropOverlay: () => ({ update: () => {}, refreshImage: () => {}, cancel: () => {} }) };
-      if (name === "../image-editor/crop-viewport") return { createCropViewport: () => ({ fit: () => {}, begin: () => {}, end: () => {} }) };
+      if (name === "../image-editor/crop-viewport") return { createCropViewport: () => ({ fit: () => {}, refresh: () => {}, begin: () => {}, end: () => {} }) };
+      if (name === "../image-editor/zoom-toolbar") return {createEditorZoomToolbar: () => ({refreshTranslations() {}, setScale() {}})};
+      if (name === "../image-editor/viewport-input") return {bindEditorViewportInput: () => ({reset() {}})};
       if (name === "../image-editor/mosaic-cursor") return { createMosaicCursor: () => ({ refresh: () => {}, reset: () => {} }) };
       if (name === "../image-editor/annotation-renderer") return { drawAnnotation: (_target, shape) => drawn.push(shape) };
       if (name === "../image-editor/annotation-layers") {
@@ -159,6 +161,26 @@ test("Escape leaves an untouched editor without a discard prompt", async () => {
   assert.equal(fixture.confirmations.length, 0);
   assert.equal(fixture.closed(), 1);
   assert.equal(fixture.root.classList.contains("hidden"), true);
+});
+
+test("rectangle, ellipse and arrow commit the exact release point without a final move", async () => {
+  for (const tool of ["rect", "circle", "arrow"]) {
+    const f = await setup(); f.toolbarActions.setTool(tool); f.click(200,150);
+    f.canvas.fire("pointermove", {clientX:300, clientY:200});
+    f.canvas.fire("pointerup", {clientX:400, clientY:250, pointerId:1});
+    assert.equal(f.drawn.at(-1).end.x, 1400); assert.equal(f.drawn.at(-1).end.y, 850);
+  }
+});
+
+test("cancelled or lost pointer capture discards unfinished drawing and ignores late release", async () => {
+  for (const event of ["pointercancel", "lostpointercapture"]) {
+    const f = await setup(); f.toolbarActions.setTool("rect"); f.click();
+    f.canvas.fire("pointermove", {clientX:400, clientY:250}); f.canvas.fire(event);
+    const count = f.drawn.length;
+    f.canvas.fire("pointerup", {clientX:400, clientY:250, pointerId:1});
+    assert.equal(f.drawn.length, count); f.windowKey();
+    assert.equal(f.confirmations.length, 0); assert.equal(f.closed(), 1);
+  }
 });
 
 test("Escape after annotation waits for confirmation; cancellation retains edits and repeated Escape cannot bypass it", async () => {

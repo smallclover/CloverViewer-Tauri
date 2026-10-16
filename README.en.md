@@ -41,7 +41,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 
 *   **Dual view modes**: grid view (thumbnails) and single-image view (large image)
 *   **Large folders stay smooth**: virtualized grid scrolling with bounded thumbnail concurrency, request deduplication, and caching; queued work that leaves the visible range is skipped
-*   **Folder browsing**: opening a folder loads all images automatically; sorting and thumbnail-size controls appear only when images are available
+*   **Folder browsing**: opening a folder loads all images automatically; sorting and thumbnail-size controls appear only when images are available; F5 / Ctrl+R refreshes the folder while preserving the current image and grid position, and saving a copy in the same folder updates the list
 *   **Quick navigation**: ←/→ to switch; the current image takes priority over bounded adjacent-image preloading. Images transition smoothly after decoding, and rapid switching cannot display an obsolete selection
 *   **Nearby image previews**: a floating strip at the bottom of single-image view shows the current image and up to two neighbors on each side; click to switch images. The current item is larger, and narrow windows allow horizontal scrolling. The button before the filename in the status bar shows or hides the strip, remembers your choice and stays in sync with Settings → View without reserving separate canvas space
 *   **Smooth zoom**: wheel zoom, actual size and fit-to-window use smooth transitions; continuous scrolling stays centered on the cursor and dragging takes over immediately. Sensitivity is adjustable and reduced-motion preferences are respected. Fit-to-window uses an arrow cursor, and draggable views use a hand cursor
@@ -50,7 +50,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Right-click menu**: copy image, copy path, view, edit image
 *   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
-*   **Image editing**: enter from the right-click menu or Ctrl+E; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete and undo/redo. Cropping offers a rule-of-thirds grid, edge and corner handles and selection movement; the exterior is dimmed while retaining its colors. Releasing the mouse smoothly centers and fits the retained area, with a stable scale during dragging. The bottom toolbar shows active-tool parameters; Save options provides format, output scale, save a copy and overwrite. Overwriting and discarding unsaved edits use an in-app confirmation
+*   **Image editing**: enter from the right-click menu or Ctrl+E; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete and undo/redo. Cropping offers a rule-of-thirds grid, edge and corner handles and selection movement; the exterior is dimmed while retaining its colors. Releasing the mouse smoothly centers and fits the retained area, with a stable scale during dragging. The bottom toolbar shows active-tool parameters; Save options provides format, output scale, save a copy and overwrite. Overwriting and discarding unsaved edits use an in-app confirmation. Small previews enlarge automatically up to 2×; wheel and button zoom, fit, 100%, and Space/middle-button panning are supported. Edits made while saving still require confirmation before exit. Exports are static and omit original EXIF/ICC data; JPEG uses 90% quality with white behind transparent pixels
 
 ### 📸 Screenshot & Annotation
 
@@ -89,7 +89,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 ### ⚙️ System Features
 
 *   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly; synchronizes the page language and adapts settings descriptions and editing controls to narrow windows
-*   **Light/dark theme**: follow system / dark / light; settings and image editing share rounded dropdown menus with mouse and keyboard selection
+*   **Light/dark theme**: follow system / dark / light; settings and image editing share rounded dropdown menus with mouse and keyboard selection; system-theme changes apply immediately
 *   **Interface scale**: defaults to 100%; choose 110% / 125% / 150% in Settings → General → Language & appearance. The viewer and screenshot interface update immediately and remember your choice; screenshots keep their original pixel dimensions
 *   **Title-bar menus**: File (open image, open folder, settings) / Capture (screenshot, scrolling screenshot, capture settings) / Help (shortcuts, check for updates, about). F1 opens a two-column shortcut guide; click elsewhere or press Esc to close a menu
 *   **Global hotkey**: default **Alt+S** to summon the screenshot (available from tray; customizable)
@@ -104,7 +104,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 
 ## 🖼️ Supported Formats
 
-PNG · JPEG · GIF · BMP · WebP · TIFF
+PNG · JPEG · GIF · BMP · WebP · TIFF (.tif / .tiff) · AVIF
 
 ## 🔧 Tech Stack
 
@@ -162,6 +162,8 @@ npm run tauri build
 | Ctrl+O | Open folder |
 | Ctrl+Shift+O | Open image |
 | Ctrl+E | Edit current image |
+| F5 / Ctrl+R | Refresh the current folder and preserve position; prevent page reload while editing |
+| Space + Drag / Middle Drag | Pan the editing preview |
 | F1 | Open shortcut guide |
 | Tab | Switch grid / single-image view; move focus inside preview controls |
 | Esc | Return from single-image view to grid; leave image editing, asking first if changes are unsaved |

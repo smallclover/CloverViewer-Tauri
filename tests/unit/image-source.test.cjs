@@ -5,6 +5,17 @@ const { createImageSourceResolver } = require("../../.unit-test-dist/viewer/imag
 const webImage = { path: "C:/images/photo.png", web_supported: true };
 const fallbackImage = { path: "C:/images/photo.tiff", web_supported: false };
 
+test("fallback cache enforces its byte budget and file versions", async () => {
+  let calls = 0;
+  const resolver = createImageSourceResolver({maxBytes:16, fileSrc:path=>path, readImageData:async()=>{calls++;return "12345678";}});
+  await resolver.for({...fallbackImage, modified:"first"});
+  await resolver.for({...fallbackImage, modified:"second"});
+  await resolver.for({...fallbackImage, modified:"first"});
+  assert.equal(calls,3);
+  const large = createImageSourceResolver({maxBytes:4,fileSrc:path=>path,readImageData:async()=>{calls++;return "too large";}});
+  await large.for(fallbackImage);await large.for(fallbackImage); assert.equal(calls,5);
+});
+
 test("web-compatible images bypass decoding", async () => {
   let decoded = 0;
   const resolver = createImageSourceResolver({

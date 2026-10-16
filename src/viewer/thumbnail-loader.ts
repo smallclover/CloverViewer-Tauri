@@ -2,6 +2,7 @@ interface ThumbnailLoaderOptions {
   load: (path: string, size: number) => Promise<string>;
   maxConcurrent?: number;
   cacheCapacity?: number;
+  maxCacheBytes?: number;
 }
 
 interface ThumbnailTask {
@@ -22,6 +23,8 @@ interface ThumbnailTask {
 export function createThumbnailLoader(options: ThumbnailLoaderOptions) {
   const maxConcurrent = Math.max(1, options.maxConcurrent ?? 4);
   const cacheCapacity = Math.max(1, options.cacheCapacity ?? 96);
+  const maxCacheBytes = options.maxCacheBytes ?? 16 * 1024 * 1024;
+  let cacheBytes = 0;
   const cache = new Map<string, string>();
   const tasks = new Map<string, ThumbnailTask>();
   let queued: ThumbnailTask[] = [];
@@ -30,11 +33,15 @@ export function createThumbnailLoader(options: ThumbnailLoaderOptions) {
   const keyFor = (path: string, size: number) => `${size}\0${path}`;
 
   const cacheValue = (key: string, value: string) => {
+    if (value.length * 2 > maxCacheBytes) return;
+    cacheBytes -= (cache.get(key)?.length ?? 0) * 2;
     cache.delete(key);
     cache.set(key, value);
-    while (cache.size > cacheCapacity) {
+    cacheBytes += value.length * 2;
+    while (cache.size > cacheCapacity || cacheBytes > maxCacheBytes) {
       const oldest = cache.keys().next().value;
       if (oldest === undefined) break;
+      cacheBytes -= (cache.get(oldest)?.length ?? 0) * 2;
       cache.delete(oldest);
     }
   };
@@ -55,6 +62,7 @@ export function createThumbnailLoader(options: ThumbnailLoaderOptions) {
       void options
         .load(task.path, task.size)
         .then((value) => {
+          if (tasks.get(task.key) !== task) return;
           cacheValue(task.key, value);
           task.resolve(value);
         })
@@ -102,6 +110,10 @@ export function createThumbnailLoader(options: ThumbnailLoaderOptions) {
     },
     clear() {
       cache.clear();
+      cacheBytes = 0;
+      for (const task of tasks.values()) task.resolve(undefined);
+      tasks.clear();
+      queued = [];
     },
   };
 }

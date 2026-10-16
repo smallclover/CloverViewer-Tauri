@@ -2,9 +2,13 @@
 
 use crate::config::{Config, ConfigStore};
 use crate::image_scan::{self, ImageEntry};
-use base64::Engine;
 use std::{fs, path::Path, time::SystemTime};
 use tauri::State;
+
+#[tauri::command]
+pub fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
 
 #[tauri::command]
 pub fn get_config(store: State<'_, ConfigStore>) -> Config {
@@ -12,27 +16,21 @@ pub fn get_config(store: State<'_, ConfigStore>) -> Config {
 }
 
 #[tauri::command]
-pub fn set_config(app: tauri::AppHandle, store: State<'_, ConfigStore>, config: Config) {
-    // 窗口位置/大小由后端窗口事件维护，此处保留后端已知值，避免前端旧值覆盖
-    let mut new_config = config;
-    let current = store.snapshot();
-    new_config.ui_scale = crate::config::normalize_ui_scale(new_config.ui_scale);
-    let scale_changed = new_config.ui_scale != current.ui_scale;
-    if new_config.window_pos.is_none() {
-        new_config.window_pos = current.window_pos;
-    }
-    if new_config.window_size.is_none() {
-        new_config.window_size = current.window_size;
-    }
-    // 桌宠窗口由专用命令同步管理；普通设置保存不应以一个稍旧的前端快照覆盖它。
-    new_config.desktop_pet_enabled = current.desktop_pet_enabled;
-    new_config.desktop_pet_scale = current.desktop_pet_scale;
-    store.replace(new_config.clone());
-    crate::config::save_config(&new_config);
+pub fn set_config(
+    app: tauri::AppHandle,
+    store: State<'_, ConfigStore>,
+    config: Config,
+) -> Result<Config, String> {
+    let mut scale_changed = false;
+    let saved = store.update_saved(|current| {
+        scale_changed = crate::config::normalize_ui_scale(config.ui_scale) != current.ui_scale;
+        current.apply_preferences(config);
+    })?;
     if scale_changed {
         crate::ui_scale::apply_all(&app);
     }
     crate::tray_menu::refresh(&app);
+    Ok(saved)
 }
 
 /// 启用或隐藏独立桌宠窗口。窗口创建可能等待 WebView2 的主线程回调，
@@ -156,80 +154,35 @@ pub fn clear_temp_cache(older_than_hours: u32) -> Result<CacheCleanupResult, Str
 
 /// 设置开机自启（写/删 HKCU\...\Run 注册表）
 #[tauri::command]
-pub fn set_launch_on_startup(enabled: bool) -> Result<(), String> {
-    crate::startup::set_launch_on_startup(enabled)
+pub fn set_launch_on_startup(
+    store: State<'_, ConfigStore>,
+    enabled: bool,
+) -> Result<Config, String> {
+    let previous = store.snapshot().launch_on_startup;
+    crate::startup::update_preference(
+        previous,
+        enabled,
+        crate::startup::set_launch_on_startup,
+        || store.update_saved(|config| config.launch_on_startup = enabled),
+    )
 }
 
-/// 重注册截图全局热键（注销旧键 → 注册新键 → 持久化）
 #[tauri::command]
 pub fn set_show_screenshot_hotkey(
     app: tauri::AppHandle,
     store: State<'_, ConfigStore>,
     hotkey: String,
 ) -> Result<(), String> {
-    use std::str::FromStr;
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-
-    // 先校验热键格式，避免注册失败后再改配置
-    Shortcut::from_str(&hotkey).map_err(|e| format!("无效的热键格式: {e}"))?;
-
-    let gs = app.global_shortcut();
-    let old = store.snapshot().hotkeys.show_screenshot.clone();
-    if old == hotkey {
-        return Ok(());
-    }
-
-    if let Err(e) = gs.unregister(old.as_str()) {
-        tracing::warn!("注销旧热键 {old} 失败: {e}");
-    }
-    gs.on_shortcut(hotkey.as_str(), |app, _sc, event| {
-        if event.state() == ShortcutState::Pressed {
-            crate::screenshot::start_screenshot(app);
-        }
-    })
-    .map_err(|e| format!("注册热键失败: {e}"))?;
-
-    let mut cfg = (*store.snapshot()).clone();
-    cfg.hotkeys.show_screenshot = hotkey;
-    store.replace(cfg.clone());
-    crate::config::save_config(&cfg);
-    crate::tray_menu::refresh(&app);
-    Ok(())
+    crate::hotkeys::change(&app, &store, crate::hotkeys::Action::Screenshot, hotkey)
 }
 
-/// 重注册滚动截图专属热键（注销旧键 → 注册新键 → 持久化）
 #[tauri::command]
 pub fn set_scroll_capture_hotkey(
     app: tauri::AppHandle,
     store: State<'_, ConfigStore>,
     hotkey: String,
 ) -> Result<(), String> {
-    use std::str::FromStr;
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-
-    Shortcut::from_str(&hotkey).map_err(|e| format!("无效的热键格式: {e}"))?;
-
-    let gs = app.global_shortcut();
-    let old = store.snapshot().hotkeys.scroll_capture.clone();
-    if old == hotkey {
-        return Ok(());
-    }
-    if let Err(e) = gs.unregister(old.as_str()) {
-        tracing::warn!("注销旧滚动截图热键 {old} 失败: {e}");
-    }
-    gs.on_shortcut(hotkey.as_str(), |app, _sc, event| {
-        if event.state() == ShortcutState::Pressed {
-            crate::screenshot::start_scroll_screenshot(app);
-        }
-    })
-    .map_err(|e| format!("注册热键失败: {e}"))?;
-
-    let mut cfg = (*store.snapshot()).clone();
-    cfg.hotkeys.scroll_capture = hotkey;
-    store.replace(cfg.clone());
-    crate::config::save_config(&cfg);
-    crate::tray_menu::refresh(&app);
-    Ok(())
+    crate::hotkeys::change(&app, &store, crate::hotkeys::Action::Scroll, hotkey)
 }
 
 /// 关于页展示的应用信息。
@@ -356,84 +309,34 @@ pub fn open_containing_folder(path: String) -> Result<(), String> {
 
 /// 扫描目录下所有受支持的图片（不递归）
 #[tauri::command]
-pub fn list_images(dir: String) -> Result<Vec<ImageEntry>, String> {
-    let path = Path::new(&dir);
-    if !path.is_dir() {
-        return Err(format!("不是有效目录: {dir}"));
-    }
-    Ok(image_scan::scan_directory(path))
+pub async fn list_images(dir: String) -> Result<Vec<ImageEntry>, String> {
+    crate::image_tasks::run(move || {
+        let path = Path::new(&dir);
+        if !path.is_dir() {
+            return Err(format!("不是有效目录: {dir}"));
+        }
+        Ok(image_scan::scan_directory(path))
+    })
+    .await
 }
 
 /// 兜底解码：WebView 不支持的格式（如 tiff）解码后转 PNG data URL
 #[tauri::command]
-pub fn read_image_data(path: String) -> Result<String, String> {
-    let img = image::ImageReader::open(&path)
-        .map_err(|e| format!("打开失败: {e}"))?
-        .decode()
-        .map_err(|e| format!("解码失败: {e}"))?;
-
-    let mut png_bytes = Vec::new();
-    img.write_to(
-        &mut std::io::Cursor::new(&mut png_bytes),
-        image::ImageFormat::Png,
-    )
-    .map_err(|e| format!("编码失败: {e}"))?;
-
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-    Ok(format!("data:image/png;base64,{b64}"))
+pub async fn read_image_data(path: String) -> Result<String, String> {
+    crate::image_tasks::run(move || crate::image_io::read_data_url(path)).await
 }
 
 /// 返回适合 Canvas 编辑的 data URL。asset protocol 在 WebView2 中可展示，
 /// 但它不保证满足 Canvas 的同源导出要求；编辑时统一转为内联数据，避免 tainted canvas。
 #[tauri::command]
-pub fn read_editable_image_data(path: String) -> Result<String, String> {
-    let extension = Path::new(&path)
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let mime = match extension.as_str() {
-        "png" => Some("image/png"),
-        "jpg" | "jpeg" => Some("image/jpeg"),
-        "bmp" => Some("image/bmp"),
-        "gif" => Some("image/gif"),
-        "webp" => Some("image/webp"),
-        "avif" => Some("image/avif"),
-        _ => None,
-    };
-    if let Some(mime) = mime {
-        let bytes = fs::read(&path).map_err(|e| format!("读取图片失败：{e}"))?;
-        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-        return Ok(format!("data:{mime};base64,{b64}"));
-    }
-    // TIFF 等浏览器不直接支持的格式沿用原有 Rust 解码 → PNG 路径。
-    read_image_data(path)
+pub async fn read_editable_image_data(path: String) -> Result<String, String> {
+    crate::image_tasks::run(move || crate::image_io::read_editable_data_url(path)).await
 }
 
 /// 将前端 Canvas 的 PNG 以用户选择的格式写入指定位置。
 ///
 /// 解码与编码均在 Rust 侧完成，避免 WebView2 对 WebP 编码支持差异影响导出结果。
 #[tauri::command]
-pub fn save_edited_image(path: String, png: String, format: String) -> Result<(), String> {
-    let source = png.split_once(',').map_or(png.as_str(), |(_, value)| value);
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(source)
-        .map_err(|e| format!("编辑结果不是有效 Base64：{e}"))?;
-    let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-        .map_err(|e| format!("无法解码编辑结果：{e}"))?;
-    let target_format = match format.as_str() {
-        "png" => image::ImageFormat::Png,
-        "jpeg" => image::ImageFormat::Jpeg,
-        "webp" => image::ImageFormat::WebP,
-        _ => return Err(format!("不支持的导出格式: {format}")),
-    };
-
-    // 先完整编码到内存；编码失败时绝不截断用户的原文件。
-    let mut encoded = Vec::new();
-    image
-        .write_to(&mut std::io::Cursor::new(&mut encoded), target_format)
-        .map_err(|e| format!("图片编码失败：{e}"))?;
-    std::fs::write(&path, encoded).map_err(|e| format!("无法写入图片：{e}"))?;
-    tracing::info!("已保存编辑图片: {path}");
-    Ok(())
+pub async fn save_edited_image(path: String, png: String, format: String) -> Result<(), String> {
+    crate::image_tasks::run(move || crate::image_io::save_edited(path, png, format)).await
 }

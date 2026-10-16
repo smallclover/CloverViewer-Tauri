@@ -10,6 +10,7 @@ import {
   setScrollCaptureHotkey,
   setShowScreenshotHotkey,
 } from "../api";
+import { createConfigWriter } from "./config-writer";
 import type { Lang } from "../i18n";
 import { playEnterAnimation, setAnimatedVisibility, type ToastKind } from "./presentation";
 import { createSelectControl } from "./select-control";
@@ -24,6 +25,7 @@ interface SettingsControllerOptions {
   applyI18n: () => void;
   refreshViewerTranslations: () => void;
   refreshImagePreviewStrip: () => void;
+  refreshActiveHotkeys: () => Promise<void>;
   setDesktopPetEnabled: (enabled: boolean) => Promise<void>;
   translate: (key: string, vars?: Record<string, string | number>) => string;
   toast: (message: string, kind?: ToastKind) => void;
@@ -156,16 +158,28 @@ export function createSettingsController(options: SettingsControllerOptions) {
     render(true);
   };
 
+  const writer = createConfigWriter({
+    read: options.getConfig,
+    render: options.setCurrentConfig,
+    persist: setConfig,
+  });
   const save = (partial: Partial<AppConfig>, silent = false, showSaved = true) => {
-    const current = options.getConfig();
-    if (!current) return;
-    const next = { ...current, ...partial };
-    options.setCurrentConfig(next);
-    void setConfig(next)
+    void writer
+      .save(partial)
       .then(() => {
         if (!silent && showSaved) options.toast(options.translate("toast.saved"), "success");
       })
       .catch(() => {
+        const current = options.getConfig();
+        if (current) {
+          fillValues(current);
+          options.setLanguage(current.language);
+          options.applyTheme(current.theme);
+          options.applyI18n();
+          render();
+          options.refreshViewerTranslations();
+          options.refreshImagePreviewStrip();
+        }
         if (!silent) options.toast(options.translate("toast.saveFailed"), "error");
       });
   };
@@ -187,9 +201,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
       cacheSummary.textContent = options.translate("settings.cacheUsageUnavailable");
     }
   };
-  const open = () => {
-    const config = options.getConfig();
-    if (!config) return;
+  const fillValues = (config: AppConfig) => {
     language.value = config.language;
     theme.value = config.theme;
     uiScale.value = String(config.ui_scale);
@@ -215,6 +227,12 @@ export function createSettingsController(options: SettingsControllerOptions) {
     cacheRetention.value = String(config.cache_cleanup_after_hours ?? 168);
     lanShareDuration.value = String(config.lan_share_duration_seconds ?? 600);
     lanShareDownloadLimit.value = String(config.lan_share_download_limit ?? 0);
+    for (const select of selects) select.refresh();
+  };
+  const open = () => {
+    const config = options.getConfig();
+    if (!config) return;
+    fillValues(config);
     void refreshCacheSummary();
     // 每次打开都回到干净状态：无搜索词、停在「常规」。
     search.value = "";
@@ -347,17 +365,22 @@ export function createSettingsController(options: SettingsControllerOptions) {
       });
   });
   autostart.addEventListener("change", () => {
-    save({ launch_on_startup: autostart.checked }, true);
-    void setLaunchOnStartup(autostart.checked)
-      .then(() =>
+    const enabled = autostart.checked;
+    autostart.disabled = true;
+    void setLaunchOnStartup(enabled)
+      .then((saved) => {
+        options.setCurrentConfig(saved);
         options.toast(
-          options.translate(autostart.checked ? "toast.autostartOn" : "toast.autostartOff"),
+          options.translate(enabled ? "toast.autostartOn" : "toast.autostartOff"),
           "success",
-        ),
-      )
+        );
+      })
       .catch((error) => {
-        autostart.checked = !autostart.checked;
+        autostart.checked = options.getConfig()?.launch_on_startup ?? !enabled;
         options.toast(options.translate("toast.autostartFailed", { msg: String(error) }), "error");
+      })
+      .finally(() => {
+        autostart.disabled = false;
       });
   });
   cacheRetention.addEventListener("change", () =>
@@ -412,6 +435,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
             ...current,
             hotkeys: { ...current.hotkeys, show_screenshot: value },
           });
+        void options.refreshActiveHotkeys();
         options.toast(options.translate("toast.hotkeySet", { key: value }), "success");
       })
       .catch((error) =>
@@ -454,6 +478,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
             ...current,
             hotkeys: { ...current.hotkeys, scroll_capture: value },
           });
+        void options.refreshActiveHotkeys();
         options.toast(options.translate("toast.hotkeySet", { key: value }), "success");
       })
       .catch((error) =>

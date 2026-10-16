@@ -248,12 +248,9 @@ fn get_config_path() -> PathBuf {
     get_config_dir().join("config.json")
 }
 
-fn save_config_internal(path: &std::path::Path, config: &Config) -> bool {
-    fs::write(
-        path,
-        serde_json::to_string_pretty(config).unwrap_or_default(),
-    )
-    .is_ok()
+fn save_config_internal(path: &std::path::Path, config: &Config) -> Result<(), String> {
+    let json = serde_json::to_vec_pretty(config).map_err(|error| error.to_string())?;
+    crate::atomic_file::write(path, &json).map_err(|error| error.to_string())
 }
 
 pub fn load_config() -> Config {
@@ -272,11 +269,9 @@ pub fn load_config() -> Config {
     Config::default()
 }
 
-pub fn save_config(config: &Config) {
+pub fn save_config(config: &Config) -> Result<(), String> {
     let path = get_config_path();
-    if !save_config_internal(&path, config) {
-        tracing::error!("无法保存配置到: {path:?}");
-    }
+    save_config_internal(&path, config)
 }
 
 /// 全局配置存储（Rust 侧持有，前端通过命令读写）
@@ -284,7 +279,41 @@ pub struct ConfigStore {
     config: RwLock<Config>,
 }
 
+impl Config {
+    /// 普通设置只替换前端拥有的字段；专用命令和窗口事件的值在锁内保留。
+    pub fn apply_preferences(&mut self, mut next: Config) {
+        next.ui_scale = normalize_ui_scale(next.ui_scale);
+        next.window_pos = self.window_pos;
+        next.window_size = self.window_size;
+        next.desktop_pet_enabled = self.desktop_pet_enabled;
+        next.desktop_pet_scale = self.desktop_pet_scale;
+        next.hotkeys.show_screenshot = self.hotkeys.show_screenshot.clone();
+        next.hotkeys.scroll_capture = self.hotkeys.scroll_capture.clone();
+        next.launch_on_startup = self.launch_on_startup;
+        *self = next;
+    }
+}
+
 impl ConfigStore {
+    pub fn update_saved(&self, update: impl FnOnce(&mut Config)) -> Result<Config, String> {
+        self.update_saved_with(update, save_config)
+    }
+
+    fn update_saved_with(
+        &self,
+        update: impl FnOnce(&mut Config),
+        persist: impl FnOnce(&Config) -> Result<(), String>,
+    ) -> Result<Config, String> {
+        let mut current = self
+            .config
+            .write()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut next = current.clone();
+        update(&mut next);
+        persist(&next)?;
+        *current = next.clone();
+        Ok(next)
+    }
     pub fn new(config: Config) -> Self {
         Self {
             config: RwLock::new(config),
@@ -311,6 +340,53 @@ impl ConfigStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_preferences_preserve_latest_backend_owned_values() {
+        let store = ConfigStore::new(Config::default());
+        let mut stale = (*store.snapshot()).clone();
+        stale.ui_scale = 125;
+        stale.hotkeys.copy_color = "Alt+V".into();
+        store
+            .update_saved_with(
+                |config| {
+                    config.window_pos = Some((10.0, 20.0));
+                    config.window_size = Some((800.0, 600.0));
+                    config.desktop_pet_enabled = true;
+                    config.desktop_pet_scale = 150;
+                    config.hotkeys.show_screenshot = "Alt+A".into();
+                    config.hotkeys.scroll_capture = "Alt+B".into();
+                    config.launch_on_startup = true;
+                },
+                |_| Ok(()),
+            )
+            .unwrap();
+        let saved = store
+            .update_saved_with(|config| config.apply_preferences(stale), |_| Ok(()))
+            .unwrap();
+        assert_eq!(saved.window_pos, Some((10.0, 20.0)));
+        assert_eq!(saved.window_size, Some((800.0, 600.0)));
+        assert!(saved.desktop_pet_enabled);
+        assert_eq!(saved.desktop_pet_scale, 150);
+        assert_eq!(saved.hotkeys.show_screenshot, "Alt+A");
+        assert_eq!(saved.hotkeys.scroll_capture, "Alt+B");
+        assert!(saved.launch_on_startup);
+        assert_eq!(saved.ui_scale, 125);
+        assert_eq!(saved.hotkeys.copy_color, "Alt+V");
+    }
+
+    #[test]
+    fn failed_persistence_does_not_commit_config_and_next_attempt_can_retry() {
+        let store = ConfigStore::new(Config::default());
+        assert!(store
+            .update_saved_with(|config| config.ui_scale = 125, |_| Err("denied".into()))
+            .is_err());
+        assert_eq!(store.snapshot().ui_scale, 100);
+        store
+            .update_saved_with(|config| config.ui_scale = 125, |_| Ok(()))
+            .unwrap();
+        assert_eq!(store.snapshot().ui_scale, 125);
+    }
 
     #[test]
     fn old_configs_and_new_installs_use_full_size_interface() {

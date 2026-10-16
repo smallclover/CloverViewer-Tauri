@@ -17,7 +17,7 @@ struct SessionInner {
     cancel: Arc<AtomicBool>,
     running: bool,
     progress: Option<ScrollCaptureProgress>,
-    result: Option<ScrollCaptureResult>,
+    result: Option<Arc<ScrollCaptureResult>>,
     /// 前端上报的「HUD 是否与捕获区重叠」（兜底缓存）。
     /// 重叠时整个会话隐藏 HUD，由 `hide_hud_during_capture` / `hide_glow_during_capture`
     /// 经 FrameHideGate 逐帧执行，避免提示框被 BitBlt 烤进长图。
@@ -63,7 +63,7 @@ impl ScrollCaptureSession {
     fn finish_ok(&self, result: ScrollCaptureResult) {
         let mut g = self.inner.lock().unwrap();
         g.running = false;
-        g.result = Some(result);
+        g.result = Some(Arc::new(result));
     }
 
     fn finish_err(&self, msg: String) {
@@ -104,8 +104,17 @@ impl ScrollCaptureSession {
         Some(p.clone())
     }
 
-    fn take_result(&self) -> Option<ScrollCaptureResult> {
-        self.inner.lock().unwrap().result.take()
+    fn result(&self) -> Option<Arc<ScrollCaptureResult>> {
+        self.inner.lock().unwrap().result.clone()
+    }
+
+    fn is_current_result(&self, result: &Arc<ScrollCaptureResult>) -> bool {
+        self.inner
+            .lock()
+            .unwrap()
+            .result
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, result))
     }
 
     fn peek_result(&self) -> bool {
@@ -539,15 +548,27 @@ pub fn set_scroll_hud_safe(state: tauri::State<'_, ScrollCaptureSession>, overla
 
 /// 结果落地：action = save / clipboard / open
 #[tauri::command]
-pub fn finish_scroll_capture(
+pub async fn finish_scroll_capture(
     app: tauri::AppHandle,
     state: tauri::State<'_, ScrollCaptureSession>,
     action: String,
 ) -> Result<Option<String>, String> {
     let res = state
-        .take_result()
+        .result()
         .ok_or_else(|| "没有可保存的滚动截图结果".to_string())?;
 
+    crate::image_tasks::run(move || export_result(app, res, action)).await
+}
+
+fn export_result(
+    app: tauri::AppHandle,
+    res: Arc<ScrollCaptureResult>,
+    action: String,
+) -> Result<Option<String>, String> {
+    use tauri::Manager;
+    if !app.state::<ScrollCaptureSession>().is_current_result(&res) {
+        return Err("没有可保存的滚动截图结果".into());
+    }
     let mut saved_path: Option<String> = None;
     match action.as_str() {
         "save" | "open" => {
@@ -572,7 +593,10 @@ pub fn finish_scroll_capture(
             tracing::info!("滚动截图已保存: {}", path.display());
             saved_path = Some(path.to_string_lossy().to_string());
             if action == "open" {
-                use tauri::{Emitter, Manager};
+                use tauri::Emitter;
+                if !app.state::<ScrollCaptureSession>().is_current_result(&res) {
+                    return Ok(saved_path);
+                }
                 if let Some(main) = app.get_webview_window("main") {
                     let _ = main.show();
                     let _ = main.unminimize();
@@ -623,6 +647,30 @@ pub fn scroll_capture_running(state: tauri::State<'_, ScrollCaptureSession>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn export_results_survive_repeated_reads_and_failed_exports_until_next_session() {
+        let session = ScrollCaptureSession::new();
+        session.finish_ok(ScrollCaptureResult {
+            width: 1,
+            height: 2,
+            frames: 2,
+            confidence: "high".into(),
+            message: None,
+            png: vec![1, 2, 3],
+        });
+        let first = session.result().unwrap();
+        assert!(session.is_current_result(&first));
+        // An invalid PNG models an export error without touching the system clipboard.
+        assert!(image::load_from_memory(&first.png).is_err());
+        let retry = session.result().unwrap();
+        assert!(Arc::ptr_eq(&first, &retry));
+        assert!(session.peek_result());
+        session.begin().unwrap();
+        assert!(session.result().is_none());
+        assert!(!session.is_current_result(&first));
+        assert_eq!(first.png, vec![1, 2, 3]);
+    }
 
     #[test]
     fn session_state_rejects_parallel_runs_and_resets_for_next_run() {

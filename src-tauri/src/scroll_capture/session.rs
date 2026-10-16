@@ -445,3 +445,9 @@ impl Drop for CursorGuard {
 pub(super) const PREVIEW_WIDTH: u32 = 120;
 pub(super) const PREVIEW_MAX_H: u32 = 360;
 pub(super) const MAX_CANVAS_BYTES: u64 = 768 * 1024 * 1024;
+
+pub(super) fn safe_height_limit(width: u32, requested: u32) -> u32 {
+    let bytes_per_row = u64::from(width).saturating_mul(4).max(1);
+    let memory_limited = (MAX_CANVAS_BYTES.saturating_mul(3) / 4 / bytes_per_row) as u32;
+    requested.min(memory_limited.max(280))
+}

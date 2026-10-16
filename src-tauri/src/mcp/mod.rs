@@ -129,7 +129,11 @@ impl CloverMcpServer {
         .await
         .map_err(join_error)?
         .map_err(internal_error)?;
-        result_for_artifacts(artifacts, delivery, max_width)
+        crate::image_tasks::run(move || {
+            result_for_artifacts(artifacts, delivery, max_width).map_err(|error| error.to_string())
+        })
+        .await
+        .map_err(internal_error)
     }
 
     #[tool(
@@ -142,11 +146,14 @@ impl CloverMcpServer {
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let delivery = Delivery::parse(params.delivery.as_deref())?;
         let max_width = normalized_width(params.max_width)?;
-        let artifact = self
-            .artifacts
-            .get(&params.capture_id)
-            .map_err(internal_error)?;
-        result_for_artifacts(vec![artifact], delivery, max_width)
+        let store = Arc::clone(&self.artifacts);
+        crate::image_tasks::run(move || {
+            let artifact = store.get(&params.capture_id)?;
+            result_for_artifacts(vec![artifact], delivery, max_width)
+                .map_err(|error| error.to_string())
+        })
+        .await
+        .map_err(internal_error)
     }
 
     #[tool(
@@ -157,7 +164,11 @@ impl CloverMcpServer {
         &self,
         Parameters(CaptureIdParams { capture_id }): Parameters<CaptureIdParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        let deleted = self.artifacts.delete(&capture_id).map_err(internal_error)?;
+        let store = Arc::clone(&self.artifacts);
+        let id = capture_id.clone();
+        let deleted = crate::image_tasks::run(move || store.delete(&id))
+            .await
+            .map_err(internal_error)?;
         Ok(CallToolResult::structured(
             json!({ "captureId": capture_id, "deleted": deleted }),
         ))
@@ -174,9 +185,11 @@ impl CloverMcpServer {
             language,
         }): Parameters<OcrParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        let artifact = self.artifacts.get(&capture_id).map_err(internal_error)?;
+        let store = Arc::clone(&self.artifacts);
+        let id = capture_id.clone();
         let language = parse_language(language.as_deref())?;
         let text = tokio::task::spawn_blocking(move || {
+            let artifact = store.get(&id)?;
             let image = image::open(&artifact.path)
                 .map_err(|e| format!("Failed to read screenshot: {e}"))?;
             crate::ocr::recognize_text(image, language)

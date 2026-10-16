@@ -1,3 +1,4 @@
+import { createThemeController } from "./ui/theme-controller";
 import "./styles/screenshot.css";
 
 import {
@@ -833,12 +834,9 @@ async function refreshConfig() {
 
 // 截图窗口 UI 主题：与主窗口一致，跟随 config.theme（dark / light / system），
 // 由 screenshot.html 里 :root[data-theme] 变量驱动工具栏/弹窗/帮助框配色。
-function applyTheme(theme: "dark" | "light" | "system") {
-  const dark =
-    theme === "dark" ||
-    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
-}
+const themeController = createThemeController();
+const applyTheme = themeController.set;
+window.addEventListener("beforeunload", themeController.dispose);
 
 function clearScreenshotState() {
   screenshotLoadController.cancel();

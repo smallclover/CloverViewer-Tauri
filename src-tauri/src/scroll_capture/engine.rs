@@ -11,6 +11,7 @@ const PREVIEW_MAX_HEIGHT: u32 = 360;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EngineEvent {
+    LimitReached,
     Appended {
         shift: u32,
         added: u32,
@@ -32,6 +33,7 @@ pub(super) struct CaptureEngine {
     last: RgbaImage,
     accepted_frames: u32,
     uncertain_frames: u32,
+    max_bytes: u64,
 }
 
 impl CaptureEngine {
@@ -42,6 +44,7 @@ impl CaptureEngine {
             registrar: FrameRegistrar::default(),
             accepted_frames: 1,
             uncertain_frames: 0,
+            max_bytes: super::session::MAX_CANVAS_BYTES,
         }
     }
 
@@ -94,6 +97,12 @@ impl CaptureEngine {
         current: RgbaImage,
         registration: Registration,
     ) -> Result<EngineEvent, String> {
+        let projected_height = u64::from(self.height())
+            + u64::from(registration.shift)
+            + u64::from(registration.bottom_fixed);
+        if u64::from(self.width()) * projected_height * 4 > self.max_bytes {
+            return Ok(EngineEvent::LimitReached);
+        }
         let added = self.composer.append(&current, registration)?;
         self.last = current;
         self.accepted_frames += 1;
@@ -107,5 +116,45 @@ impl CaptureEngine {
 
     pub(super) fn finish(self) -> Result<RgbaImage, String> {
         self.composer.finish(&self.last)
+    }
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+    #[test]
+    fn append_budget_is_checked_before_allocation_and_keeps_last_verified_pixels() {
+        let mut engine =
+            CaptureEngine::new(RgbaImage::from_pixel(1, 10, image::Rgba([1, 1, 1, 255])));
+        engine.max_bytes = 60;
+        let registration = Registration {
+            shift: 4,
+            top_fixed: 0,
+            bottom_fixed: 0,
+            support: 1.0,
+            mean_error: 0.0,
+        };
+        assert!(matches!(
+            engine
+                .accept(
+                    RgbaImage::from_pixel(1, 10, image::Rgba([2, 2, 2, 255])),
+                    registration
+                )
+                .unwrap(),
+            EngineEvent::Appended { .. }
+        ));
+        assert_eq!(
+            engine
+                .accept(
+                    RgbaImage::from_pixel(1, 10, image::Rgba([3, 3, 3, 255])),
+                    registration
+                )
+                .unwrap(),
+            EngineEvent::LimitReached
+        );
+        assert_eq!(engine.frames(), 2);
+        assert_eq!(engine.height(), 14);
+        let result = engine.finish().unwrap();
+        assert_eq!(result.get_pixel(0, 13).0, [2, 2, 2, 255]);
     }
 }

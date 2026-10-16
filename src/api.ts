@@ -59,7 +59,18 @@ export interface AppConfig {
 
 export const getConfig = () => invoke<AppConfig>("get_config");
 
-export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
+export const setConfig = (config: AppConfig) => invoke<AppConfig>("set_config", { config });
+
+/** 退出请求先交给主窗口的未保存编辑守卫，通过后才真正退出。 */
+export const listenExitRequested = (handler: () => void): Promise<UnlistenFn> =>
+  listen("app-exit-requested", handler);
+export const quitApp = () => invoke<void>("quit_app");
+export interface ActiveHotkeys {
+  /** 实际生效组合的界面写法（如 Alt+S、Alt+Shift+S）；未注册时为 null。 */
+  show_screenshot: string | null;
+  scroll_capture: string | null;
+}
+export const getActiveHotkeys = () => invoke<ActiveHotkeys>("get_active_hotkeys");
 
 /** 顶部菜单与托盘共用原有截图入口。 */
 export const startCapture = (scroll = false) => invoke<void>("start_capture", { scroll });
@@ -126,7 +137,7 @@ export const clearTempCache = (olderThanHours: number) =>
   invoke<CacheCleanupResult>("clear_temp_cache", { olderThanHours });
 
 export const setLaunchOnStartup = (enabled: boolean) =>
-  invoke<void>("set_launch_on_startup", { enabled });
+  invoke<AppConfig>("set_launch_on_startup", { enabled });
 
 export const setShowScreenshotHotkey = (hotkey: string) =>
   invoke<void>("set_show_screenshot_hotkey", { hotkey });
@@ -239,6 +250,7 @@ export const saveEditedImage = (path: string, png: string, format: EditedImageFo
   invoke<void>("save_edited_image", { path, png, format });
 
 export interface LanShareInfo {
+  share_id: string;
   url: string;
   qr_code: string;
   expires_in_seconds: number;
@@ -249,15 +261,18 @@ export interface LanShareInfo {
 export const startLanShare = (png: string) => invoke<LanShareInfo>("start_lan_share", { png });
 
 /** 把查看器当前图片转成浏览器可直接显示的 JPEG 预览再分享。 */
-export const startImageLanShare = (path: string) =>
-  invoke<LanShareInfo>("start_image_lan_share", { path });
+export const startImageLanShare = (path: string, png?: string) =>
+  invoke<LanShareInfo>("start_image_lan_share", { path, png });
 
-export const stopLanShare = () => invoke<void>("stop_lan_share");
+export const stopLanShare = (shareId?: string) => invoke<void>("stop_lan_share", { shareId });
+export const isLanShareActive = (shareId: string) =>
+  invoke<boolean>("is_lan_share_active", { shareId });
 
 export const copyText = (text: string) => invoke<void>("copy_text", { text });
 
 /** 原生写入图片剪贴板，避开 WebView2 对 ClipboardItem 图片的兼容性限制。 */
-export const copyImageFile = (path: string) => invoke<void>("copy_image_file", { path });
+export const copyImageFile = (path: string, png?: string) =>
+  invoke<void>("copy_image_file", { path, png });
 
 /** 关于页展示的应用信息（版本/标识/Tauri 版本/平台，均取自运行时真实值） */
 export interface AppInfo {

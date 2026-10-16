@@ -88,6 +88,9 @@ pub fn run_manual_session_ext(
         let candidate_preview = frame_data_url(&current);
         let mut finish_note: Option<(String, bool)> = None;
         match engine.ingest(current)? {
+            EngineEvent::LimitReached => {
+                break (Some("达到滚动截图上限，已保留已验证内容".into()), true)
+            }
             EngineEvent::Appended { shift, support, .. } => {
                 emit(
                     on_progress,
@@ -185,12 +188,7 @@ pub fn run_manual_session_ext(
     finish(engine, reason, partial)
 }
 
-fn safe_height_limit(width: u32, requested: u32) -> u32 {
-    // 给当前帧、首帧和 PNG 编码留出余量：把可能的整进程分配失败变成可恢复的捕获上限。
-    let bytes_per_row = (width as u64).saturating_mul(4).max(1);
-    let memory_limited = (MAX_CANVAS_BYTES.saturating_mul(3) / 4 / bytes_per_row) as u32;
-    requested.min(memory_limited.max(MIN_SELECTION_HEIGHT))
-}
+use super::session::safe_height_limit;
 
 fn capture_once(
     cap: &super::RectPx,

@@ -9,7 +9,7 @@ type Translate = (key: string, vars?: Record<string, string | number>) => string
 /** 把 Tauri 拖放事件的载荷接到主查看器的文件打开流程上。 */
 export function bindFileDrop(
   overlay: HTMLElement,
-  openPath: (path: string) => Promise<void>,
+  openPath: (path: string) => Promise<boolean | undefined>,
 ): void {
   void getCurrentWindow().onDragDropEvent((event) => {
     const payload = event.payload;
@@ -26,7 +26,7 @@ export function bindFileDrop(
 
 /** 打开后端已落成临时图片文件的截图。 */
 export async function bindOpenImageBridge(
-  openPath: (payload: OpenImagePayload) => Promise<void>,
+  openPath: (payload: OpenImagePayload) => Promise<boolean | undefined>,
   translate: Translate,
   toast: ProgressToast,
 ): Promise<void> {
@@ -35,7 +35,11 @@ export async function bindOpenImageBridge(
     const isOcr = typeof payload.ocr_text === "string";
     if (isOcr) toast(translate("toast.openingOcr"), "progress", true);
     try {
-      await openPath(payload);
+      const opened = await openPath(payload);
+      if (opened === false) {
+        if (isOcr) toast.hide();
+        return;
+      }
       if (isOcr) toast.hide();
       else toast(translate("toast.opened"), "success");
     } catch (error) {

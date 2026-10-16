@@ -7,6 +7,7 @@ interface PageNavigationOptions {
   showViewer: (imageIndex: number | null) => void;
   showSettings: () => void;
   showAbout: () => void;
+  beforeNavigate?: (action: () => void) => void;
 }
 
 const element = <T extends HTMLElement = HTMLElement>(id: string) => {
@@ -57,10 +58,23 @@ export function createPageNavigationController(options: PageNavigationOptions) {
     return true;
   };
 
-  backButton.addEventListener("click", back);
-  forwardButton.addEventListener("click", forward);
+  backButton.addEventListener("click", () => {
+    if (options.beforeNavigate) options.beforeNavigate(back);
+    else back();
+  });
+  forwardButton.addEventListener("click", () => {
+    if (options.beforeNavigate) options.beforeNavigate(forward);
+    else forward();
+  });
 
   return {
+    remapImages: (previous: readonly string[], next: readonly string[]) => {
+      const indexes = new Map(next.map((path, index) => [path, index]));
+      for (const location of history) {
+        if (location.page !== "viewer" || location.imageIndex === null) continue;
+        location.imageIndex = indexes.get(previous[location.imageIndex]) ?? null;
+      }
+    },
     showSettings: () => navigate({ page: "settings" }),
     showAbout: () => navigate({ page: "about" }),
     showImage: (imageIndex: number) => navigate({ page: "viewer", imageIndex }),

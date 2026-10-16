@@ -60,3 +60,13 @@ test("history keeps only the most recent fifty checkpoints", () => {
   }
   assert.equal(history.undo(current), null);
 });
+
+test("history evicts old snapshots by memory while preserving undo and redo isolation", () => {
+  const history = new SnapshotHistory(value => ({...value}), () => 8, 16);
+  for(let i=0;i<3;i++) history.checkpoint({index:i});
+  const two = history.undo({index:3}); assert.equal(two.index,2);
+  const one = history.undo(two); assert.equal(one.index,1);
+  assert.equal(history.undo(one),null);
+  one.index=99;
+  assert.equal(history.redo(one).index,2);
+});

@@ -22,6 +22,8 @@ export interface Shape {
   fontSize?: number;
   blockSize?: number;
   text?: string;
+  /** 文字局部坐标相对于图像的顺时针角度。 */
+  rotation?: number;
   points?: Pt[];
 }
 
@@ -35,9 +37,15 @@ export function normRect(a: Pt, b: Pt): Rect {
 }
 
 export function shapeBBox(shape: Shape): Rect {
-  if ((shape.tool === "pen" || shape.tool === "mosaic") && shape.points?.length) {
-    const xs = shape.points.map((point) => point.x);
-    const ys = shape.points.map((point) => point.y);
+  if (shape.tool === "text" && shape.rotation) {
+    const delta = textVector(
+      { x: shape.end.x - shape.start.x, y: shape.end.y - shape.start.y },
+      -shape.rotation,
+    );
+    const corner = textVector({ x: delta.x, y: 0 }, shape.rotation);
+    const other = textVector({ x: 0, y: delta.y }, shape.rotation);
+    const xs = [shape.start.x, shape.end.x, shape.start.x + corner.x, shape.start.x + other.x];
+    const ys = [shape.start.y, shape.end.y, shape.start.y + corner.y, shape.start.y + other.y];
     return {
       x: Math.min(...xs),
       y: Math.min(...ys),
@@ -45,7 +53,49 @@ export function shapeBBox(shape: Shape): Rect {
       h: Math.max(...ys) - Math.min(...ys),
     };
   }
+  if ((shape.tool === "pen" || shape.tool === "mosaic") && shape.points?.length) {
+    let left = Infinity,
+      top = Infinity,
+      right = -Infinity,
+      bottom = -Infinity;
+    for (const point of shape.points) {
+      left = Math.min(left, point.x);
+      top = Math.min(top, point.y);
+      right = Math.max(right, point.x);
+      bottom = Math.max(bottom, point.y);
+    }
+    return {
+      x: left,
+      y: top,
+      w: right - left,
+      h: bottom - top,
+    };
+  }
   return normRect(shape.start, shape.end);
+}
+
+function textVector(point: Pt, angle: number): Pt {
+  switch (((angle % 360) + 360) % 360) {
+    case 90:
+      return { x: -point.y, y: point.x };
+    case 180:
+      return { x: -point.x, y: -point.y };
+    case 270:
+      return { x: point.y, y: -point.x };
+    default:
+      return point;
+  }
+}
+
+export function rotateShapeClockwise(shape: Shape, height: number): Shape {
+  const rotate = (point: Pt) => ({ x: height - point.y, y: point.x });
+  return {
+    ...shape,
+    start: rotate(shape.start),
+    end: rotate(shape.end),
+    points: shape.points?.map(rotate),
+    ...(shape.tool === "text" ? { rotation: ((shape.rotation ?? 0) + 90) % 360 } : {}),
+  };
 }
 
 export function distToSegment(point: Pt, start: Pt, end: Pt): number {

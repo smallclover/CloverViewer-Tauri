@@ -1,11 +1,13 @@
 import type { ImageEntry, LanShareInfo } from "../api";
 import { uiIcon } from "../ui/icons";
+import { watchShareStatus } from "../ui/share-status";
 
 interface ImageShareControllerOptions {
   panel: HTMLElement;
   startLanShare: (path: string) => Promise<LanShareInfo>;
   copyText: (text: string) => Promise<void>;
-  stopLanShare: () => Promise<void>;
+  stopLanShare: (shareId?: string) => Promise<void>;
+  isLanShareActive: (shareId: string) => Promise<boolean>;
   translate: (key: string, params?: Record<string, string | number>) => string;
   onClose: () => void;
 }
@@ -13,11 +15,11 @@ interface ImageShareControllerOptions {
 /** 负责临时的局域网分享抽屉；关闭抽屉只会丢弃回调，不会中断已建立的链接。 */
 export function createImageShareController(options: ImageShareControllerOptions) {
   let requestToken = 0;
-  let timer: number | undefined;
+  let stopWatching: (() => void) | undefined;
 
   const clearTimer = () => {
-    if (timer !== undefined) window.clearInterval(timer);
-    timer = undefined;
+    stopWatching?.();
+    stopWatching = undefined;
   };
   const header = () => {
     const row = document.createElement("header");
@@ -60,6 +62,7 @@ export function createImageShareController(options: ImageShareControllerOptions)
     options.panel.append(text, retry(entry));
   };
   const showShare = (entry: ImageEntry, info: LanShareInfo) => {
+    const token = requestToken;
     options.panel.replaceChildren();
     const name = document.createElement("div");
     name.className = "image-share-file";
@@ -95,20 +98,21 @@ export function createImageShareController(options: ImageShareControllerOptions)
     actions.append(copy, stop);
     options.panel.append(header(), name, hint, qr, link, status, actions);
 
-    const deadline = Date.now() + info.expires_in_seconds * 1000;
-    const updateCountdown = () => {
-      const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-      const time = `${Math.floor(seconds / 60)
-        .toString()
-        .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
-      expires.textContent = options.translate("prop.shareExpires", { time });
-      if (seconds === 0) {
-        clearTimer();
-        options.panel.replaceChildren(header(), retry(entry));
-      }
-    };
-    updateCountdown();
-    timer = window.setInterval(updateCountdown, 1000);
+    stopWatching = watchShareStatus({
+      seconds: info.expires_in_seconds,
+      read: () => options.isLanShareActive(info.share_id),
+      onTick: (seconds) => {
+        const time = `${Math.floor(seconds / 60)
+          .toString()
+          .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+        expires.textContent = options.translate("prop.shareExpires", { time });
+      },
+      onExpired: () => {
+        const message = document.createElement("p");
+        message.textContent = options.translate("shot.shareExpired");
+        options.panel.replaceChildren(header(), message, retry(entry));
+      },
+    });
     copy.addEventListener("click", () => {
       copy.disabled = true;
       void options
@@ -135,12 +139,19 @@ export function createImageShareController(options: ImageShareControllerOptions)
       stop.disabled = true;
       stop.classList.add("feedback");
       stop.textContent = options.translate("prop.shareStopped");
-      void options.stopLanShare().finally(() => {
-        window.setTimeout(() => {
-          clearTimer();
-          options.panel.replaceChildren(header(), retry(entry));
-        }, 650);
-      });
+      clearTimer();
+      void options.stopLanShare(info.share_id).then(
+        () => {
+          window.setTimeout(() => {
+            if (token !== requestToken) return;
+            clearTimer();
+            options.panel.replaceChildren(header(), retry(entry));
+          }, 650);
+        },
+        (error) => {
+          if (token === requestToken) showError(entry, error);
+        },
+      );
     });
   };
   const open = (entry: ImageEntry) => {

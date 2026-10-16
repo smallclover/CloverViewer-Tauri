@@ -10,6 +10,11 @@ const baseShape = {
   strokeWidth: 2,
 };
 
+test("large freehand paths compute exact bounds without overflowing the argument stack", () => {
+  const points = Array.from({length:200000}, (_,index) => ({x:index - 50, y:50 - index}));
+  assert.deepEqual(shapeBBox({...baseShape,tool:"pen",points}), {x:-50,y:-199949,w:199999,h:199999});
+});
+
 test("annotation geometry normalizes rectangles and derives stroke handles", () => {
   assert.deepEqual(normRect(baseShape.start, baseShape.end), { x: 10, y: 20, w: 20, h: 20 });
   assert.equal(shapeHandles(baseShape).length, 8);

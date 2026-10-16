@@ -31,14 +31,14 @@ lru = "0.18"
 kamadak-exif = "0.6"
 xcap = "0.9"
 arboard = "3"
-imageproc = "0.27"
+imageproc = { version = "0.27", default-features = false, features = ["rayon"] }
 pollster = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 # MCP server（Phase 3）：rmcp 工具服务器 + stdio/HTTP 传输 + axum HTTP
 rmcp = { version = "1.7", features = ["server", "transport-io", "transport-streamable-http-server"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 axum = "0.8"
 qrcodegen = "1.8"
 rand = "0.9"

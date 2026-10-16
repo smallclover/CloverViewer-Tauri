@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 const WEB_SUPPORTED: &[&str] = &["png", "jpg", "jpeg", "bmp", "gif", "webp", "avif"];
 
 /// 扫描白名单：比 WebView2 原生支持的格式多出 tiff
-pub const SUPPORTED_IMAGE_EXTENSIONS: &[&str] =
-    &["png", "jpg", "jpeg", "bmp", "gif", "webp", "tiff", "avif"];
+pub const SUPPORTED_IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "bmp", "gif", "webp", "tif", "tiff", "avif",
+];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ImageEntry {
@@ -41,6 +42,18 @@ fn is_supported(path: &Path) -> bool {
 fn is_web_supported(path: &Path) -> bool {
     let ext = extension_of(path);
     WEB_SUPPORTED.contains(&ext.as_str())
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+    #[test]
+    fn both_tiff_extensions_are_discoverable_and_use_native_fallback() {
+        for path in ["scan.tif", "scan.TIFF"] {
+            assert!(is_supported(Path::new(path)));
+            assert!(!is_web_supported(Path::new(path)));
+        }
+    }
 }
 
 /// 扫描目录下的所有支持图片（只扫一层，不递归）

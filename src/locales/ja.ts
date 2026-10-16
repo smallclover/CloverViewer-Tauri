@@ -300,6 +300,14 @@ export const ja = {
   "ctx.edit": "画像を編集",
   // 画像エディター
   "editor.title": "画像を編集",
+  "editor.zoomIn": "プレビューを拡大",
+  "editor.exportHint":
+    "静止画として保存します。アニメーションは1フレームのみとなり、元の EXIF/ICC は保持されません。JPEG は品質90%、透明部分は白背景になります。",
+  "editor.zoomOut": "プレビューを縮小",
+  "shot.shareExpired": "共有は無効になりました。リンクを再作成してください。",
+  "shot.shareStopFailed": "停止に失敗しました。再試行してください",
+  "editor.zoomHelp":
+    "ホイールで拡大縮小、スペースキーまたは中ボタンを押しながらドラッグで移動。0 で全体表示、1 で実寸表示。",
   "editor.select": "選択",
   "editor.crop": "切り抜き",
   "editor.rotate": "回転",

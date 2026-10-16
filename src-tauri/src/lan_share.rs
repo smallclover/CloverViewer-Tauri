@@ -18,7 +18,10 @@ use qrcodegen::{QrCode, QrCodeEcc};
 use serde::Serialize;
 use std::{
     net::{IpAddr, Ipv4Addr, UdpSocket},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::oneshot;
@@ -29,6 +32,7 @@ const MAX_PREVIEW_EDGE: u32 = 4096;
 #[derive(Clone)]
 pub struct LanShareStore {
     active: Arc<Mutex<Option<ActiveLanShare>>>,
+    generation: Arc<AtomicU64>,
 }
 
 struct ActiveLanShare {
@@ -44,6 +48,7 @@ struct ActiveLanShare {
 
 #[derive(Serialize)]
 pub struct LanShareInfo {
+    pub share_id: String,
     pub url: String,
     pub qr_code: String,
     pub expires_in_seconds: u64,
@@ -54,13 +59,21 @@ impl LanShareStore {
     pub fn new() -> Self {
         Self {
             active: Arc::new(Mutex::new(None)),
+            generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
     pub fn stop(&self) {
-        if let Some(active) = self.active.lock().unwrap().take() {
+        let mut active = self.active.lock().unwrap();
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        if let Some(active) = active.take() {
             let _ = active.shutdown.send(());
         }
+    }
+
+    fn begin_request(&self) -> u64 {
+        let _active = self.active.lock().unwrap();
+        self.generation.fetch_add(1, Ordering::SeqCst) + 1
     }
 
     fn stop_token(&self, token: &str) {
@@ -184,6 +197,7 @@ pub async fn start_lan_share(
     config: tauri::State<'_, ConfigStore>,
     png: String,
 ) -> Result<LanShareInfo, String> {
+    let request = store.begin_request();
     let png = base64::engine::general_purpose::STANDARD
         .decode(png.trim_start_matches("data:image/png;base64,"))
         .map_err(|e| format!("截图数据无效: {e}"))?;
@@ -194,7 +208,16 @@ pub async fn start_lan_share(
         return Err("局域网分享仅支持 PNG 截图".to_string());
     }
 
-    start_share(&store, &config, png, "image/png", "screenshot", "png").await
+    start_share(
+        &store,
+        &config,
+        png,
+        "image/png",
+        "screenshot",
+        "png",
+        request,
+    )
+    .await
 }
 
 /// 把查看器当前图片转成浏览器可用的 JPEG 预览来分享。
@@ -204,19 +227,35 @@ pub async fn start_image_lan_share(
     store: tauri::State<'_, LanShareStore>,
     config: tauri::State<'_, ConfigStore>,
     path: String,
+    png: Option<String>,
 ) -> Result<LanShareInfo, String> {
-    let source = image::open(&path).map_err(|e| format!("无法读取图片: {e}"))?;
-    let (width, height) = source.dimensions();
-    let preview = if width.max(height) > MAX_PREVIEW_EDGE {
-        source.thumbnail(MAX_PREVIEW_EDGE, MAX_PREVIEW_EDGE)
-    } else {
-        source
-    };
-    let mut jpeg = Vec::new();
-    JpegEncoder::new_with_quality(&mut jpeg, 90)
-        .encode_image(&preview)
-        .map_err(|e| format!("无法生成分享预览图: {e}"))?;
-    start_share(&store, &config, jpeg, "image/jpeg", "image_preview", "jpg").await
+    let request = store.begin_request();
+    let jpeg = crate::image_tasks::run(move || {
+        let source = crate::image_io::read_pixels(&path, png.as_deref())
+            .map_err(|e| format!("无法读取图片: {e}"))?;
+        let (width, height) = source.dimensions();
+        let preview = if width.max(height) > MAX_PREVIEW_EDGE {
+            source.thumbnail(MAX_PREVIEW_EDGE, MAX_PREVIEW_EDGE)
+        } else {
+            source
+        };
+        let mut jpeg = Vec::new();
+        JpegEncoder::new_with_quality(&mut jpeg, 90)
+            .encode_image(&preview)
+            .map_err(|e| format!("无法生成分享预览图: {e}"))?;
+        Ok(jpeg)
+    })
+    .await?;
+    start_share(
+        &store,
+        &config,
+        jpeg,
+        "image/jpeg",
+        "image_preview",
+        "jpg",
+        request,
+    )
+    .await
 }
 
 async fn start_share(
@@ -226,6 +265,7 @@ async fn start_share(
     mime: &'static str,
     filename_prefix: &str,
     extension: &str,
+    request: u64,
 ) -> Result<LanShareInfo, String> {
     if data.len() > MAX_SHARE_BYTES {
         return Err("分享文件过大，局域网分享最多支持 25 MB".to_string());
@@ -233,7 +273,6 @@ async fn start_share(
     let config = config.snapshot();
     let ttl = share_duration(config.lan_share_duration_seconds);
     let download_limit = download_limit(config.lan_share_download_limit);
-    store.stop();
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
         .await
         .map_err(|e| format!("无法启动局域网分享服务: {e}"))?;
@@ -254,6 +293,12 @@ async fn start_share(
     let (shutdown, receiver) = oneshot::channel();
     {
         let mut active = store.active.lock().unwrap();
+        if store.generation.load(Ordering::SeqCst) != request {
+            return Err("Share request was cancelled".into());
+        }
+        if let Some(previous) = active.take() {
+            let _ = previous.shutdown.send(());
+        }
         *active = Some(ActiveLanShare {
             token: token.clone(),
             data: Arc::new(data),
@@ -280,12 +325,14 @@ async fn start_share(
     });
 
     let expiry_store = store.inner_clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(ttl);
-        expiry_store.stop_token(&token);
+    let expiry_token = token.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(ttl).await;
+        expiry_store.stop_token(&expiry_token);
     });
 
     Ok(LanShareInfo {
+        share_id: token,
         url,
         qr_code,
         expires_in_seconds: ttl.as_secs(),
@@ -294,8 +341,17 @@ async fn start_share(
 }
 
 #[tauri::command]
-pub fn stop_lan_share(store: tauri::State<'_, LanShareStore>) {
-    store.stop();
+pub fn is_lan_share_active(store: tauri::State<'_, LanShareStore>, share_id: String) -> bool {
+    store.get(&share_id).is_some()
+}
+
+#[tauri::command]
+pub fn stop_lan_share(store: tauri::State<'_, LanShareStore>, share_id: Option<String>) {
+    if let Some(id) = share_id {
+        store.stop_token(&id);
+    } else {
+        store.stop();
+    }
 }
 
 impl LanShareStore {
@@ -360,6 +416,51 @@ async fn download_image(State(store): State<LanShareStore>, Path(token): Path<St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_download_share_stays_active_for_previews_and_expires_after_the_download() {
+        let store = LanShareStore::new();
+        let (shutdown, _) = oneshot::channel();
+        *store.active.lock().unwrap() = Some(ActiveLanShare {
+            token: "single".into(),
+            data: Arc::new(vec![1]),
+            mime: "image/png",
+            filename: "test.png".into(),
+            expires_at: Instant::now() + Duration::from_secs(60),
+            download_limit: 1,
+            downloads: 0,
+            shutdown,
+        });
+        assert!(store.get("single").is_some());
+        assert!(store.get("single").is_some());
+        assert!(store.take_download("single").is_some());
+        assert!(store.get("single").is_none());
+        assert!(store.take_download("single").is_none());
+    }
+
+    #[test]
+    fn stale_stop_cannot_revoke_a_new_share_and_global_stop_cancels_pending_requests() {
+        let store = LanShareStore::new();
+        let first = store.begin_request();
+        let latest = store.begin_request();
+        assert_ne!(first, latest);
+        let (shutdown, _) = oneshot::channel();
+        *store.active.lock().unwrap() = Some(ActiveLanShare {
+            token: "latest".into(),
+            data: Arc::new(vec![1]),
+            mime: "image/png",
+            filename: "test.png".into(),
+            expires_at: Instant::now() + Duration::from_secs(60),
+            download_limit: 0,
+            downloads: 0,
+            shutdown,
+        });
+        store.stop_token("old");
+        assert!(store.get("latest").is_some());
+        store.stop();
+        assert!(store.get("latest").is_none());
+        assert_ne!(store.generation.load(Ordering::SeqCst), latest);
+    }
 
     #[test]
     fn generated_token_is_url_safe_and_unique() {

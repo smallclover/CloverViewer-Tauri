@@ -116,7 +116,8 @@ pub fn run_session_ext(
     let mut partial_reason: Option<String> = None;
     let mut attempted_methods: Vec<&'static str> = Vec::new();
 
-    while engine.frames() < options.max_frames && engine.height() < options.max_height_px {
+    let safe_height = super::session::safe_height_limit(cap.w, options.max_height_px);
+    while engine.frames() < options.max_frames && engine.height() < safe_height {
         if cancel.load(Ordering::Relaxed) {
             partial_reason = Some("已停止并保留全部已验证内容".into());
             break;
@@ -161,6 +162,10 @@ pub fn run_session_ext(
         log.log(&format!("{} pixel_diff={diff:.5}", selected.name()));
         let candidate_preview = frame_data_url(&current);
         match engine.ingest(current)? {
+            EngineEvent::LimitReached => {
+                partial_reason = Some("达到滚动截图上限，已保留已验证内容".into());
+                break;
+            }
             EngineEvent::Appended { shift, support, .. } => {
                 method = Some(selected);
                 no_motion = 0;
@@ -266,11 +271,11 @@ pub fn run_session_ext(
                 );
             }
         }
-        let ratio = engine.height() as f32 / options.max_height_px as f32;
+        let ratio = engine.height() as f32 / safe_height as f32;
         host.set_progress(true, ratio);
     }
     drop(cursor_guard);
-    finish(engine, partial_reason, options.max_height_px)
+    finish(engine, partial_reason, safe_height)
 }
 
 fn validate_rect(cap: &super::RectPx) -> Result<(), String> {

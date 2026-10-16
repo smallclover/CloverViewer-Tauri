@@ -1,0 +1,18 @@
+const assert=require("node:assert/strict");
+const test=require("node:test");
+const loadTs=require("./helpers/load-ts.cjs");
+test("wheel zoom and Space/middle-button panning use CSS coordinates without starting annotations", () => {
+  const events=new Map(),windowEvents=new Map(),calls=[];let busy=false;
+  const {bindEditorViewportInput}=loadTs("image-editor/viewport-input.ts",{}, {window:{addEventListener:(name,handler)=>windowEvents.set(name,handler)}});
+  const surface={classList:{add(){},remove(){}},addEventListener:(name,handler)=>events.set(name,handler),getBoundingClientRect:()=>({left:20,top:30}),setPointerCapture(){},hasPointerCapture:()=>true,releasePointerCapture(){}};
+  const viewport={zoomBy:(factor,anchor)=>calls.push({factor,anchor}),panBy:(x,y)=>calls.push({x,y}),fit(){},actualSize(){}};
+  bindEditorViewportInput({surface,viewport,isActive:()=>true,isBusy:()=>busy});
+  const event=(extra={})=>({pointerId:1,preventDefault(){this.prevented=true;},stopImmediatePropagation(){this.stopped=true;},...extra});
+  events.get("wheel")(event({deltaY:-100,clientX:120,clientY:130}));
+  assert.deepEqual({...calls[0].anchor},{x:100,y:100});
+  windowEvents.get("keydown")(event({key:" "}));
+  const down=event({button:0,clientX:50,clientY:60});events.get("pointerdown")(down);assert.equal(down.stopped,true);
+  events.get("pointermove")(event({clientX:60,clientY:70}));events.get("pointerup")(event({clientX:65,clientY:75}));
+  assert.deepEqual(calls.slice(1),[{x:10,y:10},{x:5,y:5}]);
+  busy=true;events.get("wheel")(event({deltaY:100,clientX:0,clientY:0}));assert.equal(calls.length,3);
+});

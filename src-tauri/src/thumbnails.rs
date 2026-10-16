@@ -7,6 +7,7 @@
 use base64::Engine;
 use lru::LruCache;
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{
     collections::hash_map::DefaultHasher,
@@ -14,17 +15,38 @@ use std::{
     hash::{Hash, Hasher},
     io::Cursor,
     path::{Path, PathBuf},
-    time::UNIX_EPOCH,
 };
-use tauri::State;
+use tauri::Manager;
 
 const DISK_CACHE_LIMIT: usize = 512;
 const DISK_CACHE_MAX_BYTES: u64 = 128 * 1024 * 1024;
+const MEMORY_CACHE_MAX_BYTES: usize = 32 * 1024 * 1024;
 
-/// 缩略图内存缓存（key: `path#size` -> JPEG 或 PNG data URL）
+fn cache_thumbnail(
+    cache: &mut LruCache<String, String>,
+    key: String,
+    value: String,
+    budget: usize,
+) {
+    if value.len() > budget {
+        return;
+    }
+    cache.put(key, value);
+    let mut bytes = cache.iter().map(|(_, value)| value.len()).sum::<usize>();
+    while bytes > budget {
+        if let Some((_, value)) = cache.pop_lru() {
+            bytes -= value.len();
+        } else {
+            break;
+        }
+    }
+}
+
+/// 内存和磁盘缓存共用包含原图版本的 key。
 pub struct ThumbnailStore {
     cache: Mutex<LruCache<String, String>>,
     disk_cache_dir: Mutex<Option<PathBuf>>,
+    writes_since_trim: AtomicUsize,
 }
 
 impl ThumbnailStore {
@@ -32,6 +54,7 @@ impl ThumbnailStore {
         Self {
             cache: Mutex::new(LruCache::new(NonZeroUsize::new(capacity.max(1)).unwrap())),
             disk_cache_dir: Mutex::new(None),
+            writes_since_trim: AtomicUsize::new(0),
         }
     }
 
@@ -46,67 +69,72 @@ impl ThumbnailStore {
         trim_disk_cache(&dir);
     }
 
-    fn read_disk_cache(&self, path: &str, size: u32) -> Option<String> {
-        let file = self.disk_cache_file(path, size)?;
+    fn read_disk_cache(&self, key: &str) -> Option<String> {
+        let file = self.disk_cache_file(key)?;
         let data_url = fs::read_to_string(file).ok()?;
         data_url.starts_with("data:image/").then_some(data_url)
     }
 
-    fn write_disk_cache(&self, path: &str, size: u32, data_url: &str) {
-        let Some(file) = self.disk_cache_file(path, size) else {
+    fn write_disk_cache(&self, key: &str, data_url: &str) {
+        let Some(file) = self.disk_cache_file(key) else {
             return;
         };
         if let Err(error) = fs::write(&file, data_url) {
             tracing::debug!("无法写入缩略图磁盘缓存 {}: {error}", file.display());
             return;
         }
-        if let Some(dir) = file.parent() {
+        if let Some(dir) = file
+            .parent()
+            .filter(|_| self.writes_since_trim.fetch_add(1, Ordering::Relaxed) % 16 == 15)
+        {
             trim_disk_cache(dir);
         }
     }
 
-    fn disk_cache_file(&self, path: &str, size: u32) -> Option<PathBuf> {
+    fn disk_cache_file(&self, key: &str) -> Option<PathBuf> {
         let dir = self.disk_cache_dir.lock().unwrap().clone()?;
-        let metadata = fs::metadata(path).ok()?;
-        let modified = metadata
-            .modified()
-            .ok()?
-            .duration_since(UNIX_EPOCH)
-            .ok()?
-            .as_nanos();
         let mut hasher = DefaultHasher::new();
-        path.hash(&mut hasher);
-        size.hash(&mut hasher);
-        metadata.len().hash(&mut hasher);
-        modified.hash(&mut hasher);
+        key.hash(&mut hasher);
         Some(dir.join(format!("{:016x}.data-url", hasher.finish())))
+    }
+
+    fn get(&self, path: &str, size: u32) -> Result<String, String> {
+        let size = size.clamp(32, 1024);
+        let metadata = fs::metadata(path).map_err(|error| error.to_string())?;
+        let modified = metadata.modified().map_err(|error| error.to_string())?;
+        let key = format!("{path}#{size}#{}#{modified:?}", metadata.len());
+        if let Some(hit) = self.cache.lock().unwrap().get(&key) {
+            return Ok(hit.clone());
+        }
+        if let Some(hit) = self.read_disk_cache(&key) {
+            cache_thumbnail(
+                &mut self.cache.lock().unwrap(),
+                key,
+                hit.clone(),
+                MEMORY_CACHE_MAX_BYTES,
+            );
+            return Ok(hit);
+        }
+        let data_url = generate_thumbnail(path, size)?;
+        cache_thumbnail(
+            &mut self.cache.lock().unwrap(),
+            key.clone(),
+            data_url.clone(),
+            MEMORY_CACHE_MAX_BYTES,
+        );
+        self.write_disk_cache(&key, &data_url);
+        Ok(data_url)
     }
 }
 
 /// 生成缩略图（等比缩放到 size 范围内），返回 JPEG 或 PNG data URL
 #[tauri::command]
-pub fn get_thumbnail(
-    store: State<'_, ThumbnailStore>,
+pub async fn get_thumbnail(
+    app: tauri::AppHandle,
     path: String,
     size: u32,
 ) -> Result<String, String> {
-    let size = size.clamp(32, 1024);
-    let key = format!("{path}#{size}");
-
-    if let Some(hit) = store.cache.lock().unwrap().get(&key) {
-        return Ok(hit.clone());
-    }
-
-    if let Some(hit) = store.read_disk_cache(&path, size) {
-        store.cache.lock().unwrap().put(key, hit.clone());
-        return Ok(hit);
-    }
-
-    let data_url = generate_thumbnail(&path, size)?;
-
-    store.cache.lock().unwrap().put(key, data_url.clone());
-    store.write_disk_cache(&path, size, &data_url);
-    Ok(data_url)
+    crate::image_tasks::run(move || app.state::<ThumbnailStore>().get(&path, size)).await
 }
 
 fn generate_thumbnail(path: &str, size: u32) -> Result<String, String> {
@@ -220,6 +248,42 @@ fn map_orientation(orientation: u8) -> image::metadata::Orientation {
 mod tests {
     use super::*;
     use image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
+
+    #[test]
+    fn memory_cache_evicts_by_bytes_and_does_not_keep_oversized_thumbnails() {
+        let mut cache = LruCache::new(NonZeroUsize::new(10).unwrap());
+        cache_thumbnail(&mut cache, "a".into(), "12345".into(), 8);
+        cache_thumbnail(&mut cache, "b".into(), "67890".into(), 8);
+        assert!(cache.get("a").is_none());
+        assert!(cache.get("b").is_some());
+        cache_thumbnail(&mut cache, "large".into(), "123456789".into(), 8);
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn overwriting_a_source_invalidates_memory_and_disk_thumbnails() {
+        let directory =
+            std::env::temp_dir().join(format!("clover-thumbnail-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source.png");
+        let store = ThumbnailStore::new(4);
+        store.configure_disk_cache(directory.join("cache"));
+        RgbImage::from_pixel(2, 2, Rgb([255, 0, 0]))
+            .save(&source)
+            .unwrap();
+        let first = store.get(source.to_str().unwrap(), 64).unwrap();
+        RgbImage::from_pixel(3, 3, Rgb([0, 255, 0]))
+            .save(&source)
+            .unwrap();
+        let replacement = store.get(source.to_str().unwrap(), 64).unwrap();
+        assert_ne!(first, replacement);
+        store.cache.lock().unwrap().clear();
+        assert_eq!(
+            replacement,
+            store.get(source.to_str().unwrap(), 64).unwrap()
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn opaque_thumbnails_use_jpeg() {

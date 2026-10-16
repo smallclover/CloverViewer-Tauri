@@ -16,6 +16,8 @@
     "src/image-editor/crop-selection.ts",
     "src/image-editor/crop-viewport.ts",
     "src/image-editor/frame-update.ts",
+    "src/image-editor/save-controller.ts",
+    "src/image-editor/canvas-export.ts",
     "src/image-editor/mosaic-cursor.ts",
     "src/ui/update-controller.ts",
     "src/viewer/thumbnail-loader.ts",

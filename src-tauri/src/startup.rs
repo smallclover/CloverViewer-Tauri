@@ -46,3 +46,45 @@ mod imp {
 }
 
 pub use imp::set_launch_on_startup;
+
+pub fn update_preference<T>(
+    previous: bool,
+    enabled: bool,
+    mut apply: impl FnMut(bool) -> Result<(), String>,
+    persist: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    apply(enabled)?;
+    persist().map_err(|error| match apply(previous) {
+        Ok(()) => error,
+        Err(rollback) => format!("{error}; rollback failed: {rollback}"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn startup_registry_failure_does_not_persist_and_disk_failure_restores_registry() {
+        let result = update_preference(
+            false,
+            true,
+            |_| Err("registry denied".into()),
+            || -> Result<(), String> {
+                panic!("must not persist");
+            },
+        );
+        assert!(result.is_err());
+        let mut values = Vec::new();
+        let result: Result<(), String> = update_preference(
+            false,
+            true,
+            |value| {
+                values.push(value);
+                Ok(())
+            },
+            || Err("disk full".into()),
+        );
+        assert!(result.is_err());
+        assert_eq!(values, [true, false]);
+    }
+}

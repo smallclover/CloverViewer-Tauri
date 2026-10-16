@@ -299,6 +299,14 @@ export const en = {
   "ctx.edit": "Edit image",
   // 图片编辑器
   "editor.title": "Edit image",
+  "editor.zoomIn": "Zoom in",
+  "editor.exportHint":
+    "Exports a static image; animations keep one frame. Original EXIF/ICC data is omitted. JPEG uses 90% quality with white behind transparent pixels.",
+  "editor.zoomOut": "Zoom out",
+  "shot.shareExpired": "This share has ended. Generate a new link.",
+  "shot.shareStopFailed": "Could not stop; retry",
+  "editor.zoomHelp":
+    "Scroll to zoom; hold Space or the middle mouse button to pan. 0 fits the image; 1 shows actual size.",
   "editor.select": "Select",
   "editor.crop": "Crop",
   "editor.rotate": "Rotate",

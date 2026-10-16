@@ -1,3 +1,4 @@
+import { canvasPng } from "../image-editor/canvas-export";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { EditedImageFormat, ImageEntry } from "../api";
 import { createAnnotationLayers } from "../image-editor/annotation-layers";
@@ -15,13 +16,17 @@ import {
   cloneShape,
   isShapeHit,
   normRect,
+  rotateShapeClockwise,
   type Pt,
   type Rect,
   type Shape,
   shapeBBox,
 } from "../image-editor/geometry";
-import { SnapshotHistory } from "../image-editor/history";
+import { SnapshotHistory, shapeHistoryBytes } from "../image-editor/history";
 import { createMosaicCursor } from "../image-editor/mosaic-cursor";
+import { createEditorSaveController } from "../image-editor/save-controller";
+import { bindEditorViewportInput } from "../image-editor/viewport-input";
+import { createEditorZoomToolbar } from "../image-editor/zoom-toolbar";
 import { createEditorToolbar, type EditorTool } from "../image-editor/toolbar";
 import { createImageEditorLoader } from "./image-editor-loader";
 
@@ -39,18 +44,6 @@ interface ImageEditorControllerOptions {
   onClose: () => void;
   onSaved: (path: string) => void;
   toast: (message: string, type?: "success" | "error") => void;
-}
-
-function canvasPng(canvas: HTMLCanvasElement): Promise<string> {
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => {
-      if (!blob) return reject(new Error("Canvas export failed"));
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    }, "image/png"),
-  );
 }
 
 /** 单张查看器图像的编辑器：基于 canvas 绘制，标注过程不破坏原图（可随时撤销）。 */
@@ -85,11 +78,18 @@ export function createImageEditorController(options: ImageEditorControllerOption
     rotate: () => rotate(),
     undo: () => undo(),
     redo: () => redo(),
-    saveAs: () => void saveAs(),
-    overwrite: () => void overwrite(),
+    saveAs: () => void saves.saveAs(),
+    overwrite: () => void saves.overwrite(),
     close: () => void close(),
   });
   const confirmDialog = createEditorConfirmDialog({ workspace });
+  const zoomToolbar = createEditorZoomToolbar({
+    workspace,
+    translate: options.translate,
+    zoom: (factor) => cropViewport.zoomBy(factor),
+    fit: () => cropViewport.fit(),
+    actualSize: () => cropViewport.actualSize(),
+  });
   const { color, sizes, format, outputScale } = toolbar;
 
   const context = canvas.getContext("2d");
@@ -117,7 +117,12 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let rotation = 0;
   let repaint = true;
   let dragging = false;
-  let dirty = false;
+  let session = 0;
+  let revision = 0;
+  let savedRevision = 0;
+  const markDirty = () => {
+    revision++;
+  };
   let closing = false;
   const mosaicCursor = createMosaicCursor({
     surface: canvas,
@@ -131,8 +136,11 @@ export function createImageEditorController(options: ImageEditorControllerOption
     crop: value.crop && { ...value.crop },
     rotation: value.rotation,
   });
-  const history = new SnapshotHistory<EditSnapshot>(cloneSnapshot);
-  const snapshot = (): EditSnapshot => cloneSnapshot({ shapes, crop, rotation });
+  const history = new SnapshotHistory<EditSnapshot>(
+    cloneSnapshot,
+    (value) => shapeHistoryBytes(value.shapes) + 128,
+  );
+  const snapshot = (): EditSnapshot => ({ shapes, crop, rotation });
   const checkpoint = () => history.checkpoint(snapshot());
   const restore = (value: EditSnapshot) => {
     shapes = value.shapes;
@@ -146,6 +154,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
 
   const translate = () => {
     toolbar.refreshTranslations();
+    zoomToolbar.refreshTranslations();
     textInput.ariaLabel = options.translate("editor.textPrompt");
     textInput.placeholder = textInput.ariaLabel;
   };
@@ -219,6 +228,14 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const paint = createFrameUpdate(() => render());
+  const cancelDrawing = () => {
+    if (!dragging && !current) return;
+    dragging = false;
+    paint.discard();
+    current = null;
+    resetActiveMosaic();
+    render();
+  };
 
   const cropViewport = createCropViewport({
     canvas,
@@ -226,6 +243,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     getCrop: () => crop,
     isCropping: () => tool === "crop",
     onLayout: (animating) => {
+      zoomToolbar.setScale(cropViewport.scale());
       if (animating) cropOverlay.refreshLayout();
       else cropOverlay.refreshImage();
       mosaicCursor.reset();
@@ -257,7 +275,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
           crop.h !== previous.h
         ) {
           history.checkpoint(cropSnapshot);
-          dirty = true;
+          markDirty();
         }
       }
       cropSnapshot = null;
@@ -274,6 +292,12 @@ export function createImageEditorController(options: ImageEditorControllerOption
     textInput.classList.remove("editing");
     textFrame.classList.add("hidden");
   };
+  const viewportInput = bindEditorViewportInput({
+    surface,
+    viewport: cropViewport,
+    isActive: () => !options.root.classList.contains("hidden"),
+    isBusy: () => dragging || !!cropSnapshot || !!textStart || confirmDialog.isOpen(),
+  });
   const commitTextInput = () => {
     const text = textInput.value.trim();
     if (textStart && text) {
@@ -294,7 +318,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
         text,
       });
       rasterizeAnnotations();
-      dirty = true;
+      markDirty();
       render();
     }
     hideTextInput();
@@ -371,6 +395,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   });
 
   const setTool = (next: EditorTool) => {
+    cancelDrawing();
     paint.discard();
     commitTextInput();
     cropOverlay.cancel();
@@ -380,7 +405,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     resetActiveMosaic();
     selectedIndex = null;
     toolbar.setActiveTool(next);
-    cropViewport.fit();
+    cropViewport.refresh();
     cropOverlay.update();
     mosaicCursor.refresh();
     render();
@@ -393,13 +418,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
 
   const transformAnnotations = () => {
     const oldHeight = sourceCanvas.height;
-    const transformShape = (shape: Shape) => ({
-      ...shape,
-      start: transformPoint(shape.start, oldHeight),
-      end: transformPoint(shape.end, oldHeight),
-      points: shape.points?.map((point) => transformPoint(point, oldHeight)),
-    });
-    shapes = shapes.map(transformShape);
+    shapes = shapes.map((shape) => rotateShapeClockwise(shape, oldHeight));
     if (crop) {
       const corners = [
         transformPoint({ x: crop.x, y: crop.y }, oldHeight),
@@ -410,31 +429,34 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const rotate = () => {
+    cancelDrawing();
     cropOverlay.cancel();
     checkpoint();
     transformAnnotations();
     rotation = (rotation + 90) % 360;
     rebuildSource();
     rasterizeAnnotations();
-    dirty = true;
+    markDirty();
     render();
     cropViewport.fit();
   };
 
   const undo = () => {
+    cancelDrawing();
     cropOverlay.cancel();
     const previous = history.undo(snapshot());
     if (!previous) return;
     restore(previous);
-    dirty = true;
+    markDirty();
     render();
   };
   const redo = () => {
+    cancelDrawing();
     cropOverlay.cancel();
     const next = history.redo(snapshot());
     if (!next) return;
     restore(next);
-    dirty = true;
+    markDirty();
     render();
   };
 
@@ -477,65 +499,45 @@ export function createImageEditorController(options: ImageEditorControllerOption
     return scaled;
   };
 
-  const selectedFormat = () => format.value as EditedImageFormat;
-  const saveTo = async (path: string, outputFormat = selectedFormat()) => {
-    await options.saveImage(path, await canvasPng(exportCanvas()), outputFormat);
-    dirty = false;
-    options.onSaved(path);
-    options.toast(options.translate("editor.saved"), "success");
-  };
-  const saveAs = async () => {
-    if (!entry) return;
-    const suffix = selectedFormat();
-    const name = `${entry.name.replace(/\.[^.]+$/, "")}_edited.${suffix === "jpeg" ? "jpg" : suffix}`;
-    const path = await save({
-      defaultPath: name,
-      filters: [{ name: suffix.toUpperCase(), extensions: [suffix === "jpeg" ? "jpg" : suffix] }],
-    });
-    if (!path) return;
-    try {
-      await saveTo(path);
-    } catch (error) {
-      options.toast(options.translate("editor.saveFailed", { msg: String(error) }), "error");
-    }
-  };
-  const overwrite = async () => {
-    if (!entry) return;
-    const confirmed = await confirmDialog.ask({
-      title: options.translate("editor.overwriteTitle"),
-      message: options.translate("editor.overwriteConfirm", { name: entry.name }),
-      cancelLabel: options.translate("editor.cancelAction"),
-      confirmLabel: options.translate("editor.overwriteTitle"),
-    });
-    if (!confirmed) return;
-    const extension = entry.name.split(".").pop()?.toLowerCase();
-    const sourceFormat: EditedImageFormat | null =
-      extension === "png"
-        ? "png"
-        : extension === "jpg" || extension === "jpeg"
-          ? "jpeg"
-          : extension === "webp"
-            ? "webp"
-            : null;
-    if (!sourceFormat) {
-      options.toast(options.translate("editor.overwriteUnsupported"), "error");
-      return;
-    }
-    try {
-      await saveTo(entry.path, sourceFormat);
-    } catch (error) {
-      options.toast(options.translate("editor.saveFailed", { msg: String(error) }), "error");
-    }
-  };
+  const saves = createEditorSaveController({
+    getEntry: () => entry,
+    getFormat: () => format.value as EditedImageFormat,
+    getSession: () => session,
+    getRevision: () => revision,
+    prepare: commitTextInput,
+    exportPng: () => canvasPng(exportCanvas()),
+    choosePath: (source, outputFormat) => {
+      const suffix = outputFormat === "jpeg" ? "jpg" : outputFormat;
+      return save({
+        defaultPath: `${source.name.replace(/\.[^.]+$/, "")}_edited.${suffix}`,
+        filters: [{ name: outputFormat.toUpperCase(), extensions: [suffix] }],
+      });
+    },
+    confirmOverwrite: (source) =>
+      confirmDialog.ask({
+        title: options.translate("editor.overwriteTitle"),
+        message: options.translate("editor.overwriteConfirm", { name: source.name }),
+        cancelLabel: options.translate("editor.cancelAction"),
+        confirmLabel: options.translate("editor.overwriteTitle"),
+      }),
+    saveImage: options.saveImage,
+    markSaved: (value) => {
+      savedRevision = value;
+    },
+    onSaved: options.onSaved,
+    translate: options.translate,
+    toast: options.toast,
+  });
 
   const close = async () => {
-    if (closing || confirmDialog.isOpen()) return;
+    if (closing || confirmDialog.isOpen()) return false;
     closing = true;
     try {
+      if (saves.isBusy()) await saves.whenIdle();
       cropOverlay.cancel();
       commitTextInput();
       if (
-        dirty &&
+        revision !== savedRevision &&
         !(await confirmDialog.ask({
           title: options.translate("editor.discardTitle"),
           message: options.translate("editor.discardConfirm"),
@@ -543,13 +545,26 @@ export function createImageEditorController(options: ImageEditorControllerOption
           confirmLabel: options.translate("editor.discardAndExit"),
         }))
       )
-        return;
+        return false;
+      session++;
       loader.cancel();
       paint.discard();
       toolbar.closePanels();
       options.root.classList.add("hidden");
       mosaicCursor.reset();
+      viewportInput.reset();
+      layers.reset();
+      mosaicRenderer.reset();
+      canvas.width = canvas.height = sourceCanvas.width = sourceCanvas.height = 0;
+      image?.removeAttribute("src");
+      image = null;
+      entry = null;
+      shapes = [];
+      current = null;
+      crop = null;
+      history.clear();
       options.onClose();
+      return true;
     } finally {
       closing = false;
     }
@@ -610,10 +625,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
     dragging = false;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     if (current) {
+      const point = displayPoint(event);
+      current.end = point;
       if (current.points) {
-        const point = displayPoint(event);
         const previous = current.points[current.points.length - 1];
-        current.end = point;
         if (Math.hypot(point.x - previous.x, point.y - previous.y) > 0) current.points.push(point);
       }
       if (
@@ -626,13 +641,16 @@ export function createImageEditorController(options: ImageEditorControllerOption
         checkpoint();
         shapes.push(current);
         rasterizeAnnotations();
-        dirty = true;
+        markDirty();
       }
       current = null;
       resetActiveMosaic();
     }
     render();
   });
+  canvas.addEventListener("pointercancel", cancelDrawing);
+  canvas.addEventListener("lostpointercapture", cancelDrawing);
+  window.addEventListener("blur", cancelDrawing);
   window.addEventListener("keydown", (event) => {
     if (options.root.classList.contains("hidden") || confirmDialog.isOpen()) return;
     if (event.ctrlKey && event.key.toLowerCase() === "z") {
@@ -646,7 +664,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       shapes.splice(selectedIndex, 1);
       rasterizeAnnotations();
       selectedIndex = null;
-      dirty = true;
+      markDirty();
       render();
     } else if (event.key === "Escape") {
       event.preventDefault();
@@ -670,7 +688,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     dragging = false;
     hideTextInput();
     rotation = 0;
-    dirty = false;
+    session++;
+    revision = savedRevision = 0;
     history.clear();
     rebuildSource();
     rasterizeAnnotations();
@@ -688,6 +707,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   return {
     open,
     close,
+    requestLeave: close,
     cancelPendingOpen: loader.cancel,
     isOpening: loader.isLoading,
     isOpen: () => !options.root.classList.contains("hidden"),

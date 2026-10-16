@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-close",
+  "description": "Allow the main-window close handler to finish closing after the unsaved-edit guard accepts.",
+  "windows": ["main"],
+  "permissions": ["core:window:allow-destroy"]
+}

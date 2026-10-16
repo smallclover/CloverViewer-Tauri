@@ -494,3 +494,22 @@ pub async fn ocr_image(app: tauri::AppHandle, png: String) -> Result<String, Str
     .await
     .map_err(|e| e.to_string())?
 }
+
+#[cfg(test)]
+mod processing_tests {
+    use super::*;
+    #[test]
+    fn unsharp_mask_reference_pixels() {
+        let source = GrayImage::from_fn(8, 8, |x, y| Luma([((x * 31 + y * 17) % 256) as u8]));
+        let result = unsharp_mask(source, 0.8, 0.6);
+        assert_eq!(
+            result.as_raw(),
+            &[
+                0, 28, 59, 90, 121, 152, 184, 219, 12, 47, 79, 110, 141, 172, 204, 241, 29, 65, 96,
+                127, 158, 190, 230, 255, 46, 82, 113, 144, 175, 209, 255, 0, 63, 99, 130, 161, 194,
+                237, 255, 2, 80, 116, 147, 179, 220, 255, 0, 40, 97, 133, 164, 198, 255, 0, 19, 67,
+                117, 152, 184, 218, 255, 0, 48, 88
+            ]
+        );
+    }
+}

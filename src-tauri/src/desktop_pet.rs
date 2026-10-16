@@ -2,7 +2,7 @@
 //!
 //! 窗口与主查看器解耦，截图前会临时隐藏，因此不会被捕获进图片。
 
-use crate::config::{save_config, ConfigStore};
+use crate::config::ConfigStore;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Mutex,
@@ -142,7 +142,7 @@ fn create_window(app: &AppHandle, scale: u16) -> Result<WebviewWindow, String> {
         "pet-screenshot" => crate::screenshot::start_screenshot(&menu_app),
         "pet-scroll-screenshot" => crate::screenshot::start_scroll_screenshot(&menu_app),
         "pet-show-main" => crate::show_main_window(&menu_app),
-        "pet-quit" => menu_app.exit(0),
+        "pet-quit" => crate::request_app_exit(&menu_app),
         _ => {}
     });
 
@@ -205,10 +205,17 @@ pub fn set_enabled(
             .map_err(|error| format!("隐藏桌宠失败: {error}"))?;
     }
 
-    let mut config = (*store.snapshot()).clone();
-    config.desktop_pet_enabled = enabled;
-    store.replace(config.clone());
-    save_config(&config);
+    let previous = store.snapshot().desktop_pet_enabled;
+    if let Err(error) = store.update_saved(|config| config.desktop_pet_enabled = enabled) {
+        if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+            let _ = if previous {
+                window.show()
+            } else {
+                window.hide()
+            };
+        }
+        return Err(error);
+    }
     Ok(())
 }
 
@@ -234,13 +241,16 @@ fn apply_scale(window: &WebviewWindow, scale: u16) -> Result<(), String> {
 }
 
 pub fn set_scale(app: &AppHandle, store: &ConfigStore, scale: u16) -> Result<(), String> {
-    let mut config = (*store.snapshot()).clone();
-    config.desktop_pet_scale = normalize_scale(scale);
-    store.replace(config.clone());
-    save_config(&config);
-
+    let previous = store.snapshot().desktop_pet_scale;
+    let scale = normalize_scale(scale);
     if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-        apply_scale(&window, config.desktop_pet_scale)?;
+        apply_scale(&window, scale)?;
+    }
+    if let Err(error) = store.update_saved(|config| config.desktop_pet_scale = scale) {
+        if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+            let _ = apply_scale(&window, previous);
+        }
+        return Err(error);
     }
     Ok(())
 }

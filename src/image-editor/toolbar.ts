@@ -148,6 +148,10 @@ export function createEditorToolbar(options: ToolbarOptions) {
   saveOptions.setAttribute("aria-controls", popup.id);
   saveOptions.setAttribute("aria-expanded", "false");
   popup.append(translated("strong", "editor.saveOptions"));
+  const exportHint = document.createElement("p");
+  exportHint.className = "image-editor-export-hint";
+  labels.set(exportHint, "editor.exportHint");
+  popup.append(exportHint);
   const format = document.createElement("select");
   format.className = "image-editor-select";
   for (const value of ["png", "jpeg", "webp"])

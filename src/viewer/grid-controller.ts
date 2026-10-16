@@ -213,12 +213,12 @@ export function createGridController(options: GridControllerOptions) {
     });
   };
 
-  const sortCurrentImages = () => {
+  const sortCurrentImages = (entries = options.session.images) => {
     const activePath =
       options.session.activeIndex >= 0
         ? options.session.images[options.session.activeIndex]?.path
         : undefined;
-    options.session.images = sortImagesByModified(options.session.images, newestFirst);
+    options.session.images = sortImagesByModified(entries, newestFirst);
     options.session.activeIndex = activePath
       ? options.session.images.findIndex((entry) => entry.path === activePath)
       : -1;

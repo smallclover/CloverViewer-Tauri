@@ -56,12 +56,23 @@ export function drawAnnotation(context: CanvasRenderingContext2D, shape: Shape, 
       context.stroke();
       break;
     case "text": {
+      const rotated = !!shape.rotation;
+      if (rotated) {
+        context.save();
+        context.translate(shape.start.x, shape.start.y);
+        context.rotate(((shape.rotation ?? 0) * Math.PI) / 180);
+      }
       const fontSize = textFontSize(shape) * scale;
       context.font = annotationFont(fontSize);
       context.textBaseline = "top";
       (shape.text || "").split("\n").forEach((line, index) => {
-        context.fillText(line, shape.start.x, shape.start.y + index * fontSize * 1.2);
+        context.fillText(
+          line,
+          rotated ? 0 : shape.start.x,
+          (rotated ? 0 : shape.start.y) + index * fontSize * 1.2,
+        );
       });
+      if (rotated) context.restore();
       break;
     }
     case "mosaic":

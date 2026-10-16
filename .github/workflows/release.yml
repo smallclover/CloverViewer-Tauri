@@ -25,10 +25,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Check frontend
+        run: npm run check
 
       # package.json 是应用版本的唯一来源；标签必须与它完全一致，避免发布包、
       # About 页面和 Release 标题出现不同版本。
@@ -44,6 +47,17 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check Rust
+        run: |
+          cargo fmt --check --manifest-path src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri/Cargo.toml --lib
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # 从 CHANGELOG.md 抽当前标签对应的版本段落（到下一个 `## ` 标题为止），
       # 并以多行 heredoc 形式交给后面的 tauri-action 当作 Release 正文。

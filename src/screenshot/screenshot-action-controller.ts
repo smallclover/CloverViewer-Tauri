@@ -3,6 +3,7 @@ import {
   finishScreenshot,
   ocrImage,
   startLanShare,
+  stopLanShare,
   type LanShareInfo,
 } from "../api";
 import type { Rect, Shape } from "./geometry";
@@ -120,7 +121,10 @@ export function createScreenshotActionController(options: ScreenshotActionContro
 
   const shareImage = async () => {
     const selection = validSelection();
-    if (!selection) return;
+    if (!selection || busy) return;
+    busy = true;
+    const current = generation;
+    options.setActionBusy(true);
     try {
       const png = await selectionToPngBase64({
         selection,
@@ -129,9 +133,21 @@ export function createScreenshotActionController(options: ScreenshotActionContro
           for (const shape of options.getShapes()) options.drawShape(context, shape);
         },
       });
-      options.showLanShare(await startLanShare(png));
+      if (current !== generation) return;
+      const info = await startLanShare(png);
+      if (current !== generation) {
+        await stopLanShare(info.share_id);
+        return;
+      }
+      options.showLanShare(info);
     } catch (error) {
+      if (current !== generation) return;
       options.showNotice(options.translate("shot.shareFailed", { msg: String(error) }), "error");
+    } finally {
+      if (current === generation) {
+        busy = false;
+        options.setActionBusy(false);
+      }
     }
   };
 

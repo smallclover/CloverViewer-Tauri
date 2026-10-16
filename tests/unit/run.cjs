@@ -1,4 +1,15 @@
 require("./grid-layout.test.cjs");
+require("./scroll-export.test.cjs");
+require("./editor-save.test.cjs");
+require("./navigation.test.cjs");
+require("./screenshot-actions.test.cjs");
+require("./config-writer.test.cjs");
+require("./image-pixels.test.cjs");
+require("./text-rotation.test.cjs");
+require("./editor-viewport-input.test.cjs");
+require("./theme-controller.test.cjs");
+require("./share-status.test.cjs");
+require("./settings-persistence.test.cjs");
 require("./image-sort.test.cjs");
 require("./image-source.test.cjs");
 require("./open-image-bridge.test.cjs");

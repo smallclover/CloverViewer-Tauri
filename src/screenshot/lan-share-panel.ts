@@ -1,9 +1,11 @@
 import { t } from "../i18n";
+import { isLanShareActive, type LanShareInfo } from "../api";
+import { watchShareStatus } from "../ui/share-status";
 import { makeBtn } from "./icons";
 
 export interface LanSharePanel {
   show(
-    info: { url: string; qr_code: string; expires_in_seconds: number; download_limit: number },
+    info: LanShareInfo,
     position: (size: { w: number; h: number }) => { x: number; y: number },
   ): void;
   hide(): void;
@@ -17,7 +19,7 @@ export function createLanSharePanel({
 }: {
   uiLayer: HTMLElement;
   onCopy: (url: string) => Promise<void>;
-  onStop: () => Promise<void>;
+  onStop: (shareId: string) => Promise<void>;
 }): LanSharePanel {
   const element = document.createElement("section");
   element.id = "lan-share-panel";
@@ -54,10 +56,15 @@ export function createLanSharePanel({
   element.append(title, description, qr, url, status, actions);
   uiLayer.append(element);
 
-  let timer: number | undefined;
+  let stopWatching: (() => void) | undefined;
   let feedbackTimer: number | undefined;
   let sharedUrl = "";
+  let shareId = "";
+  let generation = 0;
+  let active = false;
   const resetActions = () => {
+    active = true;
+    qr.hidden = false;
     copy.disabled = false;
     copy.classList.remove("feedback", "error");
     copyLabel.textContent = t("shot.shareCopy");
@@ -66,35 +73,40 @@ export function createLanSharePanel({
     stopLabel.textContent = t("shot.shareStop");
   };
   const hide = () => {
-    if (timer !== undefined) window.clearInterval(timer);
+    generation++;
+    active = false;
+    stopWatching?.();
     if (feedbackTimer !== undefined) window.clearTimeout(feedbackTimer);
-    timer = undefined;
+    stopWatching = undefined;
     feedbackTimer = undefined;
     element.style.display = "none";
   };
-  const updateCountdown = (deadline: number) => {
-    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  const updateCountdown = (remaining: number) => {
     const minutes = Math.floor(remaining / 60)
       .toString()
       .padStart(2, "0");
     const seconds = (remaining % 60).toString().padStart(2, "0");
     expires.textContent = t("shot.shareExpires", { time: `${minutes}:${seconds}` });
-    if (remaining === 0) hide();
   };
   copy.addEventListener("click", (event) => {
     event.stopPropagation();
+    const current = generation;
     copy.disabled = true;
     void onCopy(sharedUrl)
       .then(() => {
+        if (current !== generation || !active) return;
         copy.classList.add("feedback");
         copyLabel.textContent = t("shot.shareCopied");
       })
       .catch(() => {
+        if (current !== generation || !active) return;
         copy.classList.add("error");
         copyLabel.textContent = t("shot.shareCopyFailed");
       })
       .finally(() => {
+        if (current !== generation || !active) return;
         feedbackTimer = window.setTimeout(() => {
+          if (current !== generation || !active) return;
           copy.disabled = false;
           copy.classList.remove("feedback", "error");
           copyLabel.textContent = t("shot.shareCopy");
@@ -103,18 +115,31 @@ export function createLanSharePanel({
   });
   stop.addEventListener("click", (event) => {
     event.stopPropagation();
+    const current = generation;
+    stopWatching?.();
     stop.disabled = true;
     stop.classList.add("feedback");
     stopLabel.textContent = t("shot.shareStopped");
-    void onStop().finally(() => {
-      feedbackTimer = window.setTimeout(hide, 650);
-    });
+    void onStop(shareId).then(
+      () => {
+        if (current === generation)
+          feedbackTimer = window.setTimeout(() => {
+            if (current === generation) hide();
+          }, 650);
+      },
+      () => {
+        if (current !== generation) return;
+        stop.disabled = false;
+        stopLabel.textContent = t("shot.shareStopFailed");
+      },
+    );
   });
   return {
     show(info, position) {
       hide();
       resetActions();
       sharedUrl = info.url;
+      shareId = info.share_id;
       qr.src = info.qr_code;
       qr.alt = t("shot.shareQrAlt");
       url.textContent = info.url;
@@ -125,9 +150,17 @@ export function createLanSharePanel({
       const point = position({ w: element.offsetWidth, h: element.offsetHeight });
       element.style.left = `${Math.round(point.x)}px`;
       element.style.top = `${Math.round(point.y)}px`;
-      const deadline = Date.now() + info.expires_in_seconds * 1000;
-      updateCountdown(deadline);
-      timer = window.setInterval(() => updateCountdown(deadline), 1000);
+      stopWatching = watchShareStatus({
+        seconds: info.expires_in_seconds,
+        read: () => isLanShareActive(info.share_id),
+        onTick: updateCountdown,
+        onExpired: () => {
+          active = false;
+          qr.hidden = true;
+          copy.disabled = stop.disabled = true;
+          expires.textContent = t("shot.shareExpired");
+        },
+      });
     },
     hide,
   };

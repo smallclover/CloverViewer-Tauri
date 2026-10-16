@@ -8,6 +8,7 @@ use tauri::{
 
 fn menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let config = app.state::<ConfigStore>().snapshot();
+    let active = crate::hotkeys::active(app);
     let labels = match config.language {
         Language::Zh => [
             "显示主窗口",
@@ -36,14 +37,22 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let screenshot = MenuItem::with_id(
         app,
         "tray-screenshot",
-        format!("{}\t{}", labels[1], config.hotkeys.show_screenshot),
+        format!(
+            "{}\t{}",
+            labels[1],
+            active.show_screenshot.as_deref().unwrap_or("—")
+        ),
         true,
         None::<&str>,
     )?;
     let scroll = MenuItem::with_id(
         app,
         "tray-scroll",
-        format!("{}\t{}", labels[2], config.hotkeys.scroll_capture),
+        format!(
+            "{}\t{}",
+            labels[2],
+            active.scroll_capture.as_deref().unwrap_or("—")
+        ),
         true,
         None::<&str>,
     )?;
@@ -92,7 +101,7 @@ pub fn create(app: &tauri::App) -> tauri::Result<()> {
                     serde_json::json!({"action": "settings"}),
                 );
             }
-            "tray-quit" => app.exit(0),
+            "tray-quit" => crate::request_app_exit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {

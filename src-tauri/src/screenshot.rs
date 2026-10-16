@@ -192,8 +192,12 @@ pub fn copy_text(text: String) -> Result<(), String> {
 /// 支持会随运行环境变化，长截图从查看器打开后尤其容易报错。统一走 arboard，和截图
 /// 覆盖窗的图片复制保持同一套原生实现。
 #[tauri::command]
-pub fn copy_image_file(path: String) -> Result<(), String> {
-    let image = image::open(&path)
+pub async fn copy_image_file(path: String, png: Option<String>) -> Result<(), String> {
+    crate::image_tasks::run(move || copy_image_file_inner(path, png)).await
+}
+
+fn copy_image_file_inner(path: String, png: Option<String>) -> Result<(), String> {
+    let image = crate::image_io::read_pixels(&path, png.as_deref())
         .map_err(|e| format!("无法读取图片 {path}: {e}"))?
         .to_rgba8();
     let width = image.width() as usize;
@@ -367,7 +371,30 @@ pub struct FinishRequest {
 }
 
 #[tauri::command]
-pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), String> {
+pub async fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), String> {
+    let capture_id = app
+        .state::<ScreenshotStore>()
+        .data
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|capture| capture.data.capture_id)
+        .ok_or("Screenshot session has ended")?;
+    crate::image_tasks::run(move || finish_screenshot_inner(app, req, capture_id)).await
+}
+
+fn finish_screenshot_inner(
+    app: AppHandle,
+    req: FinishRequest,
+    capture_id: u64,
+) -> Result<(), String> {
+    if app
+        .state::<ScreenshotStore>()
+        .capture_bounds(capture_id)
+        .is_none()
+    {
+        return Err("Screenshot session has ended".into());
+    }
     let b64 = req.png.trim_start_matches("data:image/png;base64,");
     let png = base64::engine::general_purpose::STANDARD
         .decode(b64)
@@ -394,7 +421,12 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
             };
             std::fs::write(&path, &png).map_err(|e| e.to_string())?;
             tracing::info!("截图已保存: {}", path.display());
-            if req.action == "open" {
+            if req.action == "open"
+                && app
+                    .state::<ScreenshotStore>()
+                    .capture_bounds(capture_id)
+                    .is_some()
+            {
                 if let Some(main) = app.get_webview_window("main") {
                     let _ = main.show();
                     let _ = main.unminimize();
@@ -428,7 +460,7 @@ pub fn finish_screenshot(app: AppHandle, req: FinishRequest) -> Result<(), Strin
     if req.defer_close == Some(true) && matches!(req.action.as_str(), "save" | "clipboard") {
         return Ok(());
     }
-    close_screenshot(app, Some(true), None);
+    close_screenshot(app, Some(true), Some(capture_id));
     Ok(())
 }
 

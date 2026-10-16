@@ -8,8 +8,13 @@ const element = <T extends HTMLElement = HTMLElement>(id: string) => {
 };
 
 /** 把自定义标题栏的按钮、拖动与缩放把手接到原生窗口 API 上。 */
-export function bindWindowChrome() {
+export function bindWindowChrome(canClose?: () => Promise<boolean>) {
   const windowHandle = getCurrentWindow();
+  if (canClose) {
+    void windowHandle.onCloseRequested(async (event) => {
+      if (!(await canClose())) event.preventDefault();
+    });
+  }
   element("win-min").addEventListener("click", () => void windowHandle.minimize());
   element("win-close").addEventListener("click", () => void windowHandle.close());
   const maximize = element<HTMLButtonElement>("win-max");

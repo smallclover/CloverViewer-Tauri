@@ -1,3 +1,4 @@
+import { createThemeController } from "./ui/theme-controller";
 import "./styles.css";
 import { applyI18n, setLang, t } from "./i18n";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -7,11 +8,15 @@ import { createAppMenuController } from "./ui/app-menu-controller";
 import { createShortcutDialog } from "./ui/shortcut-dialog";
 import { createContextMenuController } from "./ui/context-menu-controller";
 import { bindFileDrop, bindOpenImageBridge, showStartupNotices } from "./ui/app-bridges";
+import { createNavigationGuard } from "./ui/navigation-guard";
+import { createDirectoryLoader } from "./viewer/directory-loader";
+import { bindDirectoryRefreshShortcut } from "./viewer/refresh-shortcut";
 import { createPageNavigationController } from "./ui/page-navigation-controller";
 import { createSettingsController } from "./ui/settings-controller";
 import { createDesktopPetController } from "./ui/desktop-pet-controller";
 import { bindWindowChrome } from "./ui/window-chrome";
 import { createGridController } from "./viewer/grid-controller";
+import { createImagePixelExporter, IMAGE_EXTENSIONS } from "./viewer/image-pixels";
 import { createImageSourceResolver } from "./viewer/image-source";
 import { createImagePropertiesController } from "./viewer/image-properties-controller";
 import { createImagePreviewStripController } from "./viewer/image-preview-strip-controller";
@@ -30,6 +35,11 @@ import {
   formatDimensions,
   formatSize,
   getConfig,
+  getActiveHotkeys,
+  isLanShareActive,
+  type ActiveHotkeys,
+  listenExitRequested,
+  quitApp,
   getImageInfo,
   getThumbnail,
   listImages,
@@ -46,10 +56,18 @@ import {
 
 // ---------- 状态 ----------
 let config: AppConfig | null = null;
+let activeHotkeys: ActiveHotkeys | null = null;
+async function refreshActiveHotkeys() {
+  activeHotkeys = await getActiveHotkeys();
+  appMenu?.refresh();
+}
 let appMenu: ReturnType<typeof createAppMenuController> | undefined;
 const viewerSession = createViewerSession();
 
 const imageSource = createImageSourceResolver({ fileSrc, readImageData });
+const imagePixels = createImagePixelExporter(readEditableImageData);
+const viewerThumbnail = async (path: string, size: number) =>
+  (await imagePixels(path, size)) ?? getThumbnail(path, size);
 
 // ---------- DOM 引用 ----------
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -112,6 +130,11 @@ const singleImagePresenter = createSingleImagePresenter({
   isActive: () => viewerSession.viewMode === "single",
   onCommit: (image) => {
     singleImg = image;
+    const entry = viewerSession.images[viewerSession.activeIndex];
+    if (entry?.path === image.dataset.imagePath) {
+      entry.width = image.naturalWidth;
+      entry.height = image.naturalHeight;
+    }
     singleImageController.reset();
     refreshStatus();
   },
@@ -143,7 +166,8 @@ const imagePropertiesController = createImagePropertiesController({
 });
 const imageShareController = createImageShareController({
   panel: imageSharePanel,
-  startLanShare: startImageLanShare,
+  isLanShareActive,
+  startLanShare: async (path) => startImageLanShare(path, await imagePixels(path)),
   copyText,
   stopLanShare,
   translate: t,
@@ -163,36 +187,22 @@ const imageEditor = createImageEditorController({
   translate: t,
   onClose: leaveEdit,
   onSaved: (path) => {
-    imageSource.clear();
-    singleImagePresenter.clear();
-    imagePreviewStripController.clear();
-    gridController.clearThumbnails();
-    const active = viewerSession.images[viewerSession.activeIndex];
-    if (active?.path !== path || !viewerSession.currentDir) return;
-    void listImages(viewerSession.currentDir).then((refreshed) => {
-      const replacement = refreshed.find((image) => image.path === path);
-      if (!replacement) return;
-      viewerSession.images = viewerSession.images.map((image) =>
-        image.path === path ? replacement : image,
-      );
-      if (
-        viewerSession.viewMode === "single" &&
-        viewerSession.images[viewerSession.activeIndex]?.path === path
-      ) {
-        showSingle(viewerSession.activeIndex);
-      }
-    });
+    const directory = viewerSession.currentDir;
+    const normalized = path.replace(/\\/g, "/");
+    const parent = normalized.slice(0, normalized.lastIndexOf("/"));
+    if (
+      directory &&
+      parent.toLowerCase() === directory.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase()
+    )
+      void directoryLoader.refresh(directory);
   },
   toast,
 });
 
 // ---------- 主题 ----------
-function applyTheme(theme: "dark" | "light" | "system") {
-  const dark =
-    theme === "dark" ||
-    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
-}
+const themeController = createThemeController();
+const applyTheme = themeController.set;
+window.addEventListener("beforeunload", themeController.dispose);
 
 // ---------- 面包屑 ----------
 function renderBreadcrumb() {
@@ -209,10 +219,39 @@ function renderBreadcrumb() {
 }
 
 // ---------- 目录加载 ----------
-async function openDirectory(dir: string) {
-  imageEditor.cancelPendingOpen();
-  try {
-    const entries = await listImages(dir);
+const navigationGuard = createNavigationGuard(() =>
+  imageEditor.isOpen() ? imageEditor.requestLeave() : Promise.resolve(true),
+);
+const directoryLoader = createDirectoryLoader({
+  load: listImages,
+  commit: (dir, entries, refresh) => {
+    if (refresh && viewerSession.currentDir === dir) {
+      const previous = viewerSession.images.map((image) => image.path);
+      const oldIndex = viewerSession.activeIndex;
+      const scrollTop = gridView.scrollTop;
+      gridController.sortCurrentImages(entries);
+      if (viewerSession.viewMode === "single" && viewerSession.activeIndex < 0 && entries.length)
+        viewerSession.activeIndex = Math.min(Math.max(oldIndex, 0), entries.length - 1);
+      pageNavigation.remapImages(
+        previous,
+        viewerSession.images.map((image) => image.path),
+      );
+      imageSource.clear();
+      singleImagePresenter.clear();
+      imagePreviewStripController.clear();
+      gridController.clearThumbnails();
+      if (viewerSession.viewMode === "grid") {
+        gridController.renderGrid();
+        gridView.scrollTop = scrollTop;
+      } else if (viewerSession.viewMode === "single") {
+        if (viewerSession.activeIndex >= 0) {
+          pageNavigation.replaceCurrentImage(viewerSession.activeIndex);
+          showSingle(viewerSession.activeIndex);
+        } else pageNavigation.resetViewer();
+      }
+      refreshStatus();
+      return;
+    }
     viewerSession.setDirectory(dir, entries);
     gridController.sortCurrentImages();
     imageSource.clear();
@@ -225,9 +264,16 @@ async function openDirectory(dir: string) {
     }
     pageNavigation.resetViewer();
     refreshStatus();
-  } catch (e) {
-    toast(t("toast.openFailed", { msg: String(e) }), "error");
-  }
+  },
+  onError: (error) => toast(t("toast.openFailed", { msg: String(error) }), "error"),
+});
+async function openDirectory(dir: string) {
+  let opened = false;
+  await navigationGuard.run(async () => {
+    imageEditor.cancelPendingOpen();
+    opened = await directoryLoader.open(dir);
+  });
+  return opened;
 }
 
 async function openFileOrFolder(path: string) {
@@ -235,16 +281,19 @@ async function openFileOrFolder(path: string) {
   const normalized = path.replace(/\\/g, "/");
   const isFile = /\.(png|jpe?g|bmp|gif|webp|tiff?|avif)$/i.test(normalized);
   if (!isFile) {
-    await openDirectory(normalized);
-    return;
+    return openDirectory(normalized);
   }
   const lastSlash = normalized.lastIndexOf("/");
   if (lastSlash <= 0) return;
-  const dir = normalized.slice(0, lastSlash);
-  const fileName = normalized.slice(lastSlash + 1);
-  await openDirectory(dir);
-  const idx = viewerSession.images.findIndex((img) => img.name === fileName);
-  if (idx >= 0) openImageDetails(idx);
+  const dir =
+    normalized.slice(0, lastSlash) + (lastSlash === 2 && normalized[1] === ":" ? "/" : "");
+  if (!(await openDirectory(dir))) return false;
+  const idx = viewerSession.images.findIndex(
+    (img) => img.path.replace(/\\/g, "/").toLowerCase() === normalized.toLowerCase(),
+  );
+  if (idx < 0) return false;
+  openImageDetails(idx);
+  return true;
 }
 
 // ---------- 网格视图（窗口化虚拟滚动） ----------
@@ -261,7 +310,7 @@ const gridController = createGridController({
   sizeSlider: gridDensity,
   session: viewerSession,
   imageSource,
-  getThumbnail,
+  getThumbnail: viewerThumbnail,
   translate: t,
   onSelect: openImageDetails,
 });
@@ -270,7 +319,7 @@ const imagePreviewStripController = createImagePreviewStripController({
   toggle: $<HTMLButtonElement>("image-preview-toggle"),
   session: viewerSession,
   imageSource,
-  getThumbnail,
+  getThumbnail: viewerThumbnail,
   onSelect: openImageDetails,
   onToggle: () =>
     settingsController.setImagePreviewStripEnabled(
@@ -418,6 +467,7 @@ function openImageDetails(index: number) {
 
 async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
   if (!entry) return;
+  directoryLoader.cancel();
   try {
     const opened = await imageEditor.open(entry, () => {
       singleImagePresenter.cancel();
@@ -447,6 +497,10 @@ async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]
 }
 
 function leaveEdit() {
+  if (!viewerSession.images[viewerSession.activeIndex]) {
+    pageNavigation.resetViewer();
+    return;
+  }
   viewerSession.viewMode = "single";
   showSingle(viewerSession.activeIndex);
 }
@@ -471,7 +525,7 @@ function refreshStatus() {
     statusRight.textContent = "";
     gridCount.classList.add("hidden");
   } else if (viewerSession.currentDir) {
-    statusLeft.textContent = t("status.imageCount", { count: viewerSession.images.length });
+    statusLeft.textContent = "";
     statusRight.textContent = "";
     gridCount.textContent = t("status.imageCount", { count: viewerSession.images.length });
     gridCount.classList.remove("hidden");
@@ -536,7 +590,7 @@ window.addEventListener("keydown", (e) => {
       if (viewerSession.viewMode === "single") navigate(1);
       break;
     case "Escape":
-      if (viewerSession.viewMode === "single") pageNavigation.back();
+      // Esc 由下面的统一导航监听消费。
       break;
     case "Tab":
       e.preventDefault();
@@ -570,6 +624,17 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+bindDirectoryRefreshShortcut({
+  isBlocked: () =>
+    imageEditor.isOpen() ||
+    imageEditor.isOpening() ||
+    settingsController.isOpen() ||
+    aboutController.isOpen(),
+  refresh: async () => {
+    if (viewerSession.currentDir) await directoryLoader.refresh(viewerSession.currentDir);
+  },
+});
+
 // ---------- 文件夹选择 ----------
 async function pickFolder() {
   const selected = await open({ directory: true, multiple: false });
@@ -584,7 +649,7 @@ async function pickImage() {
     filters: [
       {
         name: t("menu.imageFiles"),
-        extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp", "tif", "tiff", "avif"],
+        extensions: IMAGE_EXTENSIONS,
       },
     ],
   });
@@ -630,14 +695,17 @@ navPrev.addEventListener("click", () => navigate(-1));
 navNext.addEventListener("click", () => navigate(1));
 
 // ---------- 无边框窗口控制 ----------
-bindWindowChrome();
+bindWindowChrome(async () => {
+  if (config?.minimize_on_close) return false;
+  return navigationGuard.run(() => {});
+});
 
 // ---------- 自定义右键菜单（接管 WebView 默认菜单） ----------
 // 复制图片走原生剪贴板，避免 Windows WebView2 对 ClipboardItem 图片支持不完整。
 // 滚动截图的长图也在本窗口打开，与网格/单图共用这条复制路径。
 async function copyImageBitmap(entry: ImageEntry) {
   try {
-    await copyImageFile(entry.path);
+    await copyImageFile(entry.path, await imagePixels(entry.path));
     toast(t("toast.copiedImage"), "success");
   } catch (e) {
     toast(t("toast.copyFailed", { msg: String(e) }), "error");
@@ -711,6 +779,7 @@ const settingsController = createSettingsController({
   applyI18n: () => applyI18n(document),
   refreshViewerTranslations,
   refreshImagePreviewStrip: applyImagePreviewStripState,
+  refreshActiveHotkeys,
   setDesktopPetEnabled: desktopPetController.setEnabled,
   translate: t,
   toast,
@@ -718,6 +787,9 @@ const settingsController = createSettingsController({
 // ---------- 关于页 ----------
 const aboutController = createAboutController({ toast });
 const pageNavigation = createPageNavigationController({
+  beforeNavigate: (action) => {
+    void navigationGuard.run(action);
+  },
   showViewer: (imageIndex) => {
     aboutController.close();
     settingsController.close();
@@ -739,14 +811,17 @@ const pageNavigation = createPageNavigationController({
 });
 
 document.getElementById("btn-settings")?.addEventListener("click", () => {
-  pageNavigation.showSettings();
+  void navigationGuard.run(() => pageNavigation.showSettings());
 });
 document.getElementById("btn-about")?.addEventListener("click", () => {
-  pageNavigation.showAbout();
+  void navigationGuard.run(() => pageNavigation.showAbout());
 });
 window.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
-  if (settingsController.dismissUpdateIfOpen()) return;
+  if (event.key !== "Escape" || event.defaultPrevented) return;
+  if (settingsController.dismissUpdateIfOpen()) {
+    event.preventDefault();
+    return;
+  }
   if (imageEditor.isOpen()) return;
   if (pageNavigation.back()) event.preventDefault();
 });
@@ -755,8 +830,12 @@ const shortcuts = createShortcutDialog({
   translate: t,
   onOpen: () => appMenu?.close(),
   getHotkeys: () => ({
-    screenshot: config?.hotkeys.show_screenshot ?? "Alt+S",
-    scroll: config?.hotkeys.scroll_capture ?? "Alt+Shift+S",
+    screenshot: activeHotkeys
+      ? (activeHotkeys.show_screenshot ?? "—")
+      : (config?.hotkeys.show_screenshot ?? "Alt+S"),
+    scroll: activeHotkeys
+      ? (activeHotkeys.scroll_capture ?? "—")
+      : (config?.hotkeys.scroll_capture ?? "Alt+Shift+S"),
   }),
 });
 const openSettingsTab = (tab: string) => {
@@ -768,8 +847,12 @@ appMenu = createAppMenuController({
   translate: t,
   getState: () => ({
     edit: imageEditor.isOpen() || imageEditor.isOpening(),
-    screenshotHotkey: config?.hotkeys.show_screenshot ?? "Alt+S",
-    scrollHotkey: config?.hotkeys.scroll_capture ?? "Alt+Shift+S",
+    screenshotHotkey: activeHotkeys
+      ? (activeHotkeys.show_screenshot ?? "—")
+      : (config?.hotkeys.show_screenshot ?? "Alt+S"),
+    scrollHotkey: activeHotkeys
+      ? (activeHotkeys.scroll_capture ?? "—")
+      : (config?.hotkeys.scroll_capture ?? "Alt+Shift+S"),
   }),
   run: async (action) => {
     switch (action) {
@@ -805,6 +888,9 @@ appMenu = createAppMenuController({
 
 // ---------- 启动 ----------
 (async () => {
+  await listenExitRequested(() => {
+    void navigationGuard.run(quitApp);
+  });
   await listenTrayAction((action) => {
     if (action.action === "settings") {
       if (imageEditor.isOpen()) toast(t("menu.finishEditing"));
@@ -813,6 +899,7 @@ appMenu = createAppMenuController({
   });
   try {
     config = await getConfig();
+    await refreshActiveHotkeys();
     setLang(config.language);
     applyTheme(config.theme);
   } catch (e) {
@@ -835,7 +922,7 @@ appMenu = createAppMenuController({
   }
   void bindOpenImageBridge(
     async (payload) => {
-      await openFileOrFolder(payload.path);
+      if ((await openFileOrFolder(payload.path)) === false) return false;
       if (typeof payload.ocr_text !== "string") return;
       const normalized = payload.path.replace(/\\/g, "/").toLowerCase();
       const entry = viewerSession.images.find(

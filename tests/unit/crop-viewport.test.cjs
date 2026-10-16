@@ -31,6 +31,25 @@ function withAnimatedViewport(run, reducedMotion = false) {
   }
 }
 
+test("manual zoom preserves the cursor image point, pans in CSS pixels, and survives tool refresh", () => {
+  withAnimatedViewport(({canvas,viewport}) => {
+    viewport.fit();
+    const before = {left:parseFloat(canvas.style.left),top:parseFloat(canvas.style.top),scale:viewport.scale()};
+    const anchor={x:150,y:250}; const pixel={x:(anchor.x-before.left)/before.scale,y:(anchor.y-before.top)/before.scale};
+    viewport.zoomBy(2,anchor);
+    near(parseFloat(canvas.style.left)+pixel.x*viewport.scale(),anchor.x);
+    near(parseFloat(canvas.style.top)+pixel.y*viewport.scale(),anchor.y);
+    const manual={...canvas.style}; viewport.refresh(); assert.deepEqual(canvas.style,manual);
+    viewport.panBy(60,-50); near(parseFloat(canvas.style.left),parseFloat(manual.left)+60);
+    viewport.actualSize(); assert.equal(viewport.scale(),1);
+    viewport.zoomBy(1000); assert.equal(viewport.scale(),40);
+    viewport.zoomBy(0.00001); assert.equal(viewport.scale(),0.05);
+    const locked={...canvas.style}; viewport.begin(); viewport.zoomBy(2);viewport.panBy(100,100);
+    assert.deepEqual(canvas.style,locked); viewport.end(true);
+    viewport.fit(); near(viewport.scale(),before.scale);
+  });
+});
+
 test("crop release smoothly moves and scales the viewport while synchronizing overlay layout", () => {
   withAnimatedViewport(({ canvas, viewport, crop, tick, frames, layouts }) => {
     viewport.fit();
@@ -128,11 +147,15 @@ test("cropping fits and centers an off-center selection while keeping source pix
   assert.deepEqual(selection, { x: 2300, y: 1600, w: 1000, h: 800 });
 });
 
-test("portrait crops, original-sized small images and hidden workspaces fit safely", () => {
+test("portrait crops, enlarged small images and hidden workspaces fit safely", () => {
   const portrait = fitCropViewport({ w: 3000, h: 4000 }, { x: 1200, y: 1500, w: 100, h: 2000 }, { w: 600, h: 500 });
   near(portrait.scale, 476 / 2000);
   const small = fitCropViewport({ w: 100, h: 80 }, { x: 10, y: 20, w: 30, h: 20 }, { w: 600, h: 500 });
-  assert.equal(small.scale, 1);
+  assert.equal(small.scale, 2);
+  near(small.left + 25 * small.scale, 300);
+  near(small.top + 30 * small.scale, 250);
+  const constrained = fitCropViewport({ w: 400, h: 300 }, { x: 0, y: 0, w: 400, h: 300 }, { w: 600, h: 500 });
+  near(constrained.scale, 576 / 400);
   assert.equal(fitCropViewport({ w: 100, h: 80 }, { x: 0, y: 0, w: 0, h: 20 }, { w: 600, h: 500 }), null);
   assert.equal(fitCropViewport({ w: 100, h: 80 }, { x: 0, y: 0, w: 100, h: 80 }, { w: 0, h: 0 }), null);
 });

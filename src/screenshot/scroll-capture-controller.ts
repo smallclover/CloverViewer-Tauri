@@ -29,6 +29,7 @@ interface ScrollCaptureControllerOptions {
 
 export function createScrollCaptureController(options: ScrollCaptureControllerOptions) {
   const { session, panel, hud, translate: t } = options;
+  let exporting = false;
   const selectionOk = () => {
     const selection = options.getSelection();
     return !!selection && selection.w >= 32 && selection.h >= MIN_SELECTION_HEIGHT;
@@ -296,8 +297,12 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
     void stopScrollCapture();
   };
   const finish = async (action: "save" | "clipboard" | "open") => {
+    if (exporting || session.state.phase !== "done") return;
+    exporting = true;
+    const result = session.state.result;
     try {
       const path = await finishScrollCapture(action);
+      if (session.state.phase !== "done" || session.state.result !== result) return;
       if (action === "clipboard") {
         options.showNotice(t("shot.scrollCopied"));
         return;
@@ -306,6 +311,7 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
         options.showNotice(path ? t("shot.savedTo", { path }) : t("shot.scrollSaved"));
       await options.closeScreenshot();
     } catch (error) {
+      if (session.state.phase !== "done" || session.state.result !== result) return;
       session.state.actionError = t(
         action === "open"
           ? "shot.scrollOpenFailed"
@@ -317,6 +323,8 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
       options.showNotice(session.state.actionError, true);
       syncUi();
       options.render();
+    } finally {
+      exporting = false;
     }
   };
   return { syncUi, begin, stop, finish };

@@ -1,3 +1,5 @@
+!include "${__FILEDIR__}\app-processes.nsh"
+
 ; The updater starts NSIS before exiting the old process. Give that process
 ; time to release its executable before Restart Manager tries to close it.
 ; This also works when updating from older clients without custom arguments.

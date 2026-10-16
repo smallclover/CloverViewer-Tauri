@@ -34,11 +34,11 @@ export const translations = {
     featureTitle: "图片这件事，顺手就好。",
     featureLead: "常用的工具放在一起，让每一步都更自然。",
     viewTitle: "一张张看，也一览无余。",
-    viewBody: "网格与单图视图自由切换，底部相邻图片预览可点击切图、随时收起。缩放、旋转、翻转，查看尺寸与 EXIF。",
-    viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
+    viewBody: "网格与单图自由切换，底部预览可点击切图和收起；F5 刷新保留当前图片和位置。支持缩放、旋转、翻转与 EXIF 查看。",
+    viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "留住画面，也留下重点。",
     editBody:
-      "多屏截图与自定义选区边框，裁切、箭头与文字标注，配合马赛克和撤销重做。保存选项支持 PNG、JPEG、WebP 导出。",
+      "多屏截图、自定义边框与标注。编辑支持缩放和平移，裁剪框固定调整构图；PNG、JPEG、WebP 保存采用完整写入后替换，失败保留原图。",
     editTag: "截图 · 裁切 · 标注 · 导出",
     scrollTitle: "一屏装不下，就继续滚动。",
     scrollBody:
@@ -54,10 +54,10 @@ export const translations = {
     ocrResult: "识别结果",
     ocrTag: "中文 / English / 日本語",
     shareTitle: "从电脑，到另一块屏幕。",
-    shareBody: "生成临时链接与二维码，让同一局域网里的设备预览、下载。支持有效期与一次下载后失效。",
+    shareBody: "生成临时链接与二维码，让同一局域网设备预览、下载。支持有效期和一次下载；面板同步实际状态，失效后收起链接。",
     shareTag: "临时分享 · 到期失效",
     extraTitle: "还有一些贴心的小事。",
-    extra1: "明暗主题与界面缩放",
+    extra1: "实时跟随系统的明暗主题与界面缩放",
     extra2: "全局热键与系统托盘",
     extra3: "可选 Live2D 桌宠",
     extra4: "手动检查与签名验证更新",
@@ -152,11 +152,11 @@ export const translations = {
     featureLead: "The tools you use together, brought together.",
     viewTitle: "One at a time. Or all at once.",
     viewBody:
-      "Switch between a thumbnail grid and single-image view. Click nearby previews to navigate, or hide the strip at any time. Zoom, rotate, flip and inspect dimensions or EXIF.",
-    viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
+      "Switch between a grid and single-image view. Click or hide nearby previews; refresh with F5 while keeping your place. Zoom, rotate, flip and inspect EXIF.",
+    viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "Keep the picture. Make the point.",
     editBody:
-      "Capture across monitors with customizable selection borders. Crop, add arrows and text, use mosaic and undo/redo, then export PNG, JPEG or WebP from Save options.",
+      "Capture across monitors and annotate. Zoom or pan in the editor with a fixed crop frame. PNG, JPEG and WebP saves replace the file only after a complete write.",
     editTag: "CAPTURE · CROP · ANNOTATE · EXPORT",
     scrollTitle: "When one screen isn't enough.",
     scrollBody:
@@ -174,10 +174,10 @@ export const translations = {
     ocrTag: "中文 / English / 日本語",
     shareTitle: "From your PC to another screen.",
     shareBody:
-      "Create a temporary link and QR code for devices on the same LAN. Set an expiry or let the link expire after one download.",
+      "Create a temporary link and QR code for devices on the same LAN. Set an expiry or one download; the panel checks actual status and hides expired links.",
     shareTag: "TEMPORARY SHARING · AUTOMATIC EXPIRY",
     extraTitle: "A few thoughtful extras.",
-    extra1: "Light / dark themes and UI scaling",
+    extra1: "Live system light/dark themes and UI scaling",
     extra2: "Global hotkeys and system tray",
     extra3: "Optional Live2D desktop companion",
     extra4: "Manual updates with signature verification",
@@ -275,11 +275,11 @@ export const translations = {
     featureLead: "よく使う道具をひとつに。いつもの作業を自然に。",
     viewTitle: "一枚ずつも、一覧でも。",
     viewBody:
-      "グリッド表示と一枚表示を自由に切り替え。下部のプレビューをクリックして前後の画像へ移動し、いつでも非表示にできます。拡大・縮小、回転、反転、サイズや EXIF の確認も。",
-    viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF",
+      "グリッドと単一画像表示を切り替え、前後のプレビューで移動・非表示にできます。F5 で位置を保って再読込。拡大縮小、回転、反転、EXIF 確認に対応。",
+    viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "画面を残して、要点を伝える。",
     editBody:
-      "複数画面の撮影と選択枠のカスタマイズ。切り抜き、矢印や文字、モザイク、元に戻す・やり直すに対応し、保存オプションから PNG・JPEG・WebP を書き出せます。",
+      "複数画面を撮影して注釈を追加。編集では枠を固定して画像を拡大縮小・移動し、構図を調整できます。PNG・JPEG・WebP は書き込み完了後に置換して元画像を保護します。",
     editTag: "キャプチャ · 切り抜き · 注釈 · 出力",
     scrollTitle: "一画面で足りなければ、スクロール。",
     scrollBody:
@@ -297,10 +297,10 @@ export const translations = {
     ocrTag: "中文 / English / 日本語",
     shareTitle: "PC から、もうひとつの画面へ。",
     shareBody:
-      "一時リンクと QR コードを作り、同じ LAN 内の端末で閲覧・ダウンロード。有効期限や一度のダウンロードで失効する設定が可能です。",
+      "同じ LAN の端末向けに一時リンクと QR コードを作成。期限や1回のダウンロードを設定でき、実際の状態を確認して失効したリンクを隠します。",
     shareTag: "一時共有 · 期限で失効",
     extraTitle: "小さな便利さも、いろいろ。",
-    extra1: "ライト・ダークテーマと UI 拡大",
+    extra1: "システムの明暗に即時追従するテーマと UI 拡大",
     extra2: "グローバルホットキーとトレイ",
     extra3: "任意の Live2D デスクトップペット",
     extra4: "手動更新と署名の検証",

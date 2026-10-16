@@ -65,18 +65,18 @@
         "inLanguage": ["zh-CN", "en", "ja"],
         "description": "免费开源的 Windows 图片查看器与截图工具：网格/单图双视图、多屏截图与标注、滚动长截图、Live2D 桌宠、Windows 原生 OCR 取字，并内置 MCP Server 让 AI 客户端直接截图看屏幕。",
         "featureList": [
-          "网格视图与单图视图，大目录虚拟滚动与缩略图缓存",
+          "网格与单图视图、受控缓存、F5 / Ctrl+R 刷新并保留当前图片和位置；支持 TIFF 与 AVIF",
           "单图底部相邻图片预览，点击切图，状态栏快捷展开或收起并记住选择",
           "图片缩放与裁剪居中平滑过渡，拖动立即接管，遵循减少动态效果偏好",
           "截图选区边框可自定义颜色与虚线、实线，保留经典黑白虚线",
-          "图片编辑：九宫格裁切、边角调整、松开鼠标后自动居中、透明自适应文字框、连续马赛克笔刷、撤销重做与 PNG / JPEG / WebP 导出",
+          "图片编辑：底部缩放按钮、倍率、适应与 100%、空格/中键平移；裁剪框固定调整构图，九宫格、标注、撤销重做及原子保存",
           "多显示器跨屏截图，显示前同步窗口与内容区域尺寸，修复混合 DPI 遮罩黑条与分辨率切换后的画面压缩；拖动选区时底图保持静态，遮罩、边框与放大镜独立更新；支持六种标注",
           "滚动长截图：逐帧按重叠像素配准拼接成长图",
-          "局域网临时分享：二维码和带随机令牌的链接，可设有效期与一次下载后失效",
+          "局域网临时分享：二维码、随机令牌链接、有效期与一次下载；实际状态查询、确认停止、失效链接收起",
           "Live2D 桌宠：待机、眨眼、定时点头、鼠标跟随与 60%–200% 缩放",
           "基于 Windows 原生 UWP OCR 的中英日文字识别",
           "内置 MCP Server（stdio 与 streamable HTTP），供 AI 客户端调用截图与 OCR",
-          "三语言界面（简体中文 / English / 日本語）、明暗主题、统一圆角下拉菜单、全局热键与系统托盘",
+          "三语言界面（简体中文 / English / 日本語）、明暗主题实时跟随系统、普通设置静默保存、实际生效热键与系统托盘",
           "文件、截图、帮助三组菜单，F1 打开双栏快捷键说明，编辑退出与覆盖原图使用应用内确认",
           "分类 + 搜索的设置页，可为普通截图、长截图和 OCR 在查看器打开时产生的临时 PNG 设置保留期或随时清理缓存",
           "界面缩放 100% / 110% / 125% / 150%，截图与图片标注保留原图像素",
@@ -334,10 +334,8 @@
               <div class="card-copy">
                 <svg class="icon card-icon" aria-hidden="true"><use href="#i-image"></use></svg>
                 <h3 data-copy="viewTitle">一张张看，也一览无余。</h3>
-                <p data-copy="viewBody">
-                  网格与单图视图自由切换，底部相邻图片预览可点击切图、随时收起。缩放、旋转、翻转，查看尺寸与 EXIF。
-                </p>
-                <p class="small-tag" data-copy="viewTag">PNG / JPEG / GIF / BMP / WebP / TIFF</p>
+                <p data-copy="viewBody">网格与单图自由切换，底部预览可点击切图和收起；F5 刷新保留当前图片和位置。支持缩放、旋转、翻转与 EXIF 查看。</p>
+                <p class="small-tag" data-copy="viewTag">PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF</p>
               </div>
               <img
                 class="app-screenshot"
@@ -353,10 +351,7 @@
               <div class="card-copy">
                 <svg class="icon card-icon" aria-hidden="true"><use href="#i-crop"></use></svg>
                 <h3 data-copy="editTitle">留住画面，也留下重点。</h3>
-                <p data-copy="editBody">
-                  多屏截图与自定义选区边框，裁切、箭头与文字标注，配合马赛克和撤销重做。保存选项支持
-                  PNG、JPEG、WebP 导出。
-                </p>
+                <p data-copy="editBody">多屏截图、自定义边框与标注。编辑支持缩放和平移，裁剪框固定调整构图；PNG、JPEG、WebP 保存采用完整写入后替换，失败保留原图。</p>
                 <p class="small-tag" data-copy="editTag">截图 · 裁切 · 标注 · 导出</p>
               </div>
               <img
@@ -424,9 +419,7 @@
               <div class="card-copy">
                 <svg class="icon card-icon" aria-hidden="true"><use href="#i-share"></use></svg>
                 <h3 data-copy="shareTitle">从电脑，到另一块屏幕。</h3>
-                <p data-copy="shareBody">
-                  生成临时链接与二维码，让同一局域网里的设备预览、下载。支持有效期与一次下载后失效。
-                </p>
+                <p data-copy="shareBody">生成临时链接与二维码，让同一局域网设备预览、下载。支持有效期和一次下载；面板同步实际状态，失效后收起链接。</p>
                 <p class="small-tag" data-copy="shareTag">临时分享 · 到期失效</p>
               </div>
               <div class="share-art" aria-hidden="true">
@@ -441,7 +434,7 @@
             <p data-copy="extraTitle">还有一些贴心的小事。</p>
             <span
               ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg
-              ><span data-copy="extra1">明暗主题与界面缩放</span></span
+              ><span data-copy="extra1">实时跟随系统的明暗主题与界面缩放</span></span
             ><span
               ><svg class="icon " aria-hidden="true"><use href="#i-check"></use></svg
               ><span data-copy="extra2">全局热键与系统托盘</span></span

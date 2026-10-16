@@ -42,19 +42,20 @@
 - CSS：按页面或组件分组，统一保留设计 token/全局变量，避免按单条属性机械分文件。
 - 先提取低耦合、已有测试覆盖的部分；每次拆分后保持行为不变，并补充模块级测试。
 
-## 当前基线（2026-10-14）
+## 当前基线（2026-10-16）
 
 按物理行数盘点，以下项目自有源码文件超过 500 行。它们目前都未达到 1,000 有效代码行，不需要仅因行数安排拆分：
 
 | 文件 | 物理行 | 建议关注点 |
 | --- | ---: | --- |
-| `src/screenshot.ts` | 908 | 截图窗口组合入口；新增交互优先放入 `src/screenshot/` 中对应模块。 |
-| `src/main.ts` | 858 | 主窗口组合入口；菜单和快捷键说明由独立的 `src/ui/` 模块承载。 |
-| `src-tauri/src/screenshot.rs` | 576 | 截图原生实现；屏幕像素与窗口创建已提取为独立模块。 |
+| `src/screenshot.ts` | 906 | 截图窗口组合入口；新增交互优先放入 `src/screenshot/` 中对应模块。 |
+| `src/main.ts` | 942 | 主窗口组合入口；目录请求与导航守卫已提取为独立模块，页面只做协调。 |
+| `src-tauri/src/screenshot.rs` | 608 | 截图原生实现；屏幕像素、窗口创建和后台图像任务已提取为独立模块。 |
 | `src-tauri/src/scroll_capture/platform.rs` | 692 | 滚动截图平台交互；保持平台调用与算法边界。 |
-| `src-tauri/src/scroll_capture/tauri.rs` | 645 | 滚动截图命令桥接；新增算法放入领域模块。 |
-| `src/viewer/image-editor-controller.ts` | 696 | 图片编辑会话与导出；裁切、预览居中、工具栏、确认框、加载和共用标注图层已提取为独立模块。 |
-| `src-tauri/src/mcp/mod.rs` | 553 | MCP 入口与组装；新增协议实现放入子模块。 |
+| `src-tauri/src/scroll_capture/tauri.rs` | 693 | 滚动截图命令桥接；共享结果与后台导出归宿主协调，算法放入领域模块。 |
+| `src/viewer/image-editor-controller.ts` | 733 | 图片编辑会话；保存事务、裁剪视图、缩放输入与工具栏已提取为独立模块。 |
+| `src-tauri/src/mcp/mod.rs` | 566 | MCP 入口与组装；图片响应和文件 IO 通过受控后台任务执行。 |
+| `src-tauri/src/ocr.rs` | 515 | Windows OCR 与图像预处理；包含依赖 feature 裁剪的参考像素回归测试。 |
 
 `src/live2d-framework/` 是引入的框架源码，不按项目自有业务文件的行数目标拆分。多语言静态数据同样属于上文的例外。
 

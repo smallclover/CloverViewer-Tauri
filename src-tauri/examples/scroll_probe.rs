@@ -293,7 +293,7 @@ mod win_impl {
         let mut n = 0u64;
         let mut min = u8::MAX;
         let mut max = 0u8;
-        for px in raw.chunks_exact(4) {
+        for px in raw.as_chunks::<4>().0 {
             let l = ((px[0] as u32 + px[1] as u32 + px[2] as u32) / 3) as u8;
             min = min.min(l);
             max = max.max(l);

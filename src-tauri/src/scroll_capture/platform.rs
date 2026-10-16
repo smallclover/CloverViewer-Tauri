@@ -129,7 +129,7 @@ pub fn capture_rect(rect: &RectPx) -> Result<RgbaImage, String> {
         }
 
         // BGRA → RGBA，并把 alpha 补成不透明
-        for px in buf.chunks_exact_mut(4) {
+        for px in buf.as_chunks_mut::<4>().0 {
             px.swap(0, 2);
             px[3] = 255;
         }

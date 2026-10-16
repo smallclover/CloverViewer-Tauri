@@ -1,6 +1,6 @@
 name: release
 
-# 推送 v* 标签时触发：构建 Windows NSIS 安装包并创建 GitHub Release。
+# 推送 v* 标签时触发；也可手动构建尚无 Release 的已有标签，保留标签指向。
 # 本地无需任何 GitHub Token —— 发布使用 Actions 自带的 GITHUB_TOKEN。
 #
 # Release 正文来源：仓库根目录的 CHANGELOG.md 里对应版本的段落（由下面的
@@ -10,6 +10,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing unpublished tag to build (for example v0.1.22)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,8 +25,30 @@ jobs:
     permissions:
       contents: write
     runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
+      - name: Validate unpublished release tag
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw 'Release tag must have the form vX.Y.Z.'
+          }
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $url = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          try {
+            $null = Invoke-RestMethod -Uri $url -Headers $headers
+          } catch {
+            if ([int]$_.Exception.Response.StatusCode -eq 404) { exit 0 }
+            throw
+          }
+          throw 'A Release already exists for this tag. Refusing to replace public assets.'
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,15 +67,20 @@ jobs:
         shell: pwsh
         run: |
           $sourceVersion = (Get-Content -Raw package.json | ConvertFrom-Json).version
-          $tagVersion = '${{ github.ref_name }}'.TrimStart('v')
+          $tagVersion = $env:RELEASE_TAG.TrimStart('v')
+          $tagCommit = git rev-parse "refs/tags/$env:RELEASE_TAG^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw 'The requested ref must be an existing tag.' }
+          if ((git rev-parse HEAD) -ne $tagCommit) { throw 'Checkout differs from release tag.' }
           if ($sourceVersion -ne $tagVersion) {
             throw "Release tag v$tagVersion does not match package.json version $sourceVersion."
           }
           npm run version:check
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          # Keep CI reproducible with the locally validated release compiler.
+          toolchain: 1.97.1
           components: rustfmt, clippy
 
       - name: Check Rust
@@ -72,7 +105,7 @@ jobs:
         id: notes_body
         shell: pwsh
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $version = $env:RELEASE_TAG.TrimStart('v')
           $lines = Get-Content -Encoding UTF8 CHANGELOG.md
           $start = -1
           for ($i = 0; $i -lt $lines.Count; $i++) {

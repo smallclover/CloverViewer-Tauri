@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "cloverviewer-tauri"
-version = "0.1.23"
+version = "0.1.22"
 dependencies = [
  "arboard",
  "axum",

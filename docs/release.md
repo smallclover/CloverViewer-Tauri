@@ -203,6 +203,11 @@ git push origin main
 推送后 `release` 工作流会自动构建并创建 Release（约几分钟）。进度：
 `https://github.com/smallclover/CloverViewer-Tauri/actions`。
 
+工作流固定使用本地已验证的 Rust 1.97.1，避免 `stable` 自动升级后新增 lint 阻断旧标签。
+如果旧运行仅因 CI 工具链漂移失败，且标签源码无需修改、该标签尚无 Release，可在
+Actions → release → Run workflow 选择 `main`，填写已有 `release_tag`，用更新后的工作流
+重新构建原标签。工作流会校验标签、清单版本与检出提交，拒绝覆盖已有 Release；不得移动标签。
+
 ---
 
 ## 7. 阶段 F：发布后验证（AI 必须逐条做完再进入 G）
@@ -282,7 +287,7 @@ Invoke-RestMethod https://github.com/smallclover/CloverViewer-Tauri/releases/lat
 | --- | --- |
 | 阶段 B 预检失败 | 按 `release-check.mjs` 输出的「修复」逐条修；**不要**注释掉检查或删检查项 |
 | 阶段 C 构建失败 | 视为阻塞：修代码后再从阶段 B 重跑。NSIS 下载卡住见 README 的镜像章节 |
-| Actions 构建失败 | 先看 `release` 工作流日志。若标签指向的提交和版本正确、失败来自临时网络或 Secret 配置，可修复外部配置后重跑同一提交的工作流；若必须改清单或代码，使用新的更高版本重新走阶段 A–G，不移动既有标签 |
+| Actions 构建失败 | 先看 `release` 工作流日志。若标签指向的提交和版本正确、失败来自临时网络或 Secret 配置，可修复外部配置后重跑同一提交的工作流；若仅为 CI 工具链漂移且标签尚无 Release，可按阶段 E 手动构建原标签；若必须改标签内的产品清单或代码，使用新的更高版本重新走阶段 A–G，不移动既有标签 |
 | Release 正文是兜底文案 | 说明版本段落没被抽到（标题格式或版本号不符）。核对标签提交中的 CHANGELOG；已有正确段落时用它补齐 Release 正文，不移动标签或改写已发布段落。源段落缺失时说明原因，并在下一次发布修正准备流程 |
 | `latest.json` 缺失或版本不对 | 核对 `createUpdaterArtifacts`、签名配置和工作流产物，记录更新链路故障。需要修改代码或清单时发新的更高版本；不覆盖或删除已公开资产 |
 | 发布脚本在「推送 main」后直接退出（无 ERROR 提示） | 非交互环境下 git 的正常提示会被当成致命错误（v0.1.10 首次发布时踩到）。已改为所有 git 调用走 `Invoke-Git`；若仍复现，按顺序手动续跑（脚本此时已校验并创建好本地标签）：`git push origin main` → `git push origin refs/tags/vX.Y.Z` |

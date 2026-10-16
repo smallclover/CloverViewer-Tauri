@@ -88,6 +88,9 @@ export function createEditorToolbar(options: ToolbarOptions) {
     if (tool === "rect") divider(tools);
     button(tools, key, () => options.setTool(tool)).classList.add("image-editor-tool");
   }
+  const zoomSlot = document.createElement("div");
+  zoomSlot.className = "image-editor-zoom-slot";
+  dock.append(zoomSlot);
 
   const context = document.createElement("div");
   context.className = "image-editor-context image-editor-island";
@@ -270,6 +273,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
   setActiveTool("select");
   return {
     element,
+    zoomSlot,
     color,
     width,
     sizes,

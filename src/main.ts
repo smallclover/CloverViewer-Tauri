@@ -322,10 +322,7 @@ const imagePreviewStripController = createImagePreviewStripController({
   getThumbnail: viewerThumbnail,
   onSelect: openImageDetails,
   onToggle: () =>
-    settingsController.setImagePreviewStripEnabled(
-      !(config?.image_preview_strip_enabled ?? true),
-      false,
-    ),
+    settingsController.setImagePreviewStripEnabled(!(config?.image_preview_strip_enabled ?? true)),
   translate: t,
 });
 

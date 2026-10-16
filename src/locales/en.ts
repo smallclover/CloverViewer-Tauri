@@ -305,6 +305,8 @@ export const en = {
   "editor.zoomOut": "Zoom out",
   "shot.shareExpired": "This share has ended. Generate a new link.",
   "shot.shareStopFailed": "Could not stop; retry",
+  "shot.shareStopping": "Stopping…",
+  "shot.shareStatusUnavailable": "Unable to confirm sharing status. Retrying…",
   "editor.zoomHelp":
     "Scroll to zoom; hold Space or the middle mouse button to pan. 0 fits the image; 1 shows actual size.",
   "editor.select": "Select",
@@ -333,7 +335,7 @@ export const en = {
   "editor.tools": "Editing tools",
   "editor.history": "Edit history and exit",
   "editor.saveOptions": "Save options",
-  "editor.cropHint": "Drag the edges to adjust the crop area",
+  "editor.cropHint": "Drag edges to adjust the area; the frame stays fixed while zooming",
   "editor.selectHint": "Click an annotation to select it",
   "editor.fontSize": "Font size",
   "editor.blockSize": "Block size",

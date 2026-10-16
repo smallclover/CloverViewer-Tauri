@@ -4,11 +4,14 @@ export function watchShareStatus(options: {
   read: () => Promise<boolean>;
   onTick: (seconds: number) => void;
   onExpired: () => void;
+  onUnavailable?: () => void;
 }) {
   const deadline = Date.now() + options.seconds * 1000;
   let stopped = false,
-    checking = false;
+    checking = false,
+    unavailable = false;
   let timer: number | undefined;
+  let checkingSince = 0;
   const stop = () => {
     stopped = true;
     if (timer !== undefined) window.clearInterval(timer);
@@ -21,19 +24,40 @@ export function watchShareStatus(options: {
   const tick = () => {
     if (stopped) return;
     const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    options.onTick(remaining);
+    if (!unavailable) options.onTick(remaining);
     if (!remaining) {
       expire();
       return;
     }
-    if (checking) return;
+    if (checking) {
+      if (!unavailable && Date.now() - checkingSince >= 5000) {
+        unavailable = true;
+        options.onUnavailable?.();
+      }
+      return;
+    }
     checking = true;
+    checkingSince = Date.now();
     void options
       .read()
       .then((active) => {
-        if (!active) expire();
+        if (stopped) return;
+        if (!active) {
+          expire();
+          return;
+        }
+        if (unavailable) {
+          unavailable = false;
+          const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+          if (!remaining) expire();
+          else options.onTick(remaining);
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (stopped) return;
+        unavailable = true;
+        options.onUnavailable?.();
+      })
       .finally(() => {
         checking = false;
       });

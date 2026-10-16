@@ -63,6 +63,9 @@ export function createImageShareController(options: ImageShareControllerOptions)
   };
   const showShare = (entry: ImageEntry, info: LanShareInfo) => {
     const token = requestToken;
+    let active = true,
+      stopping = false;
+    const current = () => token === requestToken && active;
     options.panel.replaceChildren();
     const name = document.createElement("div");
     name.className = "image-share-file";
@@ -82,6 +85,7 @@ export function createImageShareController(options: ImageShareControllerOptions)
     const status = document.createElement("div");
     status.className = "image-share-status";
     const expires = document.createElement("span");
+    expires.setAttribute("role", "status");
     const rule = document.createElement("span");
     rule.textContent = options.translate(
       info.download_limit === 1 ? "prop.shareDownloadsOnce" : "prop.shareDownloadsUnlimited",
@@ -98,6 +102,16 @@ export function createImageShareController(options: ImageShareControllerOptions)
     actions.append(copy, stop);
     options.panel.append(header(), name, hint, qr, link, status, actions);
 
+    const showEnded = () => {
+      if (!current()) return;
+      active = false;
+      clearTimer();
+      const message = document.createElement("p");
+      message.className = "image-share-message";
+      message.setAttribute("role", "status");
+      message.textContent = options.translate("shot.shareExpired");
+      options.panel.replaceChildren(header(), message, retry(entry));
+    };
     stopWatching = watchShareStatus({
       seconds: info.expires_in_seconds,
       read: () => options.isLanShareActive(info.share_id),
@@ -107,28 +121,31 @@ export function createImageShareController(options: ImageShareControllerOptions)
           .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
         expires.textContent = options.translate("prop.shareExpires", { time });
       },
-      onExpired: () => {
-        const message = document.createElement("p");
-        message.textContent = options.translate("shot.shareExpired");
-        options.panel.replaceChildren(header(), message, retry(entry));
+      onExpired: showEnded,
+      onUnavailable: () => {
+        if (current()) expires.textContent = options.translate("shot.shareStatusUnavailable");
       },
     });
     copy.addEventListener("click", () => {
+      if (!current() || stopping) return;
       copy.disabled = true;
       void options
         .copyText(info.url)
         .then(
           () => {
+            if (!current() || stopping) return;
             copy.classList.add("feedback");
             copy.textContent = options.translate("prop.shareCopied");
           },
           () => {
+            if (!current() || stopping) return;
             copy.classList.add("error");
             copy.textContent = options.translate("prop.shareCopyFailed");
           },
         )
         .finally(() =>
           window.setTimeout(() => {
+            if (!current() || stopping) return;
             copy.disabled = false;
             copy.classList.remove("feedback", "error");
             copy.textContent = options.translate("prop.shareCopy");
@@ -136,22 +153,19 @@ export function createImageShareController(options: ImageShareControllerOptions)
         );
     });
     stop.addEventListener("click", () => {
+      if (!current() || stopping) return;
+      stopping = true;
+      copy.disabled = true;
       stop.disabled = true;
-      stop.classList.add("feedback");
-      stop.textContent = options.translate("prop.shareStopped");
-      clearTimer();
-      void options.stopLanShare(info.share_id).then(
-        () => {
-          window.setTimeout(() => {
-            if (token !== requestToken) return;
-            clearTimer();
-            options.panel.replaceChildren(header(), retry(entry));
-          }, 650);
-        },
-        (error) => {
-          if (token === requestToken) showError(entry, error);
-        },
-      );
+      stop.classList.remove("error");
+      stop.textContent = options.translate("shot.shareStopping");
+      void options.stopLanShare(info.share_id).then(showEnded, () => {
+        if (!current()) return;
+        stopping = false;
+        copy.disabled = stop.disabled = false;
+        stop.classList.add("error");
+        stop.textContent = options.translate("shot.shareStopFailed");
+      });
     });
   };
   const open = (entry: ImageEntry) => {

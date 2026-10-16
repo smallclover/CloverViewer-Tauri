@@ -11,7 +11,7 @@ export interface LanSharePanel {
   hide(): void;
 }
 
-/** 展示当前唯一生效的局域网分享链接，只负责本地的倒计时 UI。 */
+/** 查询分享的实际生效状态，倒计时仅用于展示剩余有效期。 */
 export function createLanSharePanel({
   uiLayer,
   onCopy,
@@ -35,6 +35,7 @@ export function createLanSharePanel({
   const url = document.createElement("code");
   const expires = document.createElement("span");
   expires.className = "lan-share-expires";
+  expires.setAttribute("role", "status");
   const downloadRule = document.createElement("span");
   downloadRule.className = "lan-share-download-rule";
   const status = document.createElement("div");
@@ -62,14 +63,17 @@ export function createLanSharePanel({
   let shareId = "";
   let generation = 0;
   let active = false;
+  let stopping = false;
   const resetActions = () => {
     active = true;
+    stopping = false;
     qr.hidden = false;
+    url.hidden = downloadRule.hidden = false;
     copy.disabled = false;
     copy.classList.remove("feedback", "error");
     copyLabel.textContent = t("shot.shareCopy");
     stop.disabled = false;
-    stop.classList.remove("feedback");
+    stop.classList.remove("feedback", "error");
     stopLabel.textContent = t("shot.shareStop");
   };
   const hide = () => {
@@ -88,25 +92,38 @@ export function createLanSharePanel({
     const seconds = (remaining % 60).toString().padStart(2, "0");
     expires.textContent = t("shot.shareExpires", { time: `${minutes}:${seconds}` });
   };
+  const showEnded = () => {
+    active = false;
+    stopping = false;
+    stopWatching?.();
+    qr.hidden = url.hidden = downloadRule.hidden = true;
+    copy.disabled = stop.disabled = true;
+    copy.classList.remove("feedback", "error");
+    copyLabel.textContent = t("shot.shareCopy");
+    stop.classList.remove("feedback", "error");
+    stopLabel.textContent = t("shot.shareStopped");
+    expires.textContent = t("shot.shareExpired");
+  };
   copy.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (!active || stopping) return;
     const current = generation;
     copy.disabled = true;
     void onCopy(sharedUrl)
       .then(() => {
-        if (current !== generation || !active) return;
+        if (current !== generation || !active || stopping) return;
         copy.classList.add("feedback");
         copyLabel.textContent = t("shot.shareCopied");
       })
       .catch(() => {
-        if (current !== generation || !active) return;
+        if (current !== generation || !active || stopping) return;
         copy.classList.add("error");
         copyLabel.textContent = t("shot.shareCopyFailed");
       })
       .finally(() => {
-        if (current !== generation || !active) return;
+        if (current !== generation || !active || stopping) return;
         feedbackTimer = window.setTimeout(() => {
-          if (current !== generation || !active) return;
+          if (current !== generation || !active || stopping) return;
           copy.disabled = false;
           copy.classList.remove("feedback", "error");
           copyLabel.textContent = t("shot.shareCopy");
@@ -115,21 +132,22 @@ export function createLanSharePanel({
   });
   stop.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (!active || stopping) return;
     const current = generation;
-    stopWatching?.();
+    stopping = true;
+    copy.disabled = true;
     stop.disabled = true;
-    stop.classList.add("feedback");
-    stopLabel.textContent = t("shot.shareStopped");
+    stop.classList.remove("error");
+    stopLabel.textContent = t("shot.shareStopping");
     void onStop(shareId).then(
       () => {
-        if (current === generation)
-          feedbackTimer = window.setTimeout(() => {
-            if (current === generation) hide();
-          }, 650);
+        if (current === generation && active) showEnded();
       },
       () => {
-        if (current !== generation) return;
-        stop.disabled = false;
+        if (current !== generation || !active) return;
+        stopping = false;
+        copy.disabled = stop.disabled = false;
+        stop.classList.add("error");
         stopLabel.textContent = t("shot.shareStopFailed");
       },
     );
@@ -154,11 +172,9 @@ export function createLanSharePanel({
         seconds: info.expires_in_seconds,
         read: () => isLanShareActive(info.share_id),
         onTick: updateCountdown,
-        onExpired: () => {
-          active = false;
-          qr.hidden = true;
-          copy.disabled = stop.disabled = true;
-          expires.textContent = t("shot.shareExpired");
+        onExpired: showEnded,
+        onUnavailable: () => {
+          expires.textContent = t("shot.shareStatusUnavailable");
         },
       });
     },

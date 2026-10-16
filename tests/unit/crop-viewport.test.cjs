@@ -4,9 +4,9 @@ const { fitCropViewport, createCropViewport } = require("../../.unit-test-dist/i
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8);
 
-function withAnimatedViewport(run, reducedMotion = false) {
+function withAnimatedViewport(run, reducedMotion = false, fixedCrop = false) {
   const originals = Object.fromEntries(["ResizeObserver", "requestAnimationFrame", "cancelAnimationFrame", "matchMedia"].map(key => [key, global[key]]));
-  let resize, id = 0, crop = null;
+  let resize, id = 0, crop = null, cropping = true;
   const frames = new Map();
   const layouts = [];
   global.ResizeObserver = class { constructor(callback) { resize = callback; } observe() {} };
@@ -15,14 +15,14 @@ function withAnimatedViewport(run, reducedMotion = false) {
   global.matchMedia = () => ({ matches: reducedMotion });
   const canvas = { width: 4000, height: 3000, style: {} };
   const surface = { clientWidth: 900, clientHeight: 600 };
-  const viewport = createCropViewport({ canvas, surface, getCrop: () => crop, isCropping: () => true, onLayout: animating => layouts.push({ animating, style: { ...canvas.style } }) });
+  const viewport = createCropViewport({ canvas, surface, getCrop: () => crop, isCropping: () => cropping, onCropChange: fixedCrop ? value => { crop = value; } : undefined, onLayout: animating => layouts.push({ animating, style: { ...canvas.style } }) });
   const tick = time => {
     const pending = [...frames.values()];
     frames.clear();
     pending.forEach(callback => callback(time));
   };
   try {
-    run({ canvas, surface, viewport, frames, layouts, tick, resize: () => resize(), crop: value => { crop = value; } });
+    run({ canvas, surface, viewport, frames, layouts, tick, resize: () => resize(), crop: value => { crop = value; }, getCrop: () => crop, setCropping: value => { cropping = value; } });
   } finally {
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete global[key];
@@ -30,6 +30,45 @@ function withAnimatedViewport(run, reducedMotion = false) {
     }
   }
 }
+
+test("crop zoom and image panning keep the screen frame fixed and clamp before revealing blank pixels", () => {
+  withAnimatedViewport(({canvas, viewport, crop, getCrop}) => {
+    crop({x:1200,y:900,w:1600,h:1200}); viewport.fit();
+    const frame = () => {
+      const selection = getCrop(), scale = viewport.scale();
+      return {x:parseFloat(canvas.style.left)+selection.x*scale,y:parseFloat(canvas.style.top)+selection.y*scale,w:selection.w*scale,h:selection.h*scale};
+    };
+    const original = frame();
+    const fixed = () => { const current = frame(); for (const key of ["x","y","w","h"]) near(current[key],original[key]); };
+    viewport.zoomBy(2,{x:350,y:200}); fixed();
+    near(getCrop().w,800); near(getCrop().h,600);
+    viewport.panBy(70,-40); fixed();
+    viewport.panBy(1000000,-1000000); fixed();
+    assert(getCrop().x >= 0 && getCrop().y >= 0);
+    assert(getCrop().x+getCrop().w <= canvas.width+1e-7);
+    assert(getCrop().y+getCrop().h <= canvas.height+1e-7);
+    viewport.zoomBy(0.000001); fixed();
+    near(viewport.scale(), Math.max(original.w/canvas.width,original.h/canvas.height));
+    const saved = {...getCrop()}; viewport.zoomBy(0.1); fixed();
+    assert.deepEqual(getCrop(),saved);
+  }, false, true);
+});
+
+test("fixed-frame zoom starts from the full image and leaves annotation views and explicit resets unchanged", () => {
+  withAnimatedViewport(({canvas, viewport, crop, getCrop, setCropping}) => {
+    viewport.fit();
+    const scale = viewport.scale(); viewport.zoomBy(2);
+    assert(getCrop()); near(getCrop().w,canvas.width/2); near(getCrop().h,canvas.height/2);
+    const selection = {...getCrop()};
+    setCropping(false); viewport.zoomBy(2);
+    assert.deepEqual(getCrop(),selection); near(viewport.scale(),scale*4);
+    setCropping(true); viewport.actualSize();
+    assert.equal(viewport.scale(),1); assert.deepEqual(getCrop(),selection);
+    viewport.fit(); assert.deepEqual(getCrop(),selection);
+    crop({x:10,y:10,w:4,h:4}); viewport.fit(); viewport.zoomBy(1000);
+    near(getCrop().w,2); near(getCrop().h,2);
+  }, false, true);
+});
 
 test("manual zoom preserves the cursor image point, pans in CSS pixels, and survives tool refresh", () => {
   withAnimatedViewport(({canvas,viewport}) => {

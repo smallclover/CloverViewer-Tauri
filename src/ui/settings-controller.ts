@@ -163,12 +163,11 @@ export function createSettingsController(options: SettingsControllerOptions) {
     render: options.setCurrentConfig,
     persist: setConfig,
   });
-  const save = (partial: Partial<AppConfig>, silent = false, showSaved = true) => {
-    void writer
+  // 普通设置自动保存；仅明确执行的操作在成功后显示结果。
+  const save = (partial: Partial<AppConfig>) =>
+    writer
       .save(partial)
-      .then(() => {
-        if (!silent && showSaved) options.toast(options.translate("toast.saved"), "success");
-      })
+      .then(() => true)
       .catch(() => {
         const current = options.getConfig();
         if (current) {
@@ -180,9 +179,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
           options.refreshViewerTranslations();
           options.refreshImagePreviewStrip();
         }
-        if (!silent) options.toast(options.translate("toast.saveFailed"), "error");
+        options.toast(options.translate("toast.saveFailed"), "error");
+        return false;
       });
-  };
 
   const close = () => {
     for (const select of selects) select.close();
@@ -316,9 +315,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
     zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
   });
   zoom.addEventListener("change", () => save({ zoom_sensitivity: Number(zoom.value) }));
-  const setImagePreviewStripEnabled = (enabled: boolean, showSaved = true) => {
+  const setImagePreviewStripEnabled = (enabled: boolean) => {
     imagePreviewStrip.checked = enabled;
-    save({ image_preview_strip_enabled: enabled }, false, showSaved);
+    void save({ image_preview_strip_enabled: enabled });
     options.refreshImagePreviewStrip();
   };
   imagePreviewStrip.addEventListener("change", () =>
@@ -353,7 +352,6 @@ export function createSettingsController(options: SettingsControllerOptions) {
       .then(() => {
         const current = options.getConfig();
         if (current) options.setCurrentConfig({ ...current, desktop_pet_scale: scale });
-        options.toast(options.translate("toast.saved"), "success");
       })
       .catch((error) => {
         const current = options.getConfig();
@@ -370,10 +368,6 @@ export function createSettingsController(options: SettingsControllerOptions) {
     void setLaunchOnStartup(enabled)
       .then((saved) => {
         options.setCurrentConfig(saved);
-        options.toast(
-          options.translate(enabled ? "toast.autostartOn" : "toast.autostartOff"),
-          "success",
-        );
       })
       .catch((error) => {
         autostart.checked = options.getConfig()?.launch_on_startup ?? !enabled;
@@ -449,20 +443,19 @@ export function createSettingsController(options: SettingsControllerOptions) {
       return;
     }
     const current = options.getConfig();
-    save(
-      {
-        hotkeys: {
-          ...(current?.hotkeys ?? {
-            show_screenshot: "Alt+S",
-            copy_color: "Alt+C",
-            scroll_capture: "Alt+Shift+S",
-          }),
-          copy_color: value,
-        },
+    void save({
+      hotkeys: {
+        ...(current?.hotkeys ?? {
+          show_screenshot: "Alt+S",
+          copy_color: "Alt+C",
+          scroll_capture: "Alt+Shift+S",
+        }),
+        copy_color: value,
       },
-      true,
-    );
-    options.toast(options.translate("toast.colorHotkeySet", { key: value }), "success");
+    }).then((saved) => {
+      if (saved)
+        options.toast(options.translate("toast.colorHotkeySet", { key: value }), "success");
+    });
   });
   element("set-scroll-hotkey-apply").addEventListener("click", () => {
     const value = scrollHotkey.value.trim();

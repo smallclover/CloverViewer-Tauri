@@ -173,8 +173,8 @@
 body:has(#image-editor-view:not(.hidden)) #toast { top: 48px; bottom: auto; max-width: calc(100% - 32px); }
 .image-editor-text-input { --text-input-accent: var(--accent); --text-input-fg: var(--fg); --text-input-fg-dim: var(--fg-dim); }
 .image-editor-text-frame { --text-input-accent: var(--accent); }
-.image-editor-zoom { position: absolute; top: 2px; right: 12px; z-index: 2; padding: 1px; border-radius: 10px; }
-.image-editor-zoom .image-editor-button { min-width: 28px; min-height: 26px; padding: 3px; }
+.image-editor-zoom-slot { flex: none; max-width: 100%; }
+.image-editor-zoom .image-editor-button { min-width: 28px; padding: 4px; }
 .image-editor-zoom-value { min-width: 46px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .image-editor-surface.panning, .image-editor-surface.panning * { cursor: grabbing !important; }
 @media (min-width: 1200px) {

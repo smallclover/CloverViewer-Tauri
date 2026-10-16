@@ -47,7 +47,7 @@ export function createDesktopPetController(options: DesktopPetControllerOptions)
     timeoutTimer = window.setTimeout(() => {
       if (!wanted || ready) return;
       options.toast(options.translate("toast.desktopPetTimedOut"), "error");
-      void setEnabled(false, true).catch((error) => {
+      void setEnabled(false).catch((error) => {
         options.toast(options.translate("toast.desktopPetFailed", { msg: String(error) }), "error");
       });
     }, 90_000);
@@ -64,10 +64,8 @@ export function createDesktopPetController(options: DesktopPetControllerOptions)
     }
     if (status.sessionId !== activeSessionId) return;
     if (status.state === "ready") {
-      const wasReady = ready;
       ready = true;
       clearStatus();
-      if (wanted && !wasReady) options.toast(options.translate("toast.desktopPetOn"), "success");
     } else {
       ready = false;
       clearStatus();
@@ -80,7 +78,7 @@ export function createDesktopPetController(options: DesktopPetControllerOptions)
   const listener = listenDesktopPetLoadStatus(onLoadStatus);
   void listener.catch(() => undefined);
 
-  const setEnabled = (enabled: boolean, quiet = false): Promise<void> => {
+  const setEnabled = (enabled: boolean): Promise<void> => {
     wanted = enabled;
     const id = ++requestId;
     const wasReady = ready;
@@ -100,10 +98,6 @@ export function createDesktopPetController(options: DesktopPetControllerOptions)
       await setDesktopPetEnabled(enabled);
       if (enabled && !wasReady) void requestDesktopPetLoadStatus().catch(() => undefined);
       if (id !== requestId) return;
-      if (!quiet) {
-        if (!enabled) options.toast(options.translate("toast.desktopPetOff"), "success");
-        else if (wasReady) options.toast(options.translate("toast.desktopPetOn"), "success");
-      }
     })();
     return next.catch((error) => {
       if (id !== requestId) return;

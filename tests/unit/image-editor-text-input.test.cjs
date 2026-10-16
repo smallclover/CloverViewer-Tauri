@@ -18,6 +18,7 @@ async function setup() {
   let active = null;
   let toolbarActions;
   let toolbar;
+  let viewportOptions, now = 100;
   let previewScale = 0.2;
   const elements = [];
   const context = new Proxy({ measureText: text => ({ width: text.length * 24 }),
@@ -54,6 +55,7 @@ async function setup() {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText, {
     exports,
+    performance: { now: () => now },
     document: { createElement: element },
     window: {
       addEventListener: (name, handler) => {
@@ -88,7 +90,7 @@ async function setup() {
         load: async () => ({ naturalWidth: 2000, naturalHeight: 1000, removeAttribute() {} }), cancel: () => {}, isLoading: () => false,
       }) };
       if (name === "../image-editor/crop-overlay") return { createCropOverlay: () => ({ update: () => {}, refreshImage: () => {}, cancel: () => {} }) };
-      if (name === "../image-editor/crop-viewport") return { createCropViewport: () => ({ fit: () => {}, refresh: () => {}, begin: () => {}, end: () => {} }) };
+      if (name === "../image-editor/crop-viewport") return { createCropViewport: options => { viewportOptions = options; return { fit: () => {}, refresh: () => {}, begin: () => {}, end: () => {} }; } };
       if (name === "../image-editor/zoom-toolbar") return {createEditorZoomToolbar: () => ({refreshTranslations() {}, setScale() {}})};
       if (name === "../image-editor/viewport-input") return {bindEditorViewportInput: () => ({reset() {}})};
       if (name === "../image-editor/mosaic-cursor") return { createMosaicCursor: () => ({ refresh: () => {}, reset: () => {} }) };
@@ -138,6 +140,9 @@ async function setup() {
     return event;
   };
   return { controller, input, canvas, click, key, drawn, cleared, toolbarActions, toolbar, root, confirmations,
+    changeCropView: value => viewportOptions.onCropChange(value),
+    crop: () => JSON.parse(JSON.stringify(viewportOptions.getCrop())),
+    advanceTime: ms => { now += ms; },
     closed: () => closed,
     resolveConfirmation: async accepted => {
       assert.ok(confirmationResolver);
@@ -154,6 +159,25 @@ async function setup() {
     resizePreview: scale => { previewScale = scale; },
     flush: () => { while (timers.length) timers.shift()(); }, focused: () => active === input };
 }
+
+test("crop zoom changes are dirty and consecutive view changes undo as one gesture", async () => {
+  const editor = await setup();
+  editor.toolbarActions.setTool("crop");
+  const first = {x:200,y:100,w:1600,h:800};
+  const last = {x:400,y:200,w:1200,h:600};
+  editor.changeCropView(first);
+  editor.changeCropView(last);
+  assert.deepEqual(editor.crop(),last);
+  editor.toolbarActions.undo(); assert.equal(editor.crop(),null);
+  editor.toolbarActions.redo(); assert.deepEqual(editor.crop(),last);
+  editor.advanceTime(300);
+  editor.changeCropView({x:600,y:300,w:800,h:400});
+  editor.toolbarActions.undo(); assert.deepEqual(editor.crop(),last);
+  editor.windowKey({key:"Escape"});
+  assert.equal(editor.confirmations.length,1);
+  await editor.resolveConfirmation(false);
+  assert.equal(editor.closed(),0);
+});
 
 test("Escape leaves an untouched editor without a discard prompt", async () => {
   const fixture = await setup();

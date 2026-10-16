@@ -306,6 +306,8 @@ export const ja = {
   "editor.zoomOut": "プレビューを縮小",
   "shot.shareExpired": "共有は無効になりました。リンクを再作成してください。",
   "shot.shareStopFailed": "停止に失敗しました。再試行してください",
+  "shot.shareStopping": "停止中…",
+  "shot.shareStatusUnavailable": "共有状態を確認できません。再試行中…",
   "editor.zoomHelp":
     "ホイールで拡大縮小、スペースキーまたは中ボタンを押しながらドラッグで移動。0 で全体表示、1 で実寸表示。",
   "editor.select": "選択",
@@ -334,7 +336,7 @@ export const ja = {
   "editor.tools": "編集ツール",
   "editor.history": "編集履歴と終了",
   "editor.saveOptions": "保存オプション",
-  "editor.cropHint": "枠をドラッグして切り抜き範囲を調整",
+  "editor.cropHint": "枠をドラッグして範囲を調整。拡大縮小中は枠を固定",
   "editor.selectHint": "注釈をクリックして選択",
   "editor.fontSize": "文字サイズ",
   "editor.blockSize": "ブロックサイズ",

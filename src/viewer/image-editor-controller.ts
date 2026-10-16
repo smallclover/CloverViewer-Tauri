@@ -84,7 +84,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   });
   const confirmDialog = createEditorConfirmDialog({ workspace });
   const zoomToolbar = createEditorZoomToolbar({
-    workspace,
+    container: toolbar.zoomSlot,
     translate: options.translate,
     zoom: (factor) => cropViewport.zoomBy(factor),
     fit: () => cropViewport.fit(),
@@ -120,6 +120,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let session = 0;
   let revision = 0;
   let savedRevision = 0;
+  let cropViewRevision = -1;
+  let cropViewChangedAt = 0;
   const markDirty = () => {
     revision++;
   };
@@ -242,6 +244,21 @@ export function createImageEditorController(options: ImageEditorControllerOption
     surface,
     getCrop: () => crop,
     isCropping: () => tool === "crop",
+    onCropChange: (next) => {
+      const now = performance.now();
+      // 连续滚轮/平移合并为一步撤销；中间的编辑、撤销或保存会切断合并。
+      if (
+        revision !== cropViewRevision ||
+        revision === savedRevision ||
+        now - cropViewChangedAt > 250
+      )
+        checkpoint();
+      crop = next;
+      markDirty();
+      cropViewRevision = revision;
+      cropViewChangedAt = now;
+      toolbar.refreshHistory(history.canUndo, history.canRedo);
+    },
     onLayout: (animating) => {
       zoomToolbar.setScale(cropViewport.scale());
       if (animating) cropOverlay.refreshLayout();

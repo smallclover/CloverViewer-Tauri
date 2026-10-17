@@ -48,7 +48,7 @@ pub fn run_manual_session_ext(
     };
     host.focus_target_for_manual(root);
     host.set_passthrough(true);
-    host.set_escape_hook(true);
+    host.set_capture_shortcuts(true);
     host.set_progress(true, 0.0);
 
     let first = capture_settled(&cap, options, &gate)?;
@@ -63,7 +63,7 @@ pub fn run_manual_session_ext(
         false,
     );
     // 手动模式只做观察者：不因为动画、弹窗或快速滚动产生的几帧难配准就替用户判定结束。
-    // 只有用户明确 Finish/Esc，或达到文档化的资源上限，才会结束会话。
+    // 只有用户明确完成（Enter）、取消（Esc），或达到文档化的资源上限，才会结束会话。
     let poll = options.poll_ms.clamp(20, 80);
     let (reason, partial) = loop {
         let safe_height = safe_height_limit(cap.w, options.max_height_px);

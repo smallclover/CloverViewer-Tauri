@@ -406,10 +406,7 @@ bindEditorShortcuts({
   getScrollPhase: () => scroll.phase,
   getSelection: () => editorSession.selection,
   onStopScroll: stopScrollCaptureNow,
-  onDiscardAndClose: () => {
-    void discardScrollCapture();
-    void closeScreenshot();
-  },
+  onDiscardAndClose: exitScrollMode,
   onFinishScroll: () => void finishScrollAction("clipboard"),
   onExitScroll: exitScrollMode,
   onStartScroll: () => void beginScrollCapture(),
@@ -467,7 +464,7 @@ async function runOcr() {
 // - 选区外框 / 压暗 / HUD 一律画在选区**之外**，边框还要画在选区边界外侧，
 //   避免吃掉边界像素。
 // - 后端若选用 SendInput 注入（资源管理器这类不吃滚轮消息的目标），会把覆盖窗临时设为
-//   click-through（滚轮要落到底下的目标窗口），此时 HUD 按钮点不到 → 只提示按 Esc 停止。
+//   click-through（滚轮要落到底下的目标窗口），此时 Enter 完成并预览，Esc 取消。
 
 const scrollSession = createScrollCaptureSession();
 const scroll = scrollSession.state;
@@ -489,6 +486,7 @@ const { panel: scrollPanel, manual: shManual } = scrollPanelUi;
 const scrollHudUi = createScrollCaptureHud({
   uiLayer,
   onStop: () => stopScrollCaptureNow(),
+  onCancel: exitScrollMode,
   onAction: (action) => void finishScrollAction(action),
   onLayout: () => scrollPositioner?.position(),
 });
@@ -846,6 +844,7 @@ function clearScreenshotState() {
 }
 
 function handleScrollProgress(progress: ScrollCaptureProgress) {
+  if (scroll.phase !== "capturing") return;
   scrollSession.receiveProgress(progress, minX, minY);
   syncScrollUi();
   render();
@@ -860,6 +859,7 @@ function handleScrollHud({
   hud?: boolean;
   glow?: boolean;
 }) {
+  if (scroll.phase !== "capturing") return;
   if (hud !== false && scrollSession.receiveHudVisibility(!!hidden, true)) {
     scrollHud.classList.toggle("hud-hidden", !!hidden);
   }
@@ -867,6 +867,11 @@ function handleScrollHud({
 }
 
 function handleScrollDone(done: ScrollCaptureDone) {
+  if (done.cancelled && (scroll.phase === "capturing" || scroll.phase === "done")) {
+    exitScrollMode();
+    return;
+  }
+  if (scroll.phase !== "capturing") return;
   scrollSession.receiveDone(done, performance.now());
   scrollHud.classList.remove("hud-hidden", "clickthrough");
   scrollSelectionGlow.classList.remove("capture-hidden");

@@ -25,7 +25,7 @@ export function createCropPreview(source: HTMLCanvasElement, root: HTMLElement) 
       color.width = dim.width = w;
       color.height = dim.height = h;
       colorContext.drawImage(source, region.x, region.y, region.w, region.h, 0, 0, w, h);
-      dimContext.filter = "brightness(0.45)";
+      // 暗化在 DOM 层完成，同时覆盖透明区的棋盘格；不改变原图透明度。
       dimContext.drawImage(color, 0, 0);
       dirty = false;
       regionKey = nextRegionKey;

@@ -18,7 +18,9 @@ async function setup() {
   let active = null;
   let toolbarActions;
   let toolbar;
-  let viewportOptions, now = 100;
+  let viewportOptions, cropOptions, activeTool, saveDialogCount = 0;
+  let pathResolver;
+  const toasts = [], saved = [];
   let previewScale = 0.2;
   const elements = [];
   const context = new Proxy({ measureText: text => ({ width: text.length * 24 }),
@@ -36,8 +38,8 @@ async function setup() {
       getBoundingClientRect: () => tag === "canvas"
         ? { left: 120, top: 80, width: 2000 * previewScale, height: 1000 * previewScale }
         : { left: 100, top: 50, width: 700, height: 500 },
-      addEventListener: (name, handler) => listeners.set(name, handler),
-      fire: (name, event = {}) => listeners.get(name)?.(event),
+      addEventListener: (name, handler) => listeners.set(name, [...(listeners.get(name) ?? []),handler]),
+      fire: (name, event = {}) => { for(const handler of listeners.get(name) ?? []) handler(event); },
       focus: () => { if (active && active !== el) active.blur(); active = el; },
       blur: () => { if (active !== el) return; active = null; el.fire("blur"); },
       setPointerCapture: () => { el.captured = true; },
@@ -55,7 +57,6 @@ async function setup() {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText, {
     exports,
-    performance: { now: () => now },
     document: { createElement: element },
     window: {
       addEventListener: (name, handler) => {
@@ -67,7 +68,16 @@ async function setup() {
       confirm: () => { throw new Error("editor exit must use an in-app confirmation"); },
     },
     require: name => {
-      if (name === "@tauri-apps/plugin-dialog") return { save: async () => null };
+      if (name === "@tauri-apps/plugin-dialog") return { save: () => {
+        saveDialogCount++;
+        return new Promise(resolve => { pathResolver = resolve; });
+      } };
+      if (name === "../image-editor/crop-transaction") return require("./helpers/load-ts.cjs")("image-editor/crop-transaction.ts");
+      if (name === "../image-editor/annotation-selection") return require("./helpers/load-ts.cjs")("image-editor/annotation-selection.ts", {
+        "./frame-update": {createFrameUpdate: apply => require("../../.unit-test-dist/image-editor/frame-update.js").createFrameUpdate(apply, {
+          request: callback => {frames.set(++frameId,callback);return frameId;},cancel: id => frames.delete(id),
+        })},
+      },{document:{createElement:element}});
       if (name === "../image-editor/confirm-dialog") return { createEditorConfirmDialog: () => ({
         isOpen: () => confirmationResolver !== null,
         ask: request => {
@@ -78,7 +88,7 @@ async function setup() {
       if (name === "../image-editor/toolbar") return { createEditorToolbar: actions => {
         toolbarActions = actions;
         toolbar = { color: { value: "#ff0000" }, width: { addEventListener: () => {} }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
-          refreshTranslations: () => {}, refreshHistory: () => {}, setActiveTool: () => {}, closePanels: () => {}, updateLayout: () => {},
+          refreshTranslations: () => {}, refreshHistory: () => {}, setSelection: selected => {toolbar.selected=selected;}, setActiveTool: tool => {activeTool=tool;}, closePanels: () => {}, updateLayout: () => {},
           initializeSizes: scale => {
             assert.equal(root.classList.contains("hidden"), false, "measure the visible editor");
             const { createPreviewAnnotationSizing } = require("../../.unit-test-dist/image-editor/annotation-style.js");
@@ -89,7 +99,10 @@ async function setup() {
       if (name === "./image-editor-loader") return { createImageEditorLoader: () => ({
         load: async () => ({ naturalWidth: 2000, naturalHeight: 1000, removeAttribute() {} }), cancel: () => {}, isLoading: () => false,
       }) };
-      if (name === "../image-editor/crop-overlay") return { createCropOverlay: () => ({ update: () => {}, refreshImage: () => {}, cancel: () => {} }) };
+      if (name === "../image-editor/crop-overlay") return { createCropOverlay: options => {
+        cropOptions=options;
+        return { update: () => {}, refreshImage: () => {}, cancel: () => options.onEnd(true) };
+      } };
       if (name === "../image-editor/crop-viewport") return { createCropViewport: options => { viewportOptions = options; return { fit: () => {}, refresh: () => {}, begin: () => {}, end: () => {} }; } };
       if (name === "../image-editor/zoom-toolbar") return {createEditorZoomToolbar: () => ({refreshTranslations() {}, setScale() {}})};
       if (name === "../image-editor/viewport-input") return {bindEditorViewportInput: () => ({reset() {}})};
@@ -118,8 +131,8 @@ async function setup() {
     },
   });
   const controller = exports.createImageEditorController({
-    root, getEditableSource: async () => "", saveImage: async () => {}, translate: key => key,
-    onClose: () => { closed++; }, onSaved: () => {}, toast: () => {},
+    root, getEditableSource: async () => "", saveImage: async (...args) => {saved.push(args);}, translate: (key, params) => params?.msg ? `${key}: ${params.msg}` : key,
+    onClose: () => { closed++; }, onSaved: () => {}, toast: (...args) => toasts.push(args),
   });
   await controller.open({ path: "image.png", name: "image.png" }, () => {});
   toolbarActions.setTool("text");
@@ -140,9 +153,11 @@ async function setup() {
     return event;
   };
   return { controller, input, canvas, click, key, drawn, cleared, toolbarActions, toolbar, root, confirmations,
+    toasts, saved, activeTool: () => activeTool, saveDialogs: () => saveDialogCount,
+    resolvePath: async path => {pathResolver(path); await new Promise(resolve => setImmediate(resolve));},
     changeCropView: value => viewportOptions.onCropChange(value),
+    cropGesture: (value, cancelled=false) => {cropOptions.onBegin(); cropOptions.onChange(value); cropOptions.onEnd(cancelled);},
     crop: () => JSON.parse(JSON.stringify(viewportOptions.getCrop())),
-    advanceTime: ms => { now += ms; },
     closed: () => closed,
     resolveConfirmation: async accepted => {
       assert.ok(confirmationResolver);
@@ -160,7 +175,129 @@ async function setup() {
     flush: () => { while (timers.length) timers.shift()(); }, focused: () => active === input };
 }
 
-test("crop zoom changes are dirty and consecutive view changes undo as one gesture", async () => {
+test("select moves an annotation as one undo step and toolbar deletion can be undone", async () => {
+  const f=await setup();f.click();f.flush();f.input.value="move";f.key();
+  const original=JSON.parse(JSON.stringify(f.drawn.at(-1)));
+  f.toolbarActions.setTool("select");f.click();
+  assert.equal(f.toolbar.selected,true);
+  f.canvas.fire("pointermove",{clientX:320,clientY:180,pointerId:1});f.paint();
+  f.canvas.fire("pointerup",{clientX:340,clientY:200,pointerId:1});
+  assert.equal(f.drawn.at(-1).start.x,original.start.x+200);
+  assert.equal(f.drawn.at(-1).start.y,original.start.y+200);
+  f.toolbarActions.undo();assert.equal(f.drawn.at(-1).start.x,original.start.x);
+  f.toolbarActions.redo();assert.equal(f.drawn.at(-1).start.x,original.start.x+200);
+  f.click(340,200);f.canvas.fire("pointerup",{clientX:340,clientY:200,pointerId:1});
+  f.toolbarActions.deleteSelected();assert.equal(f.toolbar.selected,false);
+  f.toolbarActions.undo();assert.equal(f.drawn.at(-1).start.x,original.start.x+200);
+});
+
+test("finished arrows, boxes and ellipses are immediately selected and movable without a tool switch",async()=>{
+  for(const tool of ["rect","circle","arrow"]) {
+    const f=await setup();f.toolbarActions.setTool(tool);f.click(200,150);
+    f.canvas.fire("pointerup",{clientX:300,clientY:210,pointerId:1});
+    assert.equal(f.activeTool(),"select");assert.equal(f.toolbar.selected,true);
+    const original=JSON.parse(JSON.stringify(f.drawn.at(-1)));
+    const x=tool==="circle"?250:200;
+    f.click(x,150);f.canvas.fire("pointerup",{clientX:x+20,clientY:170,pointerId:1});
+    assert.equal(f.drawn.at(-1).start.x,original.start.x+100);
+    assert.equal(f.drawn.at(-1).start.y,original.start.y+100);
+    f.toolbarActions.undo();assert.equal(f.drawn.at(-1).start.x,original.start.x);
+    f.toolbarActions.redo();assert.equal(f.drawn.at(-1).start.x,original.start.x+100);
+    f.toolbarActions.setTool(tool);f.click(350,150);
+    f.canvas.fire("pointerup",{clientX:400,clientY:210,pointerId:1});
+    assert.equal(f.toolbar.selected,true,"the next completed shape is also ready to adjust");
+  }
+});
+
+test("committing text immediately selects it while freehand tools retain continuous drawing",async()=>{
+  const text=await setup();text.click();text.flush();text.input.value="adjust now";text.key();
+  assert.equal(text.activeTool(),"select");assert.equal(text.toolbar.selected,true);
+  for(const tool of ["pen","mosaic"]) {
+    const f=await setup();f.toolbarActions.setTool(tool);
+    for(let i=0;i<2;i++) {
+      f.click(200+i*50,150);f.canvas.fire("pointerup",{clientX:250+i*50,clientY:180,pointerId:1});
+      assert.equal(f.activeTool(),tool);assert.equal(f.toolbar.selected,false);
+    }
+  }
+});
+
+test("clicking away from entered text commits and selects it without opening another input",async()=>{
+  const f=await setup();f.click();f.flush();f.input.value="move immediately";
+  f.click(400,220);f.flush();
+  assert.equal(f.input.classList.contains("hidden"),true);
+  assert.equal(f.activeTool(),"select");assert.equal(f.toolbar.selected,true);
+  const original=JSON.parse(JSON.stringify(f.drawn.at(-1)));
+  assert.equal(original.text,"move immediately");
+  f.click();f.canvas.fire("pointerup",{clientX:320,clientY:180,pointerId:1});
+  assert.equal(f.drawn.at(-1).start.x,original.start.x+100);
+  assert.equal(f.drawn.at(-1).start.y,original.start.y+100);
+  f.toolbarActions.undo();assert.equal(f.drawn.at(-1).start.x,original.start.x);
+});
+
+test("Enter commits text before delayed input focus and duplicate blur does not clear selection",async()=>{
+  const f=await setup();f.click();f.input.value="fast input";f.key();f.flush();
+  assert.equal(f.activeTool(),"select");assert.equal(f.toolbar.selected,true);
+  assert.equal(f.input.classList.contains("hidden"),true);
+  f.input.fire("blur");assert.equal(f.toolbar.selected,true);
+  assert.equal(f.drawn.filter(shape=>shape.tool==="text").length,1);
+});
+
+test("drawing after switching tools preserves earlier annotations and allows reselecting each later",async()=>{
+  const f=await setup();
+  const draw=(tool,x,y,endX,endY)=>{
+    f.toolbarActions.setTool(tool);f.click(x,y);
+    f.canvas.fire("pointerup",{clientX:endX,clientY:endY,pointerId:1});
+  };
+  draw("arrow",200,150,280,200);
+  const first=JSON.parse(JSON.stringify(f.drawn.at(-1)));
+  draw("rect",350,150,400,200);
+  draw("arrow",200,150,250,150);
+  const arrows=f.drawn.filter(shape=>shape.tool==="arrow");
+  assert.equal(arrows.at(-2).start.x,first.start.x);
+  assert.equal(arrows.at(-2).end.x,first.end.x,"drawing over an old arrow must not move it");
+  // Hit an earlier arrow away from the overlapping new arrow, then move it.
+  f.click(264,190);f.canvas.fire("pointerup",{clientX:284,clientY:210,pointerId:1});
+  assert.equal(f.drawn.filter(shape=>shape.tool==="arrow").at(-2).start.x,first.start.x+100);
+  // The previous rectangle can also be reselected after multiple tool switches.
+  f.click(350,150);f.canvas.fire("pointerup",{clientX:370,clientY:170,pointerId:1});
+  assert.equal(f.drawn.filter(shape=>shape.tool==="rect").at(-1).start.x,1250);
+});
+
+test("reset clears annotations, applied crop and rotation in one undoable step", async () => {
+  const f=await setup();f.click();f.flush();f.input.value="restore me";f.key();
+  f.toolbarActions.setTool("crop");f.cropGesture({x:100,y:100,w:1500,h:700});f.toolbarActions.applyCrop();
+  f.toolbarActions.rotate();const before=f.crop();
+  f.toolbarActions.reset();
+  assert.equal(f.crop(),null);assert.equal(f.canvas.width,2000);assert.equal(f.toolbar.selected,false);
+  f.toolbarActions.undo();
+  assert.deepEqual(f.crop(),before);assert.equal(f.canvas.width,1000);
+  assert.equal(f.drawn.at(-1).text,"restore me");assert.equal(f.drawn.at(-1).rotation,90);
+  f.toolbarActions.redo();assert.equal(f.crop(),null);assert.equal(f.canvas.width,2000);
+});
+
+test("reset cancels crop drafts and keeps unfinished text recoverable; resetting untouched state creates no edit", async () => {
+  const f=await setup();f.toolbarActions.reset();f.windowKey();
+  assert.equal(f.confirmations.length,0);assert.equal(f.closed(),1);
+  const g=await setup();g.click();g.flush();g.input.value="pending";g.toolbarActions.reset();
+  assert.equal(g.input.classList.contains("hidden"),true);
+  g.toolbarActions.undo();assert.equal(g.drawn.at(-1).text,"pending");
+  g.toolbarActions.setTool("crop");g.changeCropView({x:200,y:100,w:1200,h:600});
+  g.toolbarActions.reset();assert.equal(g.crop(),null);assert.equal(g.activeTool(),"select");
+  g.toolbarActions.undo();assert.equal(g.crop(),null);assert.equal(g.drawn.at(-1).text,"pending");
+});
+
+test("canceling an annotation move restores its position without an extra edit", async () => {
+  const f=await setup();f.click();f.flush();f.input.value="stay";f.key();
+  f.toolbarActions.setTool("select");f.click();
+  f.canvas.fire("pointermove",{clientX:340,clientY:200,pointerId:1});f.paint();
+  f.canvas.fire("pointercancel");
+  assert.equal(f.drawn.at(-1).start.x,900);
+  f.toolbarActions.undo();
+  assert.equal(f.toolbar.selected,false);
+  f.toolbarActions.redo();assert.equal(f.drawn.at(-1).start.x,900);
+});
+
+test("crop changes stay tentative until explicitly applied and commit as one undo step", async () => {
   const editor = await setup();
   editor.toolbarActions.setTool("crop");
   const first = {x:200,y:100,w:1600,h:800};
@@ -168,15 +305,130 @@ test("crop zoom changes are dirty and consecutive view changes undo as one gestu
   editor.changeCropView(first);
   editor.changeCropView(last);
   assert.deepEqual(editor.crop(),last);
+  editor.toolbarActions.setTool("select");
+  assert.equal(editor.activeTool(),"crop");
+  assert.equal(editor.toasts.at(-1)[0],"editor.finishCropFirst");
+  editor.toolbarActions.undo(); editor.toolbarActions.redo();
+  assert.deepEqual(editor.crop(),last);
+  editor.toolbarActions.applyCrop();
+  assert.equal(editor.activeTool(),"select");
   editor.toolbarActions.undo(); assert.equal(editor.crop(),null);
   editor.toolbarActions.redo(); assert.deepEqual(editor.crop(),last);
-  editor.advanceTime(300);
-  editor.changeCropView({x:600,y:300,w:800,h:400});
-  editor.toolbarActions.undo(); assert.deepEqual(editor.crop(),last);
+  editor.toolbarActions.setTool("crop");
+  editor.changeCropView(first);
+  editor.toolbarActions.cancelCrop();
+  assert.deepEqual(editor.crop(),last);
+});
+
+test("Escape cancels draft crop without closing; rotation waits until the crop is resolved", async () => {
+  const editor=await setup();
+  editor.toolbarActions.setTool("crop");
+  editor.changeCropView({x:200,y:100,w:1600,h:800});
+  editor.toolbarActions.rotate();
+  assert.equal(editor.canvas.width,2000);
+  assert.equal(editor.toasts.at(-1)[0],"editor.finishCropFirst");
   editor.windowKey({key:"Escape"});
+  assert.equal(editor.canvas.width,2000);
+  assert.equal(editor.crop(),null);
+  assert.equal(editor.activeTool(),"select");
+  assert.equal(editor.closed(),0);
+  editor.toolbarActions.undo();
+  assert.equal(editor.canvas.width,2000);
+  editor.windowKey({key:"Escape"});
+  assert.equal(editor.confirmations.length,0);
+  assert.equal(editor.closed(),1);
+});
+
+test("rotation commits independently and canceling a later crop preserves the rotated annotations", async () => {
+  const editor=await setup();
+  editor.click(); editor.flush(); editor.input.value="keep"; editor.key();
+  const original=JSON.stringify(editor.drawn.at(-1));
+  editor.toolbarActions.setTool("crop");
+  const crop={x:200,y:100,w:1600,h:800};
+  editor.cropGesture(crop);
+  editor.toolbarActions.applyCrop();
+  editor.toolbarActions.rotate();
+  assert.notEqual(JSON.stringify(editor.drawn.at(-1)),original);
+  const rotated=JSON.stringify(editor.drawn.at(-1)), rotatedCrop=editor.crop();
+  editor.toolbarActions.setTool("crop");
+  editor.changeCropView({x:100,y:200,w:600,h:1200});
+  editor.toolbarActions.cancelCrop();
+  assert.equal(JSON.stringify(editor.drawn.at(-1)),rotated);
+  assert.deepEqual(editor.crop(),rotatedCrop);
+  editor.toolbarActions.undo();
+  assert.deepEqual(editor.crop(),crop);
+  assert.equal(JSON.stringify(editor.drawn.at(-1)),original);
+  assert.equal(editor.canvas.width,2000);
+  editor.toolbarActions.redo();
+  assert.deepEqual(editor.crop(),rotatedCrop);
+  assert.equal(editor.canvas.width,1000);
+});
+
+test("standalone rotation commits unfinished text first and keeps its own undo step", async () => {
+  const editor=await setup();
+  editor.click(); editor.flush(); editor.input.value="rotate me";
+  editor.toolbarActions.rotate();
+  assert.equal(editor.input.classList.contains("hidden"),true);
+  assert.equal(editor.canvas.width,1000);
+  assert.equal(editor.drawn.at(-1).text,"rotate me");
+  assert.equal(editor.drawn.at(-1).rotation,90);
+  editor.toolbarActions.undo();
+  assert.equal(editor.canvas.width,2000);
+  assert.equal(editor.drawn.at(-1).rotation ?? 0,0);
+  assert.equal(editor.drawn.at(-1).text,"rotate me");
+});
+
+test("pending crop blocks saving and close cancellation retains the draft", async () => {
+  const editor=await setup();
+  editor.toolbarActions.setTool("crop");
+  const crop={x:200,y:100,w:1600,h:800};
+  editor.changeCropView(crop);
+  editor.toolbarActions.saveAs(); editor.toolbarActions.overwrite();
+  assert.equal(editor.saveDialogs(),0);
+  assert.equal(editor.confirmations.length,0);
+  const closing=editor.controller.close();
   assert.equal(editor.confirmations.length,1);
   await editor.resolveConfirmation(false);
-  assert.equal(editor.closed(),0);
+  assert.equal(await closing,false);
+  assert.deepEqual(editor.crop(),crop);
+  assert.equal(editor.activeTool(),"crop");
+  editor.windowKey({key:"Enter"});
+  assert.equal(editor.activeTool(),"select");
+  editor.toolbarActions.saveAs();
+  assert.equal(editor.saveDialogs(),1);
+  await editor.resolvePath(null);
+});
+
+test("enter respects focused controls and IME; a canceled gesture retains the preceding draft", async () => {
+  const editor=await setup();
+  editor.toolbarActions.setTool("crop");
+  const crop={x:200,y:100,w:1600,h:800};
+  editor.cropGesture(crop);
+  editor.cropGesture({x:400,y:200,w:1200,h:600},true);
+  assert.deepEqual(editor.crop(),crop);
+  for(const extra of [{isComposing:true},{repeat:true},{defaultPrevented:true},{target:{closest:()=>true}}]) {
+    editor.windowKey({key:"Enter",...extra});
+    assert.equal(editor.activeTool(),"crop");
+  }
+  editor.windowKey({key:"Enter"});
+  assert.equal(editor.activeTool(),"select");
+  editor.toolbarActions.undo(); assert.equal(editor.crop(),null);
+});
+
+test("a late save dialog cannot export an unconfirmed crop and a new session clears its draft", async () => {
+  const editor=await setup();
+  editor.toolbarActions.saveAs();
+  editor.toolbarActions.setTool("crop");
+  editor.changeCropView({x:200,y:100,w:1600,h:800});
+  await editor.resolvePath("copy.png");
+  assert.equal(editor.saved.length,0);
+  assert.match(editor.toasts.at(-1)[0],/editor.finishCropFirst/);
+  await editor.controller.open({path:"other.png",name:"other.png"},()=>{});
+  assert.equal(editor.activeTool(),"select");
+  assert.equal(editor.crop(),null);
+  editor.windowKey();
+  assert.equal(editor.confirmations.length,0);
+  assert.equal(editor.closed(),1);
 });
 
 test("Escape leaves an untouched editor without a discard prompt", async () => {

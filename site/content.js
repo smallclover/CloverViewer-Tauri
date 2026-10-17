@@ -38,11 +38,11 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "留住画面，也留下重点。",
     editBody:
-      "多屏截图、自定义边框与标注。编辑支持缩放和平移，裁剪框固定调整构图；PNG、JPEG、WebP 保存采用完整写入后替换，失败保留原图。",
+      "多屏截图与标注，图形和文字可移动、旋转，支持重置与撤销。裁剪可先预览再应用或取消；PNG、JPEG、WebP 保存失败保留原图。",
     editTag: "截图 · 裁切 · 标注 · 导出",
     scrollTitle: "一屏装不下，就继续滚动。",
     scrollBody:
-      "框选区域，按自己的节奏滚动。逐帧拼接网页、聊天记录或长列表；停止时保留已捕获的内容。",
+      "框选区域，按自己的节奏滚动。Enter 完成拼接并预览，Esc 取消并丢弃；预览后可复制、保存或在查看器中打开。",
     scrollNote: "手动滚动优先；自动滚动为可选试验功能。",
     scrollLink: "了解滚动长截图",
     scrollStep1: "框选区域",
@@ -77,7 +77,7 @@ export const translations = {
     key2: "开始滚动长截图",
     key3: "打开文件夹",
     key4: "上一张 / 下一张",
-    key5: "复制截图选区",
+    key5: "普通截图复制／滚动截图完成",
     key6: "撤销 / 重做标注",
     faqEyebrow: "开始之前",
     faqTitle: "你可能想知道。",
@@ -92,7 +92,7 @@ export const translations = {
       "不会上传到第三方服务。图片浏览、截图、标注、拼接和 OCR 都在本地完成。如果你主动创建局域网分享，持有链接的同一网络设备可以临时访问该图片；手动检查更新时会连接 GitHub Releases。",
     faq4: "滚动截图支持所有应用吗？",
     answer4:
-      "不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接；停止或失败时，已捕获部分会保留。",
+      "不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接。Enter 完成并保留已验证内容，Esc 取消并丢弃本次截图。",
     faq5: "AI 客户端怎么接入？",
     answer5:
       "在兼容的 MCP 客户端中，将命令指向 CloverViewer.exe 并传入 --mcp。也支持仅本机监听、需令牌的 HTTP 模式。具体配置与工具参数见 MCP 使用指南。",
@@ -156,11 +156,11 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "Keep the picture. Make the point.",
     editBody:
-      "Capture across monitors and annotate. Zoom or pan in the editor with a fixed crop frame. PNG, JPEG and WebP saves replace the file only after a complete write.",
+      "Capture and annotate across monitors. Move or rotate shapes and text, undo a reset, and apply or cancel crop drafts. Failed PNG, JPEG and WebP saves preserve the original.",
     editTag: "CAPTURE · CROP · ANNOTATE · EXPORT",
     scrollTitle: "When one screen isn't enough.",
     scrollBody:
-      "Select an area and scroll at your own pace. Stitch pages, conversations or long lists frame by frame. Keep what you've captured when you stop.",
+      "Select an area and scroll at your own pace. Enter finishes stitching and opens the preview; Esc cancels and discards it. Then copy, save or open the result in the viewer.",
     scrollNote: "Manual scrolling by default; optional automatic scrolling is experimental.",
     scrollLink: "About scrolling capture",
     scrollStep1: "Select an area",
@@ -199,7 +199,7 @@ export const translations = {
     key2: "Start scrolling capture",
     key3: "Open a folder",
     key4: "Previous / next image",
-    key5: "Copy the screenshot selection",
+    key5: "Copy screenshot / finish scrolling",
     key6: "Undo / redo annotations",
     faqEyebrow: "BEFORE YOU START",
     faqTitle: "A few things to know.",
@@ -214,7 +214,7 @@ export const translations = {
       "They are not uploaded to third-party services. Viewing, capture, annotations, stitching and OCR run locally. A LAN share you create temporarily lets devices on the same network access the image using its link. Manual update checks connect to GitHub Releases.",
     faq4: "Does scrolling capture work with every app?",
     answer4:
-      "Success isn't guaranteed in every app. Captures follow your manual scrolling by default; automatic scrolling is an experimental option that is off by default. Dynamic content and animations can affect stitching. Stopping or failure preserves captured content.",
+      "Success varies by app. Manual scrolling is the default; automatic scrolling is an optional experiment. Dynamic content and large animations can affect stitching. Enter finishes and keeps verified content; Esc cancels and discards this capture.",
     faq5: "How do I connect an AI client?",
     answer5:
       "In a compatible MCP client, point the command to CloverViewer.exe and pass --mcp. A token-protected, loopback-only HTTP mode is also available. See the MCP guide for setup and tool parameters.",
@@ -279,11 +279,11 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "画面を残して、要点を伝える。",
     editBody:
-      "複数画面を撮影して注釈を追加。編集では枠を固定して画像を拡大縮小・移動し、構図を調整できます。PNG・JPEG・WebP は書き込み完了後に置換して元画像を保護します。",
+      "複数画面を撮影して注釈を追加。図形や文字の移動・回転、リセットの取り消し、トリミング下書きの適用・キャンセルに対応。PNG・JPEG・WebPの保存失敗時は元画像を保持します。",
     editTag: "キャプチャ · 切り抜き · 注釈 · 出力",
     scrollTitle: "一画面で足りなければ、スクロール。",
     scrollBody:
-      "範囲を選び、自分のペースでスクロール。Web ページや会話、長いリストをフレームごとに結合します。停止しても取得済みの内容は残ります。",
+      "範囲を選び、自分のペースでスクロール。Enterで結合を完了してプレビュー、Escでキャンセルして破棄。結果はコピー・保存・ビューアで開けます。",
     scrollNote: "手動スクロールが標準。自動スクロールは任意の実験機能です。",
     scrollLink: "スクロールキャプチャについて",
     scrollStep1: "範囲を選ぶ",
@@ -321,7 +321,7 @@ export const translations = {
     key2: "スクロールキャプチャを開始",
     key3: "フォルダを開く",
     key4: "前の画像 / 次の画像",
-    key5: "キャプチャ範囲をコピー",
+    key5: "通常撮影はコピー／スクロール撮影は完了",
     key6: "注釈を元に戻す / やり直す",
     faqEyebrow: "はじめる前に",
     faqTitle: "よくある質問。",
@@ -336,7 +336,7 @@ export const translations = {
       "外部サービスへアップロードしません。閲覧、キャプチャ、注釈、結合、OCR はローカル処理です。自分で LAN 共有を作成した場合のみ、リンクを持つ同一ネットワークの端末が一時アクセスできます。手動更新確認では GitHub Releases に接続します。",
     faq4: "どのアプリでもスクロールキャプチャできますか？",
     answer4:
-      "すべてのアプリでの成功は保証できません。標準では手動スクロールに合わせて結合します。自動スクロールは初期状態で無効の実験機能です。動的な内容やアニメーションは結合に影響しますが、停止・失敗時も取得済み部分は残ります。",
+      "すべてのアプリでの成功は保証できません。既定は手動スクロールで、自動スクロールは任意の試験機能です。動的な内容や大きなアニメーションは結合に影響します。Enterで完了して検証済みの内容を保持し、Escでキャンセルして今回の撮影を破棄します。",
     faq5: "AI クライアントにはどう接続しますか？",
     answer5:
       "対応する MCP クライアントで、コマンドを CloverViewer.exe に設定し --mcp を渡します。トークン必須・ローカル接続のみの HTTP モードにも対応。詳細は MCP ガイドをご覧ください。",

@@ -40,6 +40,7 @@ export interface ScrollCaptureHud {
   actions: HTMLDivElement;
   resultBody: HTMLDivElement;
   stopButton: HTMLButtonElement;
+  cancelButton: HTMLButtonElement;
   copyButton: HTMLButtonElement;
   saveButton: HTMLButtonElement;
   openButton: HTMLButtonElement;
@@ -49,6 +50,7 @@ export interface ScrollCaptureHud {
 interface ScrollCaptureHudOptions {
   uiLayer: HTMLElement;
   onStop: () => void;
+  onCancel: () => void;
   onAction: (action: "clipboard" | "save" | "open") => void;
   onLayout: () => void;
 }
@@ -86,6 +88,7 @@ function createButton(onClick: () => void): HTMLButtonElement {
 export function createScrollCaptureHud({
   uiLayer,
   onStop,
+  onCancel,
   onAction,
   onLayout,
 }: ScrollCaptureHudOptions): ScrollCaptureHud {
@@ -194,12 +197,14 @@ export function createScrollCaptureHud({
   resultSide.className = "sh-result-side";
 
   const stopButton = createButton(onStop);
+  stopButton.classList.add("primary");
+  const cancelButton = createButton(onCancel);
   const copyButton = createButton(() => onAction("clipboard"));
   const saveButton = createButton(() => onAction("save"));
   const openButton = createButton(() => onAction("open"));
   const escStop = document.createElement("div");
   escStop.className = "sh-esc-stop";
-  actions.append(stopButton);
+  actions.append(stopButton, cancelButton);
   resultActions.append(copyButton, saveButton, openButton);
   resultSide.append(resultSummary, resultElapsed, resultActions);
   resultBody.append(previewSlot, resultSide);
@@ -267,6 +272,7 @@ export function createScrollCaptureHud({
     actions,
     resultBody,
     stopButton,
+    cancelButton,
     copyButton,
     saveButton,
     openButton,

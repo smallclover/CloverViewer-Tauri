@@ -16,15 +16,18 @@ interface ToolbarOptions {
   translate: (key: string) => string;
   setTool: (tool: EditorTool) => void;
   rotate: () => void;
+  deleteSelected: () => void;
+  applyCrop: () => void;
+  cancelCrop: () => void;
   undo: () => void;
   redo: () => void;
+  reset: () => void;
   saveAs: () => void;
   overwrite: () => void;
   close: () => void;
 }
 
 const TOOLS: [EditorTool, string][] = [
-  ["select", "editor.select"],
   ["crop", "editor.crop"],
   ["rect", "shot.rect"],
   ["circle", "shot.circle"],
@@ -43,6 +46,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
   const buttons = new Map<string, HTMLButtonElement>();
   const labels = new Map<HTMLElement, string>();
   let activeTool: EditorTool = "select";
+  let hasSelection = false;
   const sizes = createAnnotationSizes();
   let sizePresets = SIZE_PRESETS;
 
@@ -51,12 +55,12 @@ export function createEditorToolbar(options: ToolbarOptions) {
     labels.set(node, key);
     return node;
   };
-  const group = (name: string, key: string) => {
+  const group = (name: string, key: string, parent = dock) => {
     const node = document.createElement("div");
     node.className = `image-editor-island image-editor-${name}`;
     node.setAttribute("role", "group");
     labels.set(node, key);
-    dock.append(node);
+    parent.append(node);
     return node;
   };
   const button = (parent: HTMLElement, key: string, action: () => void, text = false) => {
@@ -80,20 +84,30 @@ export function createEditorToolbar(options: ToolbarOptions) {
   const history = group("history", "editor.history");
   const undo = button(history, "editor.undo", options.undo);
   const redo = button(history, "editor.redo", options.redo);
+  button(history, "editor.reset", options.reset);
   divider(history);
   button(history, "editor.cancel", options.close);
-  const tools = group("tools", "editor.tools");
+  const toolStack = document.createElement("div");
+  toolStack.className = "image-editor-tool-stack";
+  dock.append(toolStack);
+  const context = document.createElement("div");
+  context.className = "image-editor-context image-editor-island";
+  toolStack.append(context);
+  const tools = group("tools", "editor.tools", toolStack);
   tools.setAttribute("role", "toolbar");
   for (const [tool, key] of TOOLS) {
-    if (tool === "rect") divider(tools);
-    button(tools, key, () => options.setTool(tool)).classList.add("image-editor-tool");
+    if (tool === "rect") {
+      button(tools, "editor.rotate", options.rotate).classList.add("image-editor-tool");
+      divider(tools);
+    }
+    button(tools, key, () => options.setTool(activeTool === tool ? "select" : tool)).classList.add(
+      "image-editor-tool",
+    );
   }
   const zoomSlot = document.createElement("div");
   zoomSlot.className = "image-editor-zoom-slot";
   dock.append(zoomSlot);
 
-  const context = document.createElement("div");
-  context.className = "image-editor-context image-editor-island";
   const contextIntro = document.createElement("div");
   contextIntro.className = "image-editor-context-intro";
   const contextName = document.createElement("strong");
@@ -103,7 +117,19 @@ export function createEditorToolbar(options: ToolbarOptions) {
   contextIntro.append(contextName, hint);
   const cropping = document.createElement("div");
   cropping.className = "image-editor-context-fields";
-  button(cropping, "editor.rotate", options.rotate, true);
+  button(cropping, "editor.cancelCrop", options.cancelCrop, true);
+  button(cropping, "editor.applyCrop", options.applyCrop, true).classList.add(
+    "image-editor-crop-apply",
+  );
+  const selection = document.createElement("div");
+  selection.className = "image-editor-context-fields";
+  selection.hidden = true;
+  const deleteAnnotation = button(
+    selection,
+    "editor.deleteAnnotation",
+    options.deleteSelected,
+    true,
+  );
   const annotation = document.createElement("div");
   annotation.className = "image-editor-context-fields";
   const field = (parent: HTMLElement, key: string, control: HTMLElement) => {
@@ -125,8 +151,8 @@ export function createEditorToolbar(options: ToolbarOptions) {
     sizes[sizeKind(activeTool)] = Number(width.value);
   });
   const widthCaption = field(annotation, "shot.width", width).caption;
-  context.append(contextIntro, cropping, annotation);
-  element.append(context, dock);
+  context.append(contextIntro, cropping, selection, annotation);
+  element.append(dock);
 
   const saving = group("saving", "editor.saveOptions");
   const popup = document.createElement("div");
@@ -202,7 +228,20 @@ export function createEditorToolbar(options: ToolbarOptions) {
     saveOptions.focus();
   });
 
+  const refreshSelection = () => {
+    context.hidden = activeTool === "select" && !hasSelection;
+    selection.hidden = activeTool !== "select" || !hasSelection;
+    deleteAnnotation.disabled = selection.hidden;
+  };
   const refreshContext = () => {
+    refreshSelection();
+    const rotate = buttons.get("editor.rotate");
+    if (rotate) {
+      rotate.disabled = activeTool === "crop";
+      rotate.title = rotate.ariaLabel = options.translate(
+        activeTool === "crop" ? "editor.finishCropFirst" : "editor.rotate",
+      );
+    }
     const key = TOOLS.find(([tool]) => tool === activeTool)?.[1] ?? "editor.select";
     contextName.innerHTML = editorIcon(key);
     const name = document.createElement("span");
@@ -252,6 +291,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
   };
   const setActiveTool = (tool: EditorTool) => {
     closePanels();
+    if (activeTool !== tool) hasSelection = false;
     activeTool = tool;
     for (const [candidate, key] of TOOLS) {
       const node = buttons.get(key);
@@ -280,6 +320,10 @@ export function createEditorToolbar(options: ToolbarOptions) {
     format,
     outputScale,
     setActiveTool,
+    setSelection: (selected: boolean) => {
+      hasSelection = selected;
+      refreshSelection();
+    },
     refreshTranslations,
     closePanels,
     updateLayout,
@@ -290,8 +334,8 @@ export function createEditorToolbar(options: ToolbarOptions) {
       refreshContext();
     },
     refreshHistory: (canUndo: boolean, canRedo: boolean) => {
-      undo.disabled = !canUndo;
-      redo.disabled = !canRedo;
+      undo.disabled = activeTool === "crop" || !canUndo;
+      redo.disabled = activeTool === "crop" || !canRedo;
     },
   };
 }

@@ -69,9 +69,9 @@
           "单图底部相邻图片预览，点击切图，状态栏快捷展开或收起并记住选择",
           "图片缩放与裁剪居中平滑过渡，拖动立即接管，遵循减少动态效果偏好",
           "截图选区边框可自定义颜色与虚线、实线，保留经典黑白虚线",
-          "图片编辑：底部缩放按钮、倍率、适应与 100%、空格/中键平移；裁剪框固定调整构图，九宫格、标注、撤销重做及原子保存",
+          "图片编辑：图形与文字移动和旋转、可撤销的重置、裁剪草稿应用或取消、底部缩放和平移及原子保存",
           "多显示器跨屏截图，显示前同步窗口与内容区域尺寸，修复混合 DPI 遮罩黑条与分辨率切换后的画面压缩；拖动选区时底图保持静态，遮罩、边框与放大镜独立更新；支持六种标注",
-          "滚动长截图：逐帧按重叠像素配准拼接成长图",
+          "滚动长截图：逐帧按重叠像素配准拼接成长图，Enter 完成并预览，Esc 取消并丢弃",
           "局域网临时分享：二维码、随机令牌链接、有效期与一次下载；实际状态查询、确认停止、失效链接收起",
           "Live2D 桌宠：待机、眨眼、定时点头、鼠标跟随与 60%–200% 缩放",
           "基于 Windows 原生 UWP OCR 的中英日文字识别",
@@ -120,7 +120,7 @@
       "name": "滚动截图支持所有应用吗？",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接；停止或失败时，已捕获部分会保留。"
+        "text": "不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接。Enter 完成并保留已验证内容，Esc 取消并丢弃本次截图。"
       }
     },
     {
@@ -351,7 +351,7 @@
               <div class="card-copy">
                 <svg class="icon card-icon" aria-hidden="true"><use href="#i-crop"></use></svg>
                 <h3 data-copy="editTitle">留住画面，也留下重点。</h3>
-                <p data-copy="editBody">多屏截图、自定义边框与标注。编辑支持缩放和平移，裁剪框固定调整构图；PNG、JPEG、WebP 保存采用完整写入后替换，失败保留原图。</p>
+                <p data-copy="editBody">多屏截图与标注，图形和文字可移动、旋转，支持重置与撤销。裁剪可先预览再应用或取消；PNG、JPEG、WebP 保存失败保留原图。</p>
                 <p class="small-tag" data-copy="editTag">截图 · 裁切 · 标注 · 导出</p>
               </div>
               <img
@@ -368,9 +368,7 @@
               <div class="card-copy">
                 <svg class="icon card-icon" aria-hidden="true"><use href="#i-scroll"></use></svg>
                 <h3 data-copy="scrollTitle">一屏装不下，就继续滚动。</h3>
-                <p data-copy="scrollBody">
-                  框选区域，按自己的节奏滚动。逐帧拼接网页、聊天记录或长列表；停止时保留已捕获的内容。
-                </p>
+                <p data-copy="scrollBody">框选区域，按自己的节奏滚动。Enter 完成拼接并预览，Esc 取消并丢弃；预览后可复制、保存或在查看器中打开。</p>
                 <p class="fine" data-copy="scrollNote">手动滚动优先；自动滚动为可选试验功能。</p>
                 <a
                   href="https://github.com/smallclover/CloverViewer-Tauri/blob/main/docs/scroll-capture-v2.md"
@@ -510,7 +508,7 @@
             </div>
             <div class="shortcut"><kbd>Ctrl + O</kbd><span data-copy="key3">打开文件夹</span></div>
             <div class="shortcut"><kbd>← / →</kbd><span data-copy="key4">上一张 / 下一张</span></div>
-            <div class="shortcut"><kbd>Enter</kbd><span data-copy="key5">复制截图选区</span></div>
+            <div class="shortcut"><kbd>Enter</kbd><span data-copy="key5">普通截图复制／滚动截图完成</span></div>
             <div class="shortcut">
               <kbd>Ctrl + Z / Y</kbd><span data-copy="key6">撤销 / 重做标注</span>
             </div>
@@ -558,9 +556,7 @@
               <span data-copy="faq4">滚动截图支持所有应用吗？</span
               ><svg class="icon " aria-hidden="true"><use href="#i-plus"></use></svg>
             </summary>
-            <p data-copy="answer4">
-              不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接；停止或失败时，已捕获部分会保留。
-            </p>
+            <p data-copy="answer4">不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接。Enter 完成并保留已验证内容，Esc 取消并丢弃本次截图。</p>
           </details>
           <details>
             <summary>

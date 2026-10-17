@@ -30,6 +30,7 @@ interface ScrollCaptureControllerOptions {
 export function createScrollCaptureController(options: ScrollCaptureControllerOptions) {
   const { session, panel, hud, translate: t } = options;
   let exporting = false;
+  let beginAttempt = 0;
   const selectionOk = () => {
     const selection = options.getSelection();
     return !!selection && selection.w >= 32 && selection.h >= MIN_SELECTION_HEIGHT;
@@ -194,8 +195,10 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
       hud.stopButton.style.display = state.progress?.input_passthrough ? "none" : "";
       hud.stopButton.disabled = state.stopping;
       hud.stopButton.textContent = t(manual ? "shot.scrollManualFinish" : "shot.scrollStop");
+      hud.cancelButton.style.display = state.progress?.input_passthrough ? "none" : "";
+      hud.cancelButton.textContent = t("shot.scrollCancel");
       hud.escStop.textContent = t(manual ? "shot.scrollManualEscFinish" : "shot.scrollEscStop");
-      hud.escStop.classList.toggle("on", !!state.progress?.input_passthrough);
+      hud.escStop.classList.add("on");
     } else if (state.phase === "done" && result) {
       hud.hud.classList.add("result");
       hud.captureBody.style.display = "none";
@@ -263,12 +266,16 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
       panel.hint.className = "sh-status err";
       return;
     }
+    const attempt = ++beginAttempt;
     session.begin(panel.manual.checked);
     hud.selectionGlow.classList.remove("capture-hidden");
     syncUi();
     options.render();
     await new Promise((resolve) => window.setTimeout(resolve, 180));
+    // 取消待启动的会话时，不能在延时结束后又唤起原生采集。
+    if (attempt !== beginAttempt || session.state.phase !== "capturing") return;
     try {
+      const finishImmediately = session.state.stopping;
       session.state.startedAt = performance.now();
       const { minX, minY } = options.getBounds();
       await startScrollCapture({
@@ -282,7 +289,9 @@ export function createScrollCaptureController(options: ScrollCaptureControllerOp
         // 两种模式都显示聚焦光晕；每次真实取帧前临时收起，避免将绿色光晕写进长图。
         hide_glow_during_capture: true,
       });
+      if (finishImmediately && session.state.phase === "capturing") void stopScrollCapture();
     } catch (error) {
+      if (attempt !== beginAttempt || session.state.phase !== "capturing") return;
       hud.hud.classList.remove("hud-hidden");
       hud.selectionGlow.classList.remove("capture-hidden");
       session.failToArm(String(error));

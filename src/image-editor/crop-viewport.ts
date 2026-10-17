@@ -142,20 +142,26 @@ export function createCropViewport(options: CropViewportOptions) {
     };
     animationFrame = requestAnimationFrame(step);
   };
-  const setScale = (
-    scale: number,
-    anchor = { x: surface.clientWidth / 2, y: surface.clientHeight / 2 },
-    keepFrame = true,
-  ) => {
+  const scaleLimits = (frame: Rect | null) => ({
+    minimum: frame ? Math.max(0.05, frame.w / canvas.width, frame.h / canvas.height) : 0.05,
+    maximum: frame
+      ? Math.min(40, frame.w / Math.min(2, canvas.width), frame.h / Math.min(2, canvas.height))
+      : 40,
+  });
+  const canActualSize = () => {
+    const { minimum, maximum } = scaleLimits(fixedFrame());
+    return minimum <= 1 && maximum >= 1;
+  };
+  const setScale = (scale: number, anchor?: { x: number; y: number }) => {
     if (dragging || !displayed || !canvas.width || !Number.isFinite(scale) || scale <= 0) return;
     stopAnimation();
     manual = true;
-    const frame = keepFrame ? fixedFrame() : null;
-    const minimum = frame ? Math.max(frame.w / canvas.width, frame.h / canvas.height) : 0.05;
-    const maximum = frame
-      ? Math.min(40, frame.w / Math.min(2, canvas.width), frame.h / Math.min(2, canvas.height))
-      : 40;
-    const next = Math.min(maximum, Math.max(0.05, minimum, scale));
+    const frame = fixedFrame();
+    anchor ??= frame
+      ? { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 }
+      : { x: surface.clientWidth / 2, y: surface.clientHeight / 2 };
+    const { minimum, maximum } = scaleLimits(frame);
+    const next = Math.min(maximum, Math.max(minimum, scale));
     const ratio = next / displayed.scale;
     applyManualLayout(
       {
@@ -170,12 +176,35 @@ export function createCropViewport(options: CropViewportOptions) {
   };
   new ResizeObserver(() => updateLayout(false, true)).observe(surface);
   return {
+    // 初始化、旋转与撤销恢复可以重排视图；用户缩放操作走固定框路径。
     fit: () => updateLayout(),
+    fitImage: () => {
+      if (dragging) return;
+      const frame = fixedFrame();
+      if (!frame) return updateLayout();
+      stopAnimation();
+      manual = true;
+      const scale = Math.max(frame.w / canvas.width, frame.h / canvas.height);
+      const width = canvas.width * scale,
+        height = canvas.height * scale;
+      applyManualLayout(
+        {
+          left: frame.x + (frame.w - width) / 2,
+          top: frame.y + (frame.h - height) / 2,
+          width,
+          height,
+          scale,
+        },
+        frame,
+      );
+    },
     refresh: () => updateLayout(false, true),
     zoomBy: (factor: number, anchor?: { x: number; y: number }) =>
       setScale((displayed?.scale ?? 1) * factor, anchor),
-    // 明确的适应/原尺寸操作重设取景；普通缩放与平移保持框固定。
-    actualSize: () => setScale(1, undefined, false),
+    canActualSize,
+    actualSize: () => {
+      if (canActualSize()) setScale(1);
+    },
     panBy: (x: number, y: number) => {
       if (dragging || !displayed || !canvas.width) return;
       stopAnimation();

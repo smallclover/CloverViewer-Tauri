@@ -2,6 +2,7 @@ import { canvasPng } from "../image-editor/canvas-export";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { EditedImageFormat, ImageEntry } from "../api";
 import { createAnnotationLayers } from "../image-editor/annotation-layers";
+import { createAnnotationSelection } from "../image-editor/annotation-selection";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
 import { annotationFont } from "../image-editor/annotation-style";
 import {
@@ -9,18 +10,17 @@ import {
   mosaicBlockSize,
 } from "../image-editor/canvas-mosaic-renderer";
 import { createCropOverlay } from "../image-editor/crop-overlay";
+import { createCropTransaction } from "../image-editor/crop-transaction";
 import { createCropViewport } from "../image-editor/crop-viewport";
 import { createEditorConfirmDialog } from "../image-editor/confirm-dialog";
 import { createFrameUpdate } from "../image-editor/frame-update";
 import {
   cloneShape,
-  isShapeHit,
   normRect,
   rotateShapeClockwise,
   type Pt,
   type Rect,
   type Shape,
-  shapeBBox,
 } from "../image-editor/geometry";
 import { SnapshotHistory, shapeHistoryBytes } from "../image-editor/history";
 import { createMosaicCursor } from "../image-editor/mosaic-cursor";
@@ -56,6 +56,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const surface = document.createElement("div");
   surface.className = "image-editor-surface";
   surface.append(canvas);
+  const imageBoundary = document.createElement("div");
+  imageBoundary.className = "image-editor-boundary";
+  imageBoundary.ariaHidden = "true";
+  surface.append(imageBoundary);
   const textInput = document.createElement("textarea");
   textInput.className = "image-editor-text-input annotation-text-input hidden";
   textInput.rows = 1;
@@ -76,10 +80,18 @@ export function createImageEditorController(options: ImageEditorControllerOption
     translate: options.translate,
     setTool: (next) => setTool(next),
     rotate: () => rotate(),
+    deleteSelected: () => deleteSelected(),
+    applyCrop: () => finishCrop(true),
+    cancelCrop: () => finishCrop(false),
     undo: () => undo(),
     redo: () => redo(),
-    saveAs: () => void saves.saveAs(),
-    overwrite: () => void saves.overwrite(),
+    reset: () => reset(),
+    saveAs: () => {
+      if (!requireCropResolution()) void saves.saveAs();
+    },
+    overwrite: () => {
+      if (!requireCropResolution()) void saves.overwrite();
+    },
     close: () => void close(),
   });
   const confirmDialog = createEditorConfirmDialog({ workspace });
@@ -87,7 +99,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     container: toolbar.zoomSlot,
     translate: options.translate,
     zoom: (factor) => cropViewport.zoomBy(factor),
-    fit: () => cropViewport.fit(),
+    fit: () => cropViewport.fitImage(),
     actualSize: () => cropViewport.actualSize(),
   });
   const { color, sizes, format, outputScale } = toolbar;
@@ -109,7 +121,6 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let tool: EditorTool = "select";
   let shapes: Shape[] = [];
   let current: Shape | null = null;
-  let selectedIndex: number | null = null;
   let crop: Rect | null = null;
   let cropSnapshot: EditSnapshot | null = null;
   let textStart: Pt | null = null;
@@ -120,8 +131,6 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let session = 0;
   let revision = 0;
   let savedRevision = 0;
-  let cropViewRevision = -1;
-  let cropViewChangedAt = 0;
   const markDirty = () => {
     revision++;
   };
@@ -148,15 +157,39 @@ export function createImageEditorController(options: ImageEditorControllerOption
     shapes = value.shapes;
     crop = value.crop;
     rotation = value.rotation;
-    selectedIndex = null;
+    selection.clear();
     rebuildSource();
     rasterizeAnnotations();
     cropViewport.fit();
+  };
+  const cropTransaction = createCropTransaction({
+    capture: snapshot,
+    clone: cloneSnapshot,
+    getSize: () => ({ w: canvas.width, h: canvas.height }),
+    restore,
+    commit: (before) => {
+      history.checkpoint(before);
+      markDirty();
+    },
+  });
+  const requireCropResolution = () => {
+    if (!cropTransaction.active) return false;
+    options.toast(options.translate("editor.finishCropFirst"), "error");
+    return true;
+  };
+  const finishCrop = (apply: boolean) => {
+    if (!cropTransaction.active) return;
+    cropOverlay.cancel();
+    cropTransaction.finish(apply);
+    setTool("select");
+    cropViewport.fit();
+    render();
   };
 
   const translate = () => {
     toolbar.refreshTranslations();
     zoomToolbar.refreshTranslations();
+    selection.refreshTranslations();
     textInput.ariaLabel = options.translate("editor.textPrompt");
     textInput.placeholder = textInput.ariaLabel;
   };
@@ -202,7 +235,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
 
   const render = () => {
     const damage = layers.update(shapes, current);
-    const full = repaint || tool === "crop" || selectedIndex !== null || damage === "full";
+    const full = repaint || tool === "crop" || damage === "full";
     repaint = false;
     if (!full && !damage) return;
     const area = !full && damage ? damage : { x: 0, y: 0, w: canvas.width, h: canvas.height };
@@ -218,18 +251,48 @@ export function createImageEditorController(options: ImageEditorControllerOption
     context.clearRect(x, y, w, h);
     context.drawImage(sourceCanvas, x, y, w, h, x, y, w, h);
     layers.paint(context, { x, y, w, h });
-    if (selectedIndex !== null && shapes[selectedIndex]) {
-      const box = shapeBBox(shapes[selectedIndex]);
-      context.strokeStyle = "#3fa9f5";
-      context.lineWidth = 2;
-      context.strokeRect(box.x - 3, box.y - 3, box.w + 6, box.h + 6);
-    }
     context.restore();
+    selection.refresh();
     if (tool === "crop") cropOverlay.refreshImage();
     toolbar.refreshHistory(history.canUndo, history.canRedo);
   };
 
   const paint = createFrameUpdate(() => render());
+  const selection = createAnnotationSelection({
+    canvas,
+    surface,
+    translate: options.translate,
+    isActive: () => tool === "select" && !!image && !options.root.classList.contains("hidden"),
+    getShapes: () => shapes,
+    getBounds: () => crop ?? { x: 0, y: 0, w: canvas.width, h: canvas.height },
+    replace: (index, shape) => {
+      shapes[index] = shape;
+      repaint = true;
+    },
+    commit: (index, before) => {
+      history.checkpoint({
+        ...snapshot(),
+        shapes: shapes.map((shape, i) => (i === index ? before : shape)),
+      });
+      markDirty();
+    },
+    select: (selected) => toolbar.setSelection(selected),
+    render: () => {
+      paint.discard();
+      render();
+    },
+  });
+  const deleteSelected = () => {
+    selection.cancel();
+    const index = selection.selected;
+    if (index === null) return;
+    checkpoint();
+    shapes.splice(index, 1);
+    selection.clear();
+    rasterizeAnnotations();
+    markDirty();
+    render();
+  };
   const cancelDrawing = () => {
     if (!dragging && !current) return;
     dragging = false;
@@ -245,25 +308,25 @@ export function createImageEditorController(options: ImageEditorControllerOption
     getCrop: () => crop,
     isCropping: () => tool === "crop",
     onCropChange: (next) => {
-      const now = performance.now();
-      // 连续滚轮/平移合并为一步撤销；中间的编辑、撤销或保存会切断合并。
-      if (
-        revision !== cropViewRevision ||
-        revision === savedRevision ||
-        now - cropViewChangedAt > 250
-      )
-        checkpoint();
       crop = next;
-      markDirty();
-      cropViewRevision = revision;
-      cropViewChangedAt = now;
-      toolbar.refreshHistory(history.canUndo, history.canRedo);
     },
     onLayout: (animating) => {
-      zoomToolbar.setScale(cropViewport.scale());
+      const bounds = tool === "crop" ? null : crop;
+      const scale = cropViewport.scale();
+      Object.assign(imageBoundary.style, {
+        left: `${Number.parseFloat(canvas.style.left) + (bounds?.x ?? 0) * scale}px`,
+        top: `${Number.parseFloat(canvas.style.top) + (bounds?.y ?? 0) * scale}px`,
+        width: `${(bounds?.w ?? canvas.width) * scale}px`,
+        height: `${(bounds?.h ?? canvas.height) * scale}px`,
+      });
+      zoomToolbar.setScale(cropViewport.scale(), {
+        canActualSize: cropViewport.canActualSize(),
+        cropping: tool === "crop",
+      });
       if (animating) cropOverlay.refreshLayout();
       else cropOverlay.refreshImage();
       mosaicCursor.reset();
+      selection.refresh();
       layoutTextInput();
     },
   });
@@ -283,18 +346,6 @@ export function createImageEditorController(options: ImageEditorControllerOption
     onEnd: (cancelled) => {
       if (!cropSnapshot) return;
       if (cancelled || !crop || crop.w < 2 || crop.h < 2) crop = cropSnapshot.crop;
-      else {
-        const previous = cropSnapshot.crop ?? { x: 0, y: 0, w: canvas.width, h: canvas.height };
-        if (
-          crop.x !== previous.x ||
-          crop.y !== previous.y ||
-          crop.w !== previous.w ||
-          crop.h !== previous.h
-        ) {
-          history.checkpoint(cropSnapshot);
-          markDirty();
-        }
-      }
       cropSnapshot = null;
       cropViewport.end(cancelled);
       cropOverlay.update();
@@ -313,10 +364,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
     surface,
     viewport: cropViewport,
     isActive: () => !options.root.classList.contains("hidden"),
-    isBusy: () => dragging || !!cropSnapshot || !!textStart || confirmDialog.isOpen(),
+    isBusy: () =>
+      dragging || selection.isDragging() || !!cropSnapshot || !!textStart || confirmDialog.isOpen(),
+    isCropping: () => tool === "crop",
   });
-  const commitTextInput = () => {
+  const commitTextInput = (adjustAfter = false) => {
     const text = textInput.value.trim();
+    let added: number | null = null;
     if (textStart && text) {
       checkpoint();
       context.font = annotationFont(textStyle.fontSize);
@@ -334,11 +388,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
         fontSize: textStyle.fontSize,
         text,
       });
+      added = shapes.length - 1;
       rasterizeAnnotations();
       markDirty();
       render();
     }
     hideTextInput();
+    if (adjustAfter && added !== null) adjustAnnotation(added);
   };
   const layoutTextInput = () => {
     if (!textStart) return;
@@ -398,7 +454,11 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
   textInput.addEventListener("input", layoutTextInput);
   window.addEventListener("resize", layoutTextInput);
-  textInput.addEventListener("blur", commitTextInput);
+  textInput.addEventListener("blur", () => commitTextInput(true));
+  const finishTextInput = () => {
+    commitTextInput(true);
+    textInput.blur();
+  };
   textInput.addEventListener("keydown", (event) => {
     event.stopPropagation();
     if (event.isComposing || event.keyCode === 229) return;
@@ -407,25 +467,36 @@ export function createImageEditorController(options: ImageEditorControllerOption
       hideTextInput();
     } else if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      textInput.blur();
+      finishTextInput();
     }
   });
 
   const setTool = (next: EditorTool) => {
+    if (next !== "crop" && cropTransaction.active && cropTransaction.changed()) {
+      requireCropResolution();
+      return;
+    }
     cancelDrawing();
+    selection.clear();
     paint.discard();
     commitTextInput();
     cropOverlay.cancel();
+    if (next !== "crop" && cropTransaction.active) cropTransaction.finish(false);
+    if (next === "crop") cropTransaction.begin();
     tool = next;
     canvas.style.cursor = next === "select" ? "default" : "crosshair";
     current = null;
     resetActiveMosaic();
-    selectedIndex = null;
     toolbar.setActiveTool(next);
     cropViewport.refresh();
     cropOverlay.update();
     mosaicCursor.refresh();
     render();
+  };
+
+  const adjustAnnotation = (index: number) => {
+    setTool("select");
+    selection.focus(index);
   };
 
   const transformPoint = (point: Pt, oldHeight: number): Pt => ({
@@ -446,7 +517,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const rotate = () => {
+    if (requireCropResolution()) return;
     cancelDrawing();
+    selection.clear();
+    commitTextInput();
     cropOverlay.cancel();
     checkpoint();
     transformAnnotations();
@@ -459,7 +533,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const undo = () => {
+    if (requireCropResolution()) return;
     cancelDrawing();
+    selection.clear();
     cropOverlay.cancel();
     const previous = history.undo(snapshot());
     if (!previous) return;
@@ -468,7 +544,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
     render();
   };
   const redo = () => {
+    if (requireCropResolution()) return;
     cancelDrawing();
+    selection.clear();
     cropOverlay.cancel();
     const next = history.redo(snapshot());
     if (!next) return;
@@ -476,8 +554,28 @@ export function createImageEditorController(options: ImageEditorControllerOption
     markDirty();
     render();
   };
+  const reset = () => {
+    cancelDrawing();
+    selection.clear();
+    cropOverlay.cancel();
+    if (cropTransaction.active) cropTransaction.finish(false);
+    commitTextInput();
+    if (shapes.length || crop || rotation !== 0) {
+      checkpoint();
+      shapes = [];
+      crop = null;
+      rotation = 0;
+      rebuildSource();
+      rasterizeAnnotations();
+      markDirty();
+    }
+    setTool("select");
+    cropViewport.fit();
+  };
 
   const exportCanvas = () => {
+    selection.cancel();
+    if (cropTransaction.active) throw new Error(options.translate("editor.finishCropFirst"));
     const bounds =
       crop && crop.w > 1 && crop.h > 1
         ? crop
@@ -551,10 +649,11 @@ export function createImageEditorController(options: ImageEditorControllerOption
     closing = true;
     try {
       if (saves.isBusy()) await saves.whenIdle();
+      selection.cancel();
       cropOverlay.cancel();
       commitTextInput();
       if (
-        revision !== savedRevision &&
+        (revision !== savedRevision || cropTransaction.changed()) &&
         !(await confirmDialog.ask({
           title: options.translate("editor.discardTitle"),
           message: options.translate("editor.discardConfirm"),
@@ -579,7 +678,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
       shapes = [];
       current = null;
       crop = null;
+      cropTransaction.clear();
       history.clear();
+      selection.clear();
       options.onClose();
       return true;
     } finally {
@@ -592,20 +693,15 @@ export function createImageEditorController(options: ImageEditorControllerOption
     const point = displayPoint(event);
     if (tool === "text") {
       event.preventDefault();
-      beginTextInput(point);
+      if (textStart && textInput.value.trim()) finishTextInput();
+      else beginTextInput(point);
+      return;
+    }
+    if (tool === "select") {
+      selection.down(event);
       return;
     }
     canvas.setPointerCapture(event.pointerId);
-    if (tool === "select") {
-      repaint = true;
-      selectedIndex =
-        shapes
-          .map((shape, index) => ({ shape, index }))
-          .reverse()
-          .find(({ shape }) => isShapeHit(shape, point, 10))?.index ?? null;
-      render();
-      return;
-    }
     current = {
       tool,
       start: point,
@@ -622,6 +718,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
   });
   canvas.addEventListener("pointermove", (event) => {
+    if (tool === "select") {
+      selection.move(event);
+      return;
+    }
     if (!dragging) return;
     const point = displayPoint(event);
     if (current) {
@@ -637,10 +737,15 @@ export function createImageEditorController(options: ImageEditorControllerOption
     paint.push(undefined);
   });
   canvas.addEventListener("pointerup", (event) => {
+    if (tool === "select") {
+      selection.up(event);
+      return;
+    }
     if (!dragging) return;
     paint.discard();
     dragging = false;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    let added: number | null = null;
     if (current) {
       const point = displayPoint(event);
       current.end = point;
@@ -657,6 +762,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       ) {
         checkpoint();
         shapes.push(current);
+        if (current.tool !== "pen" && current.tool !== "mosaic") added = shapes.length - 1;
         rasterizeAnnotations();
         markDirty();
       }
@@ -664,25 +770,50 @@ export function createImageEditorController(options: ImageEditorControllerOption
       resetActiveMosaic();
     }
     render();
+    if (added !== null) adjustAnnotation(added);
   });
   canvas.addEventListener("pointercancel", cancelDrawing);
+  canvas.addEventListener("pointercancel", selection.cancel);
+  canvas.addEventListener("lostpointercapture", selection.cancel);
+  canvas.addEventListener("pointerleave", selection.leave);
+  surface.addEventListener("pointerdown", (event) => {
+    if (event.target === surface && tool === "select" && event.button === 0) selection.clear();
+  });
   canvas.addEventListener("lostpointercapture", cancelDrawing);
   window.addEventListener("blur", cancelDrawing);
+  window.addEventListener("blur", selection.cancel);
   window.addEventListener("keydown", (event) => {
     if (options.root.classList.contains("hidden") || confirmDialog.isOpen()) return;
+    if (event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+    if (event.key === "Escape" && selection.isDragging()) {
+      event.preventDefault();
+      selection.cancel();
+      return;
+    }
+    if (cropTransaction.active && (event.key === "Enter" || event.key === "Escape")) {
+      if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (
+        event.key === "Enter" &&
+        (event.target as HTMLElement)?.closest?.(
+          "button, input, textarea, select, [contenteditable]",
+        )
+      )
+        return;
+      event.preventDefault();
+      if (!event.repeat) finishCrop(event.key === "Enter");
+      return;
+    }
     if (event.ctrlKey && event.key.toLowerCase() === "z") {
       event.preventDefault();
       undo();
     } else if (event.ctrlKey && event.key.toLowerCase() === "y") {
       event.preventDefault();
       redo();
-    } else if (event.key === "Delete" && selectedIndex !== null) {
-      checkpoint();
-      shapes.splice(selectedIndex, 1);
-      rasterizeAnnotations();
-      selectedIndex = null;
-      markDirty();
-      render();
+    } else if (event.key === "Delete" && selection.selected !== null) {
+      if ((event.target as HTMLElement)?.closest?.("input, textarea, select, [contenteditable]"))
+        return;
+      event.preventDefault();
+      deleteSelected();
     } else if (event.key === "Escape") {
       event.preventDefault();
       if (!event.repeat) void close();
@@ -693,13 +824,14 @@ export function createImageEditorController(options: ImageEditorControllerOption
     const nextImage = await loader.load(nextEntry.path);
     if (!nextImage) return false;
     cropOverlay.cancel();
+    selection.clear();
+    cropTransaction.clear();
     entry = nextEntry;
     mosaicCursor.reset();
     translate();
     image = nextImage;
     shapes = [];
     current = null;
-    selectedIndex = null;
     crop = null;
     cropSnapshot = null;
     dragging = false;

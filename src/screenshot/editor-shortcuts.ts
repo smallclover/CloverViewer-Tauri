@@ -65,8 +65,17 @@ export function bindEditorShortcuts(options: {
   window.addEventListener("keydown", (event) => {
     if (options.isTextEditing()) return;
     const phase = options.getScrollPhase();
+    if (
+      phase !== "idle" &&
+      (event.isComposing || event.defaultPrevented || event.repeat) &&
+      (event.key === "Enter" || event.key === "Escape")
+    )
+      return;
     if (phase === "capturing") {
       if (event.key === "Escape") {
+        event.preventDefault();
+        options.onDiscardAndClose();
+      } else if (event.key === "Enter") {
         event.preventDefault();
         options.onStopScroll();
       }

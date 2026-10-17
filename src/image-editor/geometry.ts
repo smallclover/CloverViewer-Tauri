@@ -22,8 +22,10 @@ export interface Shape {
   fontSize?: number;
   blockSize?: number;
   text?: string;
-  /** 文字局部坐标相对于图像的顺时针角度。 */
+  /** 标注选框的顺时针角度；文字、矩形和椭圆绘制时也使用此局部角度。 */
   rotation?: number;
+  /** 固定的旋转支点（原图像素）；不会随包围框变化重算。 */
+  rotationOrigin?: Pt;
   points?: Pt[];
 }
 
@@ -37,13 +39,29 @@ export function normRect(a: Pt, b: Pt): Rect {
 }
 
 export function shapeBBox(shape: Shape): Rect {
-  if (shape.tool === "text" && shape.rotation) {
-    const delta = textVector(
+  if (
+    (shape.tool === "text" || shape.tool === "rect" || shape.tool === "circle") &&
+    shape.rotation
+  ) {
+    const delta = rotateVector(
       { x: shape.end.x - shape.start.x, y: shape.end.y - shape.start.y },
       -shape.rotation,
     );
-    const corner = textVector({ x: delta.x, y: 0 }, shape.rotation);
-    const other = textVector({ x: 0, y: delta.y }, shape.rotation);
+    const corner = rotateVector({ x: delta.x, y: 0 }, shape.rotation);
+    const other = rotateVector({ x: 0, y: delta.y }, shape.rotation);
+    if (shape.tool === "circle") {
+      const angle = (shape.rotation * Math.PI) / 180;
+      const a = delta.x / 2,
+        b = delta.y / 2;
+      const x = Math.hypot(a * Math.cos(angle), b * Math.sin(angle));
+      const y = Math.hypot(a * Math.sin(angle), b * Math.cos(angle));
+      return {
+        x: (shape.start.x + shape.end.x) / 2 - x,
+        y: (shape.start.y + shape.end.y) / 2 - y,
+        w: x * 2,
+        h: y * 2,
+      };
+    }
     const xs = [shape.start.x, shape.end.x, shape.start.x + corner.x, shape.start.x + other.x];
     const ys = [shape.start.y, shape.end.y, shape.start.y + corner.y, shape.start.y + other.y];
     return {
@@ -74,7 +92,7 @@ export function shapeBBox(shape: Shape): Rect {
   return normRect(shape.start, shape.end);
 }
 
-function textVector(point: Pt, angle: number): Pt {
+export function rotateVector(point: Pt, angle: number): Pt {
   switch (((angle % 360) + 360) % 360) {
     case 90:
       return { x: -point.y, y: point.x };
@@ -82,8 +100,14 @@ function textVector(point: Pt, angle: number): Pt {
       return { x: -point.x, y: -point.y };
     case 270:
       return { x: point.y, y: -point.x };
-    default:
+    case 0:
       return point;
+    default: {
+      const radians = (angle * Math.PI) / 180;
+      const cos = Math.cos(radians),
+        sin = Math.sin(radians);
+      return { x: point.x * cos - point.y * sin, y: point.x * sin + point.y * cos };
+    }
   }
 }
 
@@ -94,7 +118,10 @@ export function rotateShapeClockwise(shape: Shape, height: number): Shape {
     start: rotate(shape.start),
     end: rotate(shape.end),
     points: shape.points?.map(rotate),
-    ...(shape.tool === "text" ? { rotation: ((shape.rotation ?? 0) + 90) % 360 } : {}),
+    ...(shape.rotationOrigin ? { rotationOrigin: rotate(shape.rotationOrigin) } : {}),
+    ...(shape.tool === "text" || shape.rotation !== undefined
+      ? { rotation: ((shape.rotation ?? 0) + 90) % 360 }
+      : {}),
   };
 }
 
@@ -111,6 +138,24 @@ export function distToSegment(point: Pt, start: Pt, end: Pt): number {
 }
 
 export function isShapeHit(shape: Shape, point: Pt, tolerance: number): boolean {
+  if (
+    (shape.tool === "text" || shape.tool === "rect" || shape.tool === "circle") &&
+    shape.rotation
+  ) {
+    const localPoint = rotateVector(
+      { x: point.x - shape.start.x, y: point.y - shape.start.y },
+      -shape.rotation,
+    );
+    const localEnd = rotateVector(
+      { x: shape.end.x - shape.start.x, y: shape.end.y - shape.start.y },
+      -shape.rotation,
+    );
+    return isShapeHit(
+      { ...shape, start: { x: 0, y: 0 }, end: localEnd, rotation: 0 },
+      localPoint,
+      tolerance,
+    );
+  }
   const bounds = shapeBBox(shape);
   if (shape.tool === "arrow") return distToSegment(point, shape.start, shape.end) <= tolerance;
   const points = shape.points;
@@ -144,6 +189,7 @@ export function cloneShape(shape: Shape): Shape {
     start: { ...shape.start },
     end: { ...shape.end },
     points: shape.points?.map((point) => ({ ...point })),
+    ...(shape.rotationOrigin ? { rotationOrigin: { ...shape.rotationOrigin } } : {}),
   };
 }
 
@@ -169,6 +215,10 @@ export function translateShape(shape: Shape, dx: number, dy: number) {
   shape.start.y += dy;
   shape.end.x += dx;
   shape.end.y += dy;
+  if (shape.rotationOrigin) {
+    shape.rotationOrigin.x += dx;
+    shape.rotationOrigin.y += dy;
+  }
   for (const point of shape.points ?? []) {
     point.x += dx;
     point.y += dy;

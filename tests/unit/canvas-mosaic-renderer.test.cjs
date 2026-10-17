@@ -7,16 +7,18 @@ function fixture(callback, width = 64, height = 48) {
   const sampling = [];
   const outputs = [];
   const paths = [];
+  const fills = [];
   const source = { width, height };
   global.document = { createElement: () => {
     const canvas = { width: 0, height: 0 };
     canvas.getContext = () => ({ clearRect() {}, drawImage: (...args) => sampling.push(args),
+      fillRect(...args) { fills.push({ args, color: this.fillStyle, operation: this.globalCompositeOperation, samples: sampling.length }); },
       getImageData: () => { throw new Error("Mosaic must not synchronously read pixels"); } });
     return canvas;
   } };
   const target = { save() {}, restore() {}, clearRect() {}, beginPath() {}, moveTo() {}, closePath() {}, clip() {},
     arc: (...args) => paths.push(args), drawImage: (...args) => outputs.push(args) };
-  try { callback({ source, target, sampling, outputs, paths, renderer: createCanvasMosaicRenderer(source) }); }
+  try { callback({ source, target, sampling, outputs, paths, fills, renderer: createCanvasMosaicRenderer(source) }); }
   finally { global.document = previous; }
 }
 
@@ -33,6 +35,18 @@ test("mosaic samples the original once per size and reuses its texture across br
     renderer.reset(); renderer.drawShape(target, shape);
     assert.equal(sampling.length, 4, "a new source revision invalidates the texture cache");
   });
+});
+
+test("transparent mosaic samples receive an opaque backing after edge sampling and before expansion", () => {
+  for (const [width, height, gridWidth, gridHeight, samples] of [[64,48,4,3,1], [35,31,3,2,4]]) {
+    fixture(({ renderer, target, fills }) => {
+      renderer.drawSegment(target, { x: 16, y: 16 }, { x: 24, y: 16 }, 16);
+      assert.deepEqual(fills, [{ args: [0, 0, gridWidth, gridHeight], color: "#fff", operation: "destination-over", samples }],
+        "fill behind sampled colors so transparent blocks hide the original without changing opaque colors");
+      renderer.drawSegment(target, { x: 24, y: 16 }, { x: 28, y: 16 }, 16);
+      assert.equal(fills.length, 1, "cached texture is already opaque");
+    }, width, height);
+  }
 });
 
 test("completed strokes replay exactly the same round segments as the live preview", () => {

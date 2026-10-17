@@ -196,11 +196,13 @@
 .sh-capture-side .sh-actions .sh-btn {
   width: 100%;
   justify-content: center;
+}
+.sh-capture-side .sh-actions .sh-btn.primary {
   background: var(--s-accent-solid);
   border-color: transparent;
   color: #fff;
 }
-.sh-capture-side .sh-actions .sh-btn:hover:not(:disabled) {
+.sh-capture-side .sh-actions .sh-btn.primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--s-accent-solid) 84%, #000 16%);
   box-shadow: 0 3px 9px var(--s-accent-shadow);
   color: #fff;

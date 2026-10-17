@@ -487,7 +487,7 @@ mod win_impl {
         fn focus_target(&self, hwnd: isize) {
             let _ = sc::focus_window(hwnd);
         }
-        fn set_escape_hook(&self, _on: bool) {}
+        fn set_capture_shortcuts(&self, _on: bool) {}
     }
 
     pub fn run() {

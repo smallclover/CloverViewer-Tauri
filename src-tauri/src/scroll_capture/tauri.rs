@@ -16,6 +16,7 @@ pub struct ScrollCaptureSession {
 struct SessionInner {
     cancel: Arc<AtomicBool>,
     running: bool,
+    discarded: bool,
     progress: Option<ScrollCaptureProgress>,
     result: Option<Arc<ScrollCaptureResult>>,
     /// 前端上报的「HUD 是否与捕获区重叠」（兜底缓存）。
@@ -30,6 +31,7 @@ impl ScrollCaptureSession {
             inner: Mutex::new(SessionInner {
                 cancel: Arc::new(AtomicBool::new(false)),
                 running: false,
+                discarded: false,
                 progress: None,
                 result: None,
                 hud_overlap: Arc::new(AtomicBool::new(false)),
@@ -44,6 +46,7 @@ impl ScrollCaptureSession {
             return None;
         }
         g.running = true;
+        g.discarded = false;
         g.result = None;
         g.progress = None;
         g.cancel = Arc::new(AtomicBool::new(false));
@@ -60,37 +63,54 @@ impl ScrollCaptureSession {
             .store(on, Ordering::Relaxed);
     }
 
-    fn finish_ok(&self, result: ScrollCaptureResult) {
+    fn finish_ok(&self, result: ScrollCaptureResult) -> bool {
         let mut g = self.inner.lock().unwrap();
         g.running = false;
+        if g.discarded {
+            return false;
+        }
         g.result = Some(Arc::new(result));
+        true
     }
 
-    fn finish_err(&self, msg: String) {
+    fn finish_err(&self, msg: String) -> bool {
         let mut g = self.inner.lock().unwrap();
         g.running = false;
+        if g.discarded {
+            return false;
+        }
         if let Some(p) = g.progress.as_mut() {
             p.stage = "failed".to_string();
             p.message = Some(msg);
             p.input_passthrough = false;
         }
+        true
     }
 
-    fn set_progress(&self, p: ScrollCaptureProgress) {
+    fn set_progress(&self, p: ScrollCaptureProgress) -> bool {
         let mut g = self.inner.lock().unwrap();
+        if g.discarded || !g.running {
+            return false;
+        }
         g.progress = Some(p);
+        true
     }
 
-    pub fn cancel(&self) {
-        let g = self.inner.lock().unwrap();
+    fn discard(&self) -> bool {
+        let mut g = self.inner.lock().unwrap();
+        let was_active = (g.running || g.result.is_some()) && !g.discarded;
+        g.discarded = true;
         g.cancel.store(true, Ordering::Relaxed);
+        g.result = None;
+        g.progress = None;
+        was_active
     }
 
-    /// Esc 的反馈必须在工作线程开始最终稳定采样**之前**发出去；否则用户会在
+    /// 完成的反馈必须在工作线程开始最终稳定采样**之前**发出去；否则用户会在
     /// Chrome 平滑滚动或异步重绘期间误以为按键没有生效。
     fn request_finish(&self) -> Option<ScrollCaptureProgress> {
         let mut g = self.inner.lock().unwrap();
-        if !g.running {
+        if !g.running || g.discarded || g.cancel.load(Ordering::Relaxed) {
             return None;
         }
         g.cancel.store(true, Ordering::Relaxed);
@@ -140,6 +160,7 @@ impl Default for ScrollCaptureSession {
 struct TauriHost {
     app: tauri::AppHandle,
     escape_registered: std::sync::atomic::AtomicBool,
+    enter_registered: std::sync::atomic::AtomicBool,
     capture_exclusion_enabled: std::sync::atomic::AtomicBool,
 }
 
@@ -248,37 +269,57 @@ impl SessionHost for TauriHost {
         if !focus_window(hwnd) {
             tracing::debug!("SetForegroundWindow 被系统拒绝（继续）");
         }
-        // 键盘焦点必须留在覆盖窗上，否则 Esc 停不下来
+        // 自动模式把键盘焦点交还覆盖窗；手动模式由临时全局快捷键接收完成/取消。
         if let Some(w) = self.screenshot_window() {
             let _ = w.set_focus();
         }
     }
 
-    fn set_escape_hook(&self, on: bool) {
+    fn set_capture_shortcuts(&self, on: bool) {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
         let gs = self.app.global_shortcut();
         if on {
-            if self.escape_registered.swap(true, Ordering::Relaxed) {
-                return;
-            }
-            let app = self.app.clone();
-            if let Err(e) = gs.on_shortcut("Escape", move |_app, _sc, event| {
-                if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                    use tauri::{Emitter, Manager};
-                    if let Some(state) = app.try_state::<ScrollCaptureSession>() {
-                        // 先同步 HUD，再开始可能长达数秒的稳定采样。
-                        if let Some(progress) = state.request_finish() {
-                            let _ = app.emit("scroll-capture-progress", progress);
+            for (key, registered, cancel) in [
+                ("Escape", &self.escape_registered, true),
+                ("Enter", &self.enter_registered, false),
+            ] {
+                if registered.swap(true, Ordering::Relaxed) {
+                    continue;
+                }
+                let app = self.app.clone();
+                if let Err(e) = gs.on_shortcut(key, move |_app, _sc, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        use tauri::{Emitter, Manager};
+                        if let Some(state) = app.try_state::<ScrollCaptureSession>() {
+                            if cancel {
+                                if state.discard() {
+                                    let _ = app.emit(
+                                        "scroll-capture-done",
+                                        serde_json::json!({
+                                            "ok": false, "cancelled": true,
+                                        }),
+                                    );
+                                }
+                            } else if let Some(progress) = state.request_finish() {
+                                let _ = app.emit("scroll-capture-progress", progress);
+                            }
                         }
                     }
+                }) {
+                    tracing::warn!("临时注册全局 {key} 失败: {e}");
+                    registered.store(false, Ordering::Relaxed);
                 }
-            }) {
-                tracing::warn!("临时注册全局 Esc 失败: {e}");
-                self.escape_registered.store(false, Ordering::Relaxed);
             }
-        } else if self.escape_registered.swap(false, Ordering::Relaxed) {
-            if let Err(e) = gs.unregister("Escape") {
-                tracing::debug!("注销临时全局 Esc 失败: {e}");
+        } else {
+            for (key, registered) in [
+                ("Escape", &self.escape_registered),
+                ("Enter", &self.enter_registered),
+            ] {
+                if registered.swap(false, Ordering::Relaxed) {
+                    if let Err(e) = gs.unregister(key) {
+                        tracing::debug!("注销临时全局 {key} 失败: {e}");
+                    }
+                }
             }
         }
     }
@@ -413,6 +454,7 @@ pub fn start_scroll_capture(
         let host = TauriHost {
             app: app2.clone(),
             escape_registered: std::sync::atomic::AtomicBool::new(false),
+            enter_registered: std::sync::atomic::AtomicBool::new(false),
             capture_exclusion_enabled: std::sync::atomic::AtomicBool::new(false),
         };
         // 工作线程不得因图像处理的意外 panic 而绕过下面的状态清理与 done 事件；否则
@@ -429,7 +471,9 @@ pub fn start_scroll_capture(
             }
             let mut emit = |p: ScrollCaptureProgress| {
                 if let Some(state) = app2.try_state::<ScrollCaptureSession>() {
-                    state.set_progress(p.clone());
+                    if !state.set_progress(p.clone()) {
+                        return;
+                    }
                 }
                 if let Err(e) = app2.emit("scroll-capture-progress", p) {
                     tracing::warn!("emit scroll-capture-progress 失败: {e}");
@@ -473,17 +517,15 @@ pub fn start_scroll_capture(
             Err("滚动截图内部异常，已安全停止；请重试或改用手动模式".to_string())
         });
 
-        // 收尾：无论如何都要把覆盖窗的 click-through / 全局 Esc / 截图互斥恢复
+        // 收尾：无论如何都要把覆盖窗的 click-through / 全局按键 / 截图互斥恢复
         host.set_passthrough(false);
-        host.set_escape_hook(false);
+        host.set_capture_shortcuts(false);
         let _ = host.set_capture_exclusion(false);
         if let Some(store) = app2.try_state::<crate::screenshot::ScreenshotStore>() {
             store.end_capture();
         }
         // 必须在发出 done 事件前完成。前端收到事件后立即显示「复制/保存/打开」按钮，
         // 此时若覆盖窗仍在目标最大化/置顶窗口后面，用户看到的会是半截且无法点击的 HUD。
-        host.raise_for_result();
-
         match result {
             Ok(res) => {
                 tracing::info!(
@@ -503,15 +545,21 @@ pub fn start_scroll_capture(
                     "message": res.message,
                 });
                 if let Some(state) = app2.try_state::<ScrollCaptureSession>() {
-                    state.finish_ok(res);
+                    if !state.finish_ok(res) {
+                        return;
+                    }
                 }
+                host.raise_for_result();
                 let _ = app2.emit("scroll-capture-done", payload);
             }
             Err(e) => {
                 tracing::warn!("滚动截图: 失败 {e}");
                 if let Some(state) = app2.try_state::<ScrollCaptureSession>() {
-                    state.finish_err(e.clone());
+                    if !state.finish_err(e.clone()) {
+                        return;
+                    }
                 }
+                host.raise_for_result();
                 let _ = app2.emit(
                     "scroll-capture-done",
                     serde_json::json!({ "ok": false, "message": e }),
@@ -524,8 +572,11 @@ pub fn start_scroll_capture(
 
 /// 停止当前滚动截图（保留已捕获部分）
 #[tauri::command]
-pub fn stop_scroll_capture(state: tauri::State<'_, ScrollCaptureSession>) {
-    state.cancel();
+pub fn stop_scroll_capture(app: tauri::AppHandle, state: tauri::State<'_, ScrollCaptureSession>) {
+    use tauri::Emitter;
+    if let Some(progress) = state.request_finish() {
+        let _ = app.emit("scroll-capture-progress", progress);
+    }
 }
 
 /// 拉取当前进度（事件之外的兜底查询）
@@ -624,12 +675,10 @@ fn export_result(
     Ok(saved_path)
 }
 
-/// 丢弃结果（重截 / 取消时调用）
+/// 取消正在运行的会话并丢弃结果；工作线程的迟到进度和结果也不会再被接收。
 #[tauri::command]
 pub fn discard_scroll_capture(state: tauri::State<'_, ScrollCaptureSession>) {
-    let mut g = state.inner.lock().unwrap();
-    g.result = None;
-    g.progress = None;
+    state.discard();
 }
 
 /// 是否已有可用结果（前端恢复界面状态用）
@@ -647,6 +696,64 @@ pub fn scroll_capture_running(state: tauri::State<'_, ScrollCaptureSession>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_result() -> ScrollCaptureResult {
+        ScrollCaptureResult {
+            width: 1,
+            height: 2,
+            frames: 2,
+            confidence: "high".into(),
+            message: None,
+            png: vec![1, 2, 3],
+        }
+    }
+
+    #[test]
+    fn completing_keeps_result_but_cancelling_drops_late_progress_and_result() {
+        let session = ScrollCaptureSession::new();
+        let (finish, _) = session.begin().unwrap();
+        let rect = super::super::RectPx {
+            x: 0,
+            y: 0,
+            w: 300,
+            h: 500,
+        };
+        let progress = ScrollCaptureProgress::bare("capturing", &rect);
+        assert!(session.set_progress(progress.clone()));
+        assert_eq!(session.request_finish().unwrap().stage, "finishing");
+        assert!(finish.load(Ordering::Relaxed));
+        assert!(session.request_finish().is_none(), "重复完成不重复触发");
+        assert!(session.finish_ok(test_result()));
+        assert!(session.peek_result());
+
+        let (cancel, _) = session.begin().unwrap();
+        assert!(session.discard());
+        assert!(!session.discard(), "取消是幂等操作");
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(session.begin().is_none(), "清理完成前不能并行采集");
+        assert!(!session.set_progress(progress));
+        assert!(session.progress().is_none());
+        assert!(session.request_finish().is_none());
+        assert!(!session.finish_ok(test_result()), "取消后不接收迟到的图像");
+        assert!(!session.peek_result());
+        assert!(!session.is_running());
+
+        let (next, _) = session.begin().unwrap();
+        assert!(!next.load(Ordering::Relaxed));
+        assert!(session.finish_ok(test_result()), "下一次会话可正常完成");
+        session.discard();
+        assert!(!session.peek_result(), "关闭预览会丢弃结果");
+    }
+
+    #[test]
+    fn cancellation_suppresses_a_late_capture_failure() {
+        let session = ScrollCaptureSession::new();
+        session.begin().unwrap();
+        session.discard();
+        assert!(!session.finish_err("late failure".into()));
+        assert!(session.progress().is_none());
+        assert!(!session.is_running());
+    }
 
     #[test]
     fn export_results_survive_repeated_reads_and_failed_exports_until_next_session() {
@@ -679,7 +786,7 @@ mod tests {
         assert!(session.is_running());
         assert!(session.begin().is_none(), "并行会话必须被拒绝");
 
-        session.cancel();
+        session.request_finish();
         assert!(cancel.load(Ordering::Relaxed));
         session.finish_err("expected test failure".to_string());
         assert!(!session.is_running());

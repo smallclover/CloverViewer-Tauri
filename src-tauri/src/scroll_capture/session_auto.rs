@@ -92,7 +92,7 @@ pub fn run_session_ext(
     if options.focus_target {
         host.focus_target(root);
     }
-    host.set_escape_hook(true);
+    host.set_capture_shortcuts(true);
     host.set_progress(true, 0.0);
 
     if options.auto_scroll_top {

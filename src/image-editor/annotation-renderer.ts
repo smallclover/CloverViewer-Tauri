@@ -1,4 +1,4 @@
-import { shapeBBox, type Pt, type Shape } from "./geometry";
+import { normRect, rotateVector, shapeBBox, type Pt, type Shape } from "./geometry";
 import { annotationFont, textFontSize } from "./annotation-style";
 
 function drawArrow(context: CanvasRenderingContext2D, start: Pt, end: Pt, strokeWidth: number) {
@@ -25,7 +25,21 @@ export function drawAnnotation(context: CanvasRenderingContext2D, shape: Shape, 
   context.lineWidth = shape.strokeWidth * scale;
   context.lineCap = "round";
   context.lineJoin = "round";
-  const bounds = shapeBBox(shape);
+  const rotatedShape = (shape.tool === "rect" || shape.tool === "circle") && !!shape.rotation;
+  const bounds = rotatedShape
+    ? normRect(
+        { x: 0, y: 0 },
+        rotateVector(
+          { x: shape.end.x - shape.start.x, y: shape.end.y - shape.start.y },
+          -(shape.rotation ?? 0),
+        ),
+      )
+    : shapeBBox(shape);
+  if (rotatedShape) {
+    context.save();
+    context.translate(shape.start.x, shape.start.y);
+    context.rotate(((shape.rotation ?? 0) * Math.PI) / 180);
+  }
   switch (shape.tool) {
     case "rect":
       context.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
@@ -78,4 +92,5 @@ export function drawAnnotation(context: CanvasRenderingContext2D, shape: Shape, 
     case "mosaic":
       break;
   }
+  if (rotatedShape) context.restore();
 }

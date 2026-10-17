@@ -77,6 +77,11 @@ export function createCanvasMosaicRenderer(sourceCanvas: HTMLCanvasElement) {
         1,
         1,
       );
+    // 透明采样必须先合成实色，否则 source-over 会让原图细节透过马赛克。
+    // 在网格背后补白色，只影响涂抹区域，并保留不透明源图的采样颜色。
+    sample.globalCompositeOperation = "destination-over";
+    sample.fillStyle = "#fff";
+    sample.fillRect(0, 0, grid.width, grid.height);
     context.imageSmoothingEnabled = false;
     context.drawImage(grid, 0, 0, grid.width * size, grid.height * size);
     grid.width = grid.height = 0;

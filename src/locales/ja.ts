@@ -301,6 +301,20 @@ export const ja = {
   // 画像エディター
   "editor.title": "画像を編集",
   "editor.zoomIn": "プレビューを拡大",
+  "editor.fitCropFrame": "表示位置をリセット：画像を中央に配置して切り抜き枠に合わせる",
+  "editor.resetFraming": "表示位置をリセット",
+  "editor.showWhole": "全体を表示",
+  "editor.showWholeHint": "現在の画像全体を表示して構図を確認",
+  "editor.pixelDetail": "100%で詳細確認",
+  "editor.pixelDetailHint":
+    "実寸（100%）：元画像のピクセルで詳細を確認。大きな画像はウィンドウからはみ出す場合があります。",
+  "editor.cropZoomHelp":
+    "ホイールで拡大縮小、スペースキーまたは中ボタンで画像を移動。切り抜き枠は固定されます。",
+  "editor.applyCrop": "切り抜きを適用",
+  "editor.cancelCrop": "切り抜きをキャンセル",
+  "editor.finishCropFirst": "先に切り抜きを適用するか、キャンセルしてください。",
+  "editor.actualSizeUnavailable":
+    "この切り抜き枠では100%表示にできません。先に枠を調整してください。",
   "editor.exportHint":
     "静止画として保存します。アニメーションは1フレームのみとなり、元の EXIF/ICC は保持されません。JPEG は品質90%、透明部分は白背景になります。",
   "editor.zoomOut": "プレビューを縮小",
@@ -308,13 +322,14 @@ export const ja = {
   "shot.shareStopFailed": "停止に失敗しました。再試行してください",
   "shot.shareStopping": "停止中…",
   "shot.shareStatusUnavailable": "共有状態を確認できません。再試行中…",
-  "editor.zoomHelp":
-    "ホイールで拡大縮小、スペースキーまたは中ボタンを押しながらドラッグで移動。0 で全体表示、1 で実寸表示。",
-  "editor.select": "選択",
+  "editor.zoomHelp": "ホイールで拡大縮小、スペースキーまたは中ボタンを押しながらドラッグで移動。",
+  "editor.select": "注釈の調整",
   "editor.crop": "切り抜き",
-  "editor.rotate": "回転",
+  "editor.rotate": "右に90°回転",
   "editor.undo": "元に戻す",
   "editor.redo": "やり直す",
+  "editor.reset":
+    "すべての編集をリセット：注釈・切り抜き・回転を解除して元画像に戻します。この操作は元に戻せます。",
   "editor.saveAs": "コピーを保存…",
   "editor.saveAsHint": "保存先を選び、元の画像を残します。",
   "editor.scale": "書き出し倍率",
@@ -336,8 +351,13 @@ export const ja = {
   "editor.tools": "編集ツール",
   "editor.history": "編集履歴と終了",
   "editor.saveOptions": "保存オプション",
-  "editor.cropHint": "枠をドラッグして範囲を調整。拡大縮小中は枠を固定",
-  "editor.selectHint": "注釈をクリックして選択",
+  "editor.cropHint":
+    "枠をドラッグして範囲を調整。拡大縮小中は枠を固定。Enterで適用、Escでキャンセル。",
+  "editor.selectHint":
+    "図形や文字をドラッグして移動、角をドラッグして回転。ペンとモザイクは固定。Deleteで削除、空白部分で選択解除。",
+  "editor.deleteAnnotation": "注釈を削除",
+  "editor.rotationOriginHint":
+    "回転中心は固定です。四隅のいずれかをドラッグすると、大きさを変えずに回転します。",
   "editor.fontSize": "文字サイズ",
   "editor.blockSize": "ブロックサイズ",
   "editor.sizePixels":
@@ -430,17 +450,16 @@ export const ja = {
   "shot.scrollHeightReady": "高さは十分です",
   "shot.scrollStart": "スクロール撮影を開始",
   "shot.scrollManualStart": "手動スクロール撮影を開始",
-  "shot.scrollCancel": "スクロール撮影を終了",
-  "shot.scrollStop": "停止（撮影済みは保持）",
+  "shot.scrollCancel": "撮影をキャンセル (Esc)",
+  "shot.scrollStop": "完了してプレビュー (Enter)",
   "shot.scrollStopping": "停止しています…",
   "shot.scrollCapturing": "スクロールしながら撮影中…",
   "shot.scrollManualCapturing": "手動スクロールを撮影中…",
   "shot.scrollManualBadge": "手動モード",
-  "shot.scrollManualFinish": "完了して最後のフレームを取得",
+  "shot.scrollManualFinish": "完了してプレビュー (Enter)",
   "shot.scrollManualFinishing": "最後のフレームを取得中…",
-  "shot.scrollManualEscFinish":
-    "マウスは対象ウィンドウに透過中です · Esc で完了して最後のフレームを取得",
-  "shot.scrollEscStop": "マウスは対象ウィンドウに透過中です · Esc で停止して結果を保持",
+  "shot.scrollManualEscFinish": "Enterで最後のフレームを取得してプレビュー · Escでキャンセル",
+  "shot.scrollEscStop": "Enterで完了してプレビュー · Escでキャンセル",
   "shot.scrollProbing": "利用できるスクロール方式を検出中…",
   "shot.scrollSize": "{w} × {h}",
   "shot.scrollStageLow":

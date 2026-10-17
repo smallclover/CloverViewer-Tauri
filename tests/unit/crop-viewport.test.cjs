@@ -54,7 +54,7 @@ test("crop zoom and image panning keep the screen frame fixed and clamp before r
   }, false, true);
 });
 
-test("fixed-frame zoom starts from the full image and leaves annotation views and explicit resets unchanged", () => {
+test("fixed-frame zoom starts from the full image and leaves annotation views and layout resets unchanged", () => {
   withAnimatedViewport(({canvas, viewport, crop, getCrop, setCropping}) => {
     viewport.fit();
     const scale = viewport.scale(); viewport.zoomBy(2);
@@ -63,11 +63,55 @@ test("fixed-frame zoom starts from the full image and leaves annotation views an
     setCropping(false); viewport.zoomBy(2);
     assert.deepEqual(getCrop(),selection); near(viewport.scale(),scale*4);
     setCropping(true); viewport.actualSize();
-    assert.equal(viewport.scale(),1); assert.deepEqual(getCrop(),selection);
-    viewport.fit(); assert.deepEqual(getCrop(),selection);
+    assert.equal(viewport.scale(),1);
+    const actualSelection = {...getCrop()};
+    viewport.fit(); assert.deepEqual(getCrop(),actualSelection);
     crop({x:10,y:10,w:4,h:4}); viewport.fit(); viewport.zoomBy(1000);
     near(getCrop().w,2); near(getCrop().h,2);
   }, false, true);
+});
+
+test("fit and actual-size actions preserve an off-center crop frame and fit recenters the source image", () => {
+  withAnimatedViewport(({canvas, viewport, crop, getCrop, surface, resize}) => {
+    crop({x:1200,y:900,w:1600,h:1200}); viewport.fit();
+    const frame = () => {
+      const c=getCrop(), s=viewport.scale();
+      return {x:parseFloat(canvas.style.left)+c.x*s,y:parseFloat(canvas.style.top)+c.y*s,w:c.w*s,h:c.h*s};
+    };
+    const original=frame();
+    const fixed=()=>{for(const key of ["x","y","w","h"]) near(frame()[key],original[key]);};
+    viewport.zoomBy(2,{x:150,y:120}); viewport.panBy(500,-100); fixed();
+    surface.clientWidth=1200; surface.clientHeight=840; resize(); fixed();
+    viewport.fitImage(); fixed();
+    near(getCrop().x+getCrop().w/2,canvas.width/2);
+    near(getCrop().y+getCrop().h/2,canvas.height/2);
+    near(viewport.scale(),Math.max(original.w/canvas.width,original.h/canvas.height));
+    const fitted={...getCrop()}; viewport.fitImage(); fixed(); assert.deepEqual(getCrop(),fitted);
+    assert.equal(viewport.canActualSize(),true);
+    viewport.actualSize(); fixed(); near(viewport.scale(),1);
+    near(getCrop().x+getCrop().w/2,canvas.width/2);
+    near(getCrop().y+getCrop().h/2,canvas.height/2);
+    near(getCrop().w,original.w); near(getCrop().h,original.h);
+    assert(getCrop().x>=0 && getCrop().y>=0);
+    assert(getCrop().x+getCrop().w<=canvas.width && getCrop().y+getCrop().h<=canvas.height);
+    const actual={...getCrop()}; viewport.actualSize(); fixed(); assert.deepEqual(getCrop(),actual);
+  },false,true);
+});
+
+test("small images cannot use 100 percent when it would expose blank pixels inside the fixed frame", () => {
+  withAnimatedViewport(({canvas, viewport, crop, getCrop}) => {
+    canvas.width=120; canvas.height=80; viewport.fit();
+    const original={...canvas.style}; assert.equal(viewport.scale(),2);
+    assert.equal(viewport.canActualSize(),false);
+    viewport.actualSize(); assert.deepEqual(canvas.style,original); assert.equal(getCrop(),null);
+    viewport.zoomBy(2); assert.equal(viewport.canActualSize(),false);
+    viewport.fitImage(); near(viewport.scale(),2);
+    assert.deepEqual({...getCrop()},{x:0,y:0,w:120,h:80});
+    crop({x:30,y:20,w:40,h:30}); viewport.fit();
+    assert.equal(viewport.canActualSize(),true);
+    viewport.actualSize(); near(viewport.scale(),1);
+    near(getCrop().w,80); near(getCrop().h,60);
+  },false,true);
 });
 
 test("manual zoom preserves the cursor image point, pans in CSS pixels, and survives tool refresh", () => {
@@ -85,7 +129,7 @@ test("manual zoom preserves the cursor image point, pans in CSS pixels, and surv
     viewport.zoomBy(0.00001); assert.equal(viewport.scale(),0.05);
     const locked={...canvas.style}; viewport.begin(); viewport.zoomBy(2);viewport.panBy(100,100);
     assert.deepEqual(canvas.style,locked); viewport.end(true);
-    viewport.fit(); near(viewport.scale(),before.scale);
+    viewport.fitImage(); near(viewport.scale(),before.scale);
   });
 });
 

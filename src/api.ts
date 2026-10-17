@@ -343,7 +343,7 @@ export interface ScrollCaptureRequest {
 }
 
 export interface ScrollCaptureProgress {
-  /** 与后端 `ScrollCaptureProgress::stage` 一一对应（含 cancelled：用户 Esc / 点停止） */
+  /** 与后端 `ScrollCaptureProgress::stage` 一一对应。 */
   stage:
     | "probing"
     | "waiting"
@@ -360,7 +360,7 @@ export interface ScrollCaptureProgress {
   height: number;
   method: string | null;
   message: string | null;
-  /** true = 覆盖窗已临时 click-through（SendInput 注入），HUD 按钮点不到，只能按 Esc 停 */
+  /** true = 鼠标穿透至目标窗口；此时 Enter 完成并预览，Esc 取消。 */
   input_passthrough: boolean;
   /** 累积长图的缩略预览（data URL） */
   preview: string | null;
@@ -375,6 +375,8 @@ export interface ScrollCaptureProgress {
 
 export interface ScrollCaptureDone {
   ok: boolean;
+  /** 用户取消，前端应退出并丢弃本次内容，不展示结果或失败提示。 */
+  cancelled?: boolean;
   width?: number;
   height?: number;
   frames?: number;
@@ -386,12 +388,14 @@ export interface ScrollCaptureDone {
 export const startScrollCapture = (req: ScrollCaptureRequest) =>
   invoke<void>("start_scroll_capture", { req });
 
+/** 完成采集并保留预览；手动模式会收取最后一帧。 */
 export const stopScrollCapture = () => invoke<void>("stop_scroll_capture");
 
 /** 结果落地：save=存桌面（返回路径）/ clipboard=复制 / open=存临时文件并在查看器中打开 */
 export const finishScrollCapture = (action: "save" | "clipboard" | "open") =>
   invoke<string | null>("finish_scroll_capture", { action });
 
+/** 取消正在采集的会话或丢弃已有结果；迟到的采集结果不会被保留。 */
 export const discardScrollCapture = () => invoke<void>("discard_scroll_capture");
 
 export const scrollCaptureProgress = () =>

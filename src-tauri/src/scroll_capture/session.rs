@@ -128,7 +128,7 @@ pub struct ScrollCaptureProgress {
     pub method: Option<String>,
     pub message: Option<String>,
     /// true = 覆盖窗已临时 click-through（SendInput 注入需要），此时 HUD 的按钮点不到，
-    /// 前端应提示「按 Esc 停止」
+    /// 前端应提示「Enter 完成并预览，Esc 取消」
     pub input_passthrough: bool,
     /// 累积长图的缩略预览（data URL，宽 ≤ PREVIEW_WIDTH）
     pub preview: Option<String>,
@@ -188,8 +188,8 @@ pub trait SessionHost {
     fn focus_target_for_manual(&self, hwnd: isize) {
         self.focus_target(hwnd);
     }
-    /// 注册/注销临时全局 Esc（click-through 时 HUD 按钮点不到，这是安全出口）
-    fn set_escape_hook(&self, on: bool);
+    /// 注册/注销临时全局 Enter 完成与 Esc 取消（鼠标穿透时 HUD 按钮点不到）
+    fn set_capture_shortcuts(&self, on: bool);
     /// 捕获期间的任务栏进度指示（覆盖窗里没空地放 HUD 时的唯一可见反馈）。
     /// 默认空实现，命令行探针不需要。
     fn set_progress(&self, _running: bool, _ratio: f32) {}
@@ -212,7 +212,7 @@ pub struct NoHost;
 impl SessionHost for NoHost {
     fn set_passthrough(&self, _on: bool) {}
     fn focus_target(&self, _hwnd: isize) {}
-    fn set_escape_hook(&self, _on: bool) {}
+    fn set_capture_shortcuts(&self, _on: bool) {}
 }
 
 /// 误差门槛：err >= 12 表示画面整体变了，而不是亚像素重绘（当前无调用点）
@@ -374,7 +374,7 @@ pub(super) struct SessionCleanup<'a> {
 
 impl Drop for SessionCleanup<'_> {
     fn drop(&mut self) {
-        self.host.set_escape_hook(false);
+        self.host.set_capture_shortcuts(false);
         self.host.set_passthrough(false);
         self.host.set_progress(false, 0.0);
         self.gate.borrow_mut().restore();

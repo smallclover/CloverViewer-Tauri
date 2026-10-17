@@ -1,6 +1,8 @@
 /* 图片保留自己的画布；编辑工具岛在它下方预留空间。 */
 #image-editor-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .image-editor-workspace {
+  --editor-checker-base: #383b42;
+  --editor-checker-cell: #50545d;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -9,8 +11,26 @@
   align-items: center;
   justify-content: center;
   padding: 22px 24px var(--image-editor-bottom-space, 152px);
-  background: repeating-conic-gradient(color-mix(in srgb, var(--bg-hover) 45%, var(--bg)) 0% 25%, transparent 0% 50%) 50% / 20px 20px;
+  background: color-mix(in srgb, var(--bg-hover) 60%, var(--bg));
 }
+:root[data-theme="light"] .image-editor-workspace { --editor-checker-base: #fff; --editor-checker-cell: #dcdce2; }
+.image-editor-canvas, .image-editor-workspace .image-crop-preview { background: repeating-conic-gradient(var(--editor-checker-cell) 0% 25%, var(--editor-checker-base) 0% 50%) 0 0 / 16px 16px; }
+.image-editor-boundary { position: absolute; pointer-events: none; z-index: 1; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85), 0 0 0 1px rgba(0, 0, 0, .7); }
+.image-annotation-outline { position: absolute; pointer-events: none; z-index: 2; box-sizing: border-box; border: 2px solid var(--accent); box-shadow: 0 0 0 1px #fff, 0 0 0 2px rgba(0, 0, 0, .45); border-radius: 3px; }
+.image-annotation-outline.hovered { border: 1px dashed var(--accent); box-shadow: 0 0 0 1px rgba(255, 255, 255, .85); }
+.image-annotation-outline[hidden] { display: none; }
+.image-annotation-handle { position: absolute; display: block; width: 10px; height: 10px; border: 1px solid var(--accent); border-radius: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); pointer-events: auto; touch-action: none; }
+.image-annotation-handle.corner-0 { top: -6px; left: -6px; cursor: crosshair; }
+.image-annotation-handle.corner-1 { top: -6px; right: -6px; cursor: crosshair; }
+.image-annotation-handle.corner-2 { bottom: -6px; right: -6px; cursor: crosshair; }
+.image-annotation-handle.corner-3 { bottom: -6px; left: -6px; cursor: crosshair; }
+.image-annotation-handle::before { content: ""; position: absolute; inset: -6px; }
+.image-annotation-handle[hidden] { display: none; }
+.image-annotation-pivot { position: absolute; z-index: 3; width: 13px; height: 13px; transform: translate(-50%, -50%); pointer-events: none; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #111; background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.image-annotation-pivot::before, .image-annotation-pivot::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 0 1px #111; }
+.image-annotation-pivot::before { width: 1px; height: 17px; left: 5px; top: -3px; }
+.image-annotation-pivot::after { height: 1px; width: 17px; top: 5px; left: -3px; }
+.image-annotation-pivot[hidden] { display: none; }
 .image-editor-surface {
   position: absolute;
   inset: 22px 24px var(--image-editor-bottom-space, 152px);
@@ -36,7 +56,8 @@
   gap: 10px;
   pointer-events: none;
 }
-.image-editor-dock { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; max-width: 100%; }
+.image-editor-dock { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 10px; max-width: 100%; }
+.image-editor-tool-stack { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
 .image-editor-island {
   display: flex;
   align-items: center;
@@ -175,14 +196,11 @@ body:has(#image-editor-view:not(.hidden)) #toast { top: 48px; bottom: auto; max-
 .image-editor-text-frame { --text-input-accent: var(--accent); }
 .image-editor-zoom-slot { flex: none; max-width: 100%; }
 .image-editor-zoom .image-editor-button { min-width: 28px; padding: 4px; }
+.image-editor-context-fields > .image-editor-crop-apply { color: var(--accent); background: var(--accent-soft); }
 .image-editor-zoom-value { min-width: 46px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .image-editor-surface.panning, .image-editor-surface.panning * { cursor: grabbing !important; }
-@media (min-width: 1200px) {
-  .image-editor-controls { flex-direction: row; justify-content: center; align-items: flex-end; }
-  .image-editor-context { min-height: 54px; }
-}
 @media (max-width: 800px) {
-  .image-editor-tools { order: -1; }
+  .image-editor-tool-stack { order: -1; }
   .image-editor-dock { max-width: 470px; gap: 8px; }
   .image-editor-controls { bottom: 14px; gap: 9px; }
 }

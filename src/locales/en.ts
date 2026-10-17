@@ -300,6 +300,20 @@ export const en = {
   // 图片编辑器
   "editor.title": "Edit image",
   "editor.zoomIn": "Zoom in",
+  "editor.fitCropFrame": "Reset framing: center image to fill crop frame",
+  "editor.resetFraming": "Reset framing",
+  "editor.showWhole": "Show whole image",
+  "editor.showWholeHint": "Fit the current image in the workspace to see the whole picture",
+  "editor.pixelDetail": "100% detail",
+  "editor.pixelDetailHint":
+    "Actual size (100%): inspect original image pixels. Large images may extend beyond the window.",
+  "editor.cropZoomHelp":
+    "Scroll to zoom; hold Space or the middle mouse button to move the image. The crop frame stays fixed.",
+  "editor.applyCrop": "Apply crop",
+  "editor.cancelCrop": "Cancel crop",
+  "editor.finishCropFirst": "Apply or cancel the current crop first.",
+  "editor.actualSizeUnavailable":
+    "100% is unavailable for this crop frame. Adjust the frame first.",
   "editor.exportHint":
     "Exports a static image; animations keep one frame. Original EXIF/ICC data is omitted. JPEG uses 90% quality with white behind transparent pixels.",
   "editor.zoomOut": "Zoom out",
@@ -307,13 +321,14 @@ export const en = {
   "shot.shareStopFailed": "Could not stop; retry",
   "shot.shareStopping": "Stopping…",
   "shot.shareStatusUnavailable": "Unable to confirm sharing status. Retrying…",
-  "editor.zoomHelp":
-    "Scroll to zoom; hold Space or the middle mouse button to pan. 0 fits the image; 1 shows actual size.",
-  "editor.select": "Select",
+  "editor.zoomHelp": "Scroll to zoom; hold Space or the middle mouse button to pan.",
+  "editor.select": "Adjust annotation",
   "editor.crop": "Crop",
-  "editor.rotate": "Rotate",
+  "editor.rotate": "Rotate 90° clockwise",
   "editor.undo": "Undo",
   "editor.redo": "Redo",
+  "editor.reset":
+    "Reset all edits: clear annotations, cropping and rotation to restore the original image. This can be undone.",
   "editor.saveAs": "Save a copy…",
   "editor.saveAsHint": "Choose a location and keep the original.",
   "editor.scale": "Export scale",
@@ -335,8 +350,13 @@ export const en = {
   "editor.tools": "Editing tools",
   "editor.history": "Edit history and exit",
   "editor.saveOptions": "Save options",
-  "editor.cropHint": "Drag edges to adjust the area; the frame stays fixed while zooming",
-  "editor.selectHint": "Click an annotation to select it",
+  "editor.cropHint":
+    "Drag edges to adjust the area; the frame stays fixed while zooming. Enter applies; Esc cancels.",
+  "editor.selectHint":
+    "Drag shapes or text to move; drag corners to rotate. Pen and mosaic strokes stay fixed. Delete removes; click empty space to deselect.",
+  "editor.deleteAnnotation": "Delete annotation",
+  "editor.rotationOriginHint":
+    "The rotation center stays fixed. Drag any corner to rotate without resizing.",
   "editor.fontSize": "Font size",
   "editor.blockSize": "Block size",
   "editor.sizePixels":
@@ -429,18 +449,17 @@ export const en = {
   "shot.scrollHeightReady": "Height is sufficient",
   "shot.scrollStart": "Start scrolling capture",
   "shot.scrollManualStart": "Start manual scrolling capture",
-  "shot.scrollCancel": "Exit scrolling capture",
-  "shot.scrollStop": "Stop (keep what was captured)",
+  "shot.scrollCancel": "Cancel capture (Esc)",
+  "shot.scrollStop": "Finish and preview (Enter)",
   "shot.scrollStopping": "Stopping…",
   "shot.scrollCapturing": "Capturing while scrolling…",
   "shot.scrollManualCapturing": "Capturing your manual scrolling…",
   "shot.scrollManualBadge": "Manual mode",
-  "shot.scrollManualFinish": "Finish and capture the final frame",
+  "shot.scrollManualFinish": "Finish and preview (Enter)",
   "shot.scrollManualFinishing": "Capturing the final frame…",
   "shot.scrollManualEscFinish":
-    "Mouse is passed to the target · Press Esc to finish and capture the final frame",
-  "shot.scrollEscStop":
-    "Mouse passes through to the target · Press Esc to stop and keep the result",
+    "Enter captures the final frame and opens the preview · Esc cancels",
+  "shot.scrollEscStop": "Enter finishes and opens the preview · Esc cancels",
   "shot.scrollProbing": "Detecting a usable scroll method…",
   "shot.scrollSize": "{w} × {h}",
   "shot.scrollStageLow":

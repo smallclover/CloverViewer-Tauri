@@ -88,6 +88,10 @@ export function createScrollCaptureSession(): ScrollCaptureSession {
     return !(!hidden && state.hudHiddenForSession && state.phase === "capturing");
   };
   const receiveDone = (result: ScrollCaptureDone, now: number) => {
+    if (result.cancelled) {
+      reset();
+      return;
+    }
     const startedAt = state.startedAt;
     state.startedAt = null;
     state.elapsedMs = result.ok && startedAt !== null ? now - startedAt : null;

@@ -5,6 +5,7 @@ export function bindEditorViewportInput(options: {
   viewport: ReturnType<typeof createCropViewport>;
   isActive: () => boolean;
   isBusy: () => boolean;
+  isCropping?: () => boolean;
 }) {
   const { surface, viewport } = options;
   let space = false;
@@ -35,8 +36,8 @@ export function bindEditorViewportInput(options: {
       viewport.zoomBy(1 / 1.2);
     } else if (event.key === "0") {
       event.preventDefault();
-      viewport.fit();
-    } else if (event.key === "1") {
+      viewport.fitImage();
+    } else if (event.key === "1" && !options.isCropping?.()) {
       event.preventDefault();
       viewport.actualSize();
     }

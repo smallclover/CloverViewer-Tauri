@@ -61,6 +61,7 @@ export const translations = {
     extra2: "全局热键与系统托盘",
     extra3: "可选 Live2D 桌宠",
     extra4: "手动检查与签名验证更新",
+    extra5: "两种窗口角色装饰，大小可调",
     privacyEyebrow: "你的图片，留在你手里",
     privacyTitle: "安心使用，从本地开始。",
     privacyBody:
@@ -181,6 +182,7 @@ export const translations = {
     extra2: "Global hotkeys and system tray",
     extra3: "Optional Live2D desktop companion",
     extra4: "Manual updates with signature verification",
+    extra5: "Two window character decorations with adjustable size",
     privacyEyebrow: "YOUR IMAGES STAY IN YOUR HANDS",
     privacyTitle: "Peace of mind starts locally.",
     privacyBody:
@@ -304,6 +306,7 @@ export const translations = {
     extra2: "グローバルホットキーとトレイ",
     extra3: "任意の Live2D デスクトップペット",
     extra4: "手動更新と署名の検証",
+    extra5: "サイズを調整できる2種類のウィンドウキャラクター装飾",
     privacyEyebrow: "あなたの画像は、あなたの手元に",
     privacyTitle: "安心は、ローカルから。",
     privacyBody:

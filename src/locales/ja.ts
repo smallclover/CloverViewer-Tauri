@@ -126,6 +126,17 @@ export const ja = {
   "settings.language.en": "English",
   "settings.language.ja": "日本語",
   "settings.theme": "テーマ",
+  "settings.windowDecoration": "ウィンドウ装飾",
+  "settings.windowDecorationStyle": "装飾スタイル",
+  "settings.windowDecoration.desc":
+    "ウィンドウに追従し、クリックは背後に通ります。最大化・全画面表示・スクリーンショット中は自動で隠れます。",
+  "settings.windowDecoration.off": "オフ",
+  "settings.windowDecoration.lean": "A · 右下に腰掛ける",
+  "settings.windowDecoration.peek": "B · 右上から顔を出す",
+  "settings.windowDecorationScale": "装飾のサイズ",
+  "settings.windowDecorationScale.desc":
+    "60%–140%。スライダーを離すと反映され、選択が保存されます。",
+  "toast.windowDecorationFailed": "ウィンドウ装飾を読み込めません：{msg}",
   "settings.theme.desc": "システムに従うか、ダーク / ライトを固定します。",
   "settings.theme.system": "システムに従う",
   "settings.theme.dark": "ダーク",

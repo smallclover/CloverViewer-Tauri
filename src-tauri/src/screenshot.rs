@@ -174,6 +174,7 @@ pub fn close_screenshot(app: AppHandle, completed: Option<bool>, capture_id: Opt
         }
     }
     crate::desktop_pet::restore_after_screenshot(&app);
+    crate::window_decoration::suspend(&app, false);
     if completed.unwrap_or(false) {
         let _ = app.emit("desktop-pet-celebrate", ());
     }
@@ -513,6 +514,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
 
         // 桌宠独立成窗；截屏前先隐藏，保证它不会落入用户的捕获结果。
         crate::desktop_pet::hide_for_screenshot(&app);
+        crate::window_decoration::suspend(&app, true);
 
         let capture = match capture_all(store.next_capture_id.fetch_add(1, Ordering::Relaxed)) {
             Ok(d) => d,
@@ -521,6 +523,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
                 let store = app.state::<ScreenshotStore>();
                 *store.capturing.lock().unwrap() = false;
                 crate::desktop_pet::restore_after_screenshot(&app);
+                crate::window_decoration::suspend(&app, false);
                 return;
             }
         };
@@ -539,6 +542,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
                 tracing::error!("准备截图窗口失败: {error}");
                 store.end_capture();
                 crate::desktop_pet::restore_after_screenshot(&app);
+                crate::window_decoration::suspend(&app, false);
                 return;
             }
         };
@@ -595,10 +599,20 @@ pub fn screenshot_ui_ready(app: AppHandle, capture_id: u64) -> bool {
             tracing::warn!("截图窗口尚未覆盖完整桌面，拒绝显示 capture_id={capture_id}");
             return false;
         }
+        // 前端可能有多个就绪回调排队。序列化校验、显示和关闭，避免取消后
+        // 一个迟到的 show() 再次把截图覆盖窗带回屏幕。
+        let capture = store.data.lock().unwrap();
+        if !capture
+            .as_ref()
+            .is_some_and(|capture| capture.data.capture_id == capture_id)
+        {
+            return false;
+        }
         if w.show().is_err() {
             return false;
         }
         let _ = w.set_focus();
+        drop(capture);
         if let Some(started) = store.capture_started.lock().unwrap().take() {
             tracing::info!("截图快捷键到选区显示: {}ms", started.elapsed().as_millis());
         }

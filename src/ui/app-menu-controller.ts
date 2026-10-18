@@ -131,7 +131,9 @@ export function createAppMenuController(options: AppMenuOptions) {
       for (const root of roots) if (root !== details) root.open = false;
       refresh();
       popup.style.left = "0px";
-      const overflow = popup.getBoundingClientRect().right - window.innerWidth + 6;
+      const edge =
+        document.getElementById("app")?.getBoundingClientRect().right ?? window.innerWidth;
+      const overflow = popup.getBoundingClientRect().right - edge + 6;
       if (overflow > 0) popup.style.left = `${-overflow}px`;
     });
     details.addEventListener("pointerenter", () => {

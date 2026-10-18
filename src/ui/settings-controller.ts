@@ -48,6 +48,9 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const language = element<HTMLSelectElement>("set-language");
   const theme = element<HTMLSelectElement>("set-theme");
   const uiScale = element<HTMLSelectElement>("set-ui-scale");
+  const decoration = element<HTMLSelectElement>("set-window-decoration");
+  const decorationScale = element<HTMLInputElement>("set-window-decoration-scale");
+  const decorationScaleValue = element("set-window-decoration-scale-value");
   const zoom = element<HTMLInputElement>("set-zoom");
   const zoomValue = element("set-zoom-val");
   const imagePreviewStrip = element<HTMLInputElement>("set-image-preview-strip");
@@ -74,6 +77,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     borderMode,
     borderStyle,
     uiScale,
+    decoration,
     cacheRetention,
     lanShareDuration,
     lanShareDownloadLimit,
@@ -204,6 +208,10 @@ export function createSettingsController(options: SettingsControllerOptions) {
     language.value = config.language;
     theme.value = config.theme;
     uiScale.value = String(config.ui_scale);
+    decoration.value = config.window_decoration ?? "off";
+    decorationScale.value = String(config.window_decoration_scale ?? 100);
+    decorationScaleValue.textContent = `${decorationScale.value}%`;
+    decorationScale.disabled = decoration.value === "off";
     zoom.value = String(config.zoom_sensitivity);
     zoomValue.textContent = `${config.zoom_sensitivity.toFixed(1)}×`;
     imagePreviewStrip.checked = config.image_preview_strip_enabled;
@@ -314,6 +322,16 @@ export function createSettingsController(options: SettingsControllerOptions) {
   zoom.addEventListener("input", () => {
     zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
   });
+  decoration.addEventListener("change", () => {
+    decorationScale.disabled = decoration.value === "off";
+    void save({ window_decoration: decoration.value as AppConfig["window_decoration"] });
+  });
+  decorationScale.addEventListener("input", () => {
+    decorationScaleValue.textContent = `${decorationScale.value}%`;
+  });
+  decorationScale.addEventListener("change", () =>
+    save({ window_decoration_scale: Number(decorationScale.value) }),
+  );
   zoom.addEventListener("change", () => save({ zoom_sensitivity: Number(zoom.value) }));
   const setImagePreviewStripEnabled = (enabled: boolean) => {
     imagePreviewStrip.checked = enabled;

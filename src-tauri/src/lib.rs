@@ -31,6 +31,8 @@ mod startup;
 mod thumbnails;
 mod tray_menu;
 mod ui_scale;
+mod window_decoration;
+mod window_shell_geometry;
 
 use config::ConfigStore;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
@@ -132,6 +134,7 @@ pub fn run() {
         .manage(hotkeys::HotkeyBindings::default())
         .manage(desktop_pet::DesktopPetSwitchState::default())
         .manage(desktop_pet::DesktopPetMenuState::default())
+        .manage(window_decoration::DecorationState::default())
         .manage(thumbnails::ThumbnailStore::new(512))
         .manage(screenshot::ScreenshotStore::new())
         .manage(lan_share::LanShareStore::new())
@@ -142,6 +145,8 @@ pub fn run() {
             hotkeys::get_active_hotkeys,
             commands::quit_app,
             commands::set_config,
+            window_decoration::initialize_window_decoration,
+            window_decoration::window_shell_capture_ready,
             tray_menu::start_capture,
             commands::set_desktop_pet_enabled,
             commands::set_desktop_pet_scale,
@@ -248,6 +253,7 @@ pub fn run() {
             );
 
             tray_menu::create(app)?;
+            window_decoration::start_tracking(app.handle().clone());
 
             // 开机自启：每次启动同步一次注册表项（保证 exe 路径最新）
             if launch_on_startup {
@@ -304,6 +310,7 @@ pub fn run() {
             if window.label() != MAIN_WINDOW {
                 return;
             }
+            window_decoration::sync(window.app_handle());
             let store = window.app_handle().state::<ConfigStore>();
 
             match event {
@@ -314,34 +321,8 @@ pub fn run() {
                         let _ = window.hide();
                     }
                 }
-                // 记录窗口位置/尺寸（退出时统一落盘）
-                // 过滤 Windows 最小化虚拟坐标（±32000）与零尺寸：窗口被
-                // hide/minimize 时 Windows 会发出 Moved(-32000,-32000) /
-                // Resized(0,0)，若原样持久化，下次启动会恢复到屏幕外 / 零
-                // 尺寸，表现为「主窗口消失」。
-                tauri::WindowEvent::Moved(pos) => {
-                    if pos.x <= -32000 || pos.y <= -32000 {
-                        return;
-                    }
-                    let mut cfg = (*store.snapshot()).clone();
-                    cfg.window_pos = Some((pos.x as f32, pos.y as f32));
-                    store.replace(cfg);
-                }
-                tauri::WindowEvent::Resized(size) => {
-                    if size.width == 0 || size.height == 0 {
-                        return;
-                    }
-                    // 过滤启动阶段的瞬时小尺寸（低于窗口最小逻辑尺寸的一律不落盘），
-                    // 避免污染 config.json，导致下次打开主窗口变小。
-                    let scale = window.scale_factor().unwrap_or(1.0) as f32;
-                    if (size.width as f32) < MIN_WINDOW_LOGICAL_W * scale
-                        || (size.height as f32) < MIN_WINDOW_LOGICAL_H * scale
-                    {
-                        return;
-                    }
-                    let mut cfg = (*store.snapshot()).clone();
-                    cfg.window_size = Some((size.width as f32, size.height as f32));
-                    store.replace(cfg);
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    window_decoration::record_bounds(window.app_handle());
                 }
                 _ => {}
             }

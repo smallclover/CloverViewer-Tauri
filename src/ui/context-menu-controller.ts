@@ -46,8 +46,11 @@ export function createContextMenuController(options: ContextMenuControllerOption
     }
     menu.classList.remove("hidden", "is-visible");
     const rect = menu.getBoundingClientRect();
-    menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - rect.width - 6))}px`;
-    menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - rect.height - 6))}px`;
+    const panel = document.getElementById("app")?.getBoundingClientRect();
+    const left = panel?.left ?? 0;
+    const top = panel?.top ?? 0;
+    menu.style.left = `${Math.max(4, Math.min(x - left, (panel?.width ?? window.innerWidth) - rect.width - 6))}px`;
+    menu.style.top = `${Math.max(4, Math.min(y - top, (panel?.height ?? window.innerHeight) - rect.height - 6))}px`;
     requestAnimationFrame(() => menu.classList.add("is-visible"));
   };
   const actionsFor = (entry: ImageEntry, index?: number): ContextItem[] => {

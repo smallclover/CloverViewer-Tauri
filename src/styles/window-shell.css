@@ -1,0 +1,74 @@
+/* 透明原生窗口包含 UI 与角色；所有相对位置由同一个 CSS 布局计算。 */
+:root {
+  --shell-left: 0px; --shell-top: 0px; --shell-right: 0px; --shell-bottom: 0px;
+  --art-width: 0px; --art-height: 0px; --shell-controls: 150px;
+  /* 同时用于主窗口和设置缩略图；只让弯下来的手指越过窗沿。 */
+  --peek-hand-clip: polygon(16.5% 90%, 27.5% 89%, 26.6% 95%, 26.6% 100%, 17% 100%, 17% 92.3%);
+  --panel-width: calc(100vw - var(--shell-left) - var(--shell-right));
+  --panel-height: calc(100vh - var(--shell-top) - var(--shell-bottom));
+}
+html, body { background: transparent; }
+#app {
+  position: absolute;
+  inset: var(--shell-top) var(--shell-right) var(--shell-bottom) var(--shell-left);
+  height: auto;
+  z-index: 2;
+  /* 固定浮层、设置页和缩放把手以面板作为包含块，而不是原生窗口的透明留白。 */
+  transform: translateZ(0);
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    radial-gradient(120% 70% at 15% -12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+    radial-gradient(100% 60% at 95% 110%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 55%),
+    var(--bg);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+:root[data-window-maximized="true"] #app { border: 0; border-radius: 0; box-shadow: none; }
+#window-character-back, #window-character-front {
+  position: absolute;
+  width: var(--art-width);
+  height: var(--art-height);
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+#window-character-back { z-index: 1; }
+#window-character-front { z-index: 4; }
+:root:not([data-shell-style]), :root[data-shell-style="off"] {
+  #window-character-back, #window-character-front, #window-contact-shadow { display: none; }
+}
+:root[data-shell-style="peek"] {
+  #window-character-back, #window-character-front {
+    right: calc(var(--shell-right) + var(--shell-controls));
+    top: calc(var(--shell-top) - var(--art-height) * 0.915);
+  }
+  /* 窗沿贴住掌根（原图 y≈812/887），袖口与拇指留在后面，避免露出素材的平切底边。 */
+  #window-character-front {
+    clip-path: var(--peek-hand-clip);
+  }
+  #window-contact-shadow {
+    right: calc(var(--shell-right) + var(--shell-controls) + var(--art-width) * 0.73);
+    top: calc(var(--shell-top) + 1px);
+    width: calc(var(--art-width) * 0.10);
+    height: 3px;
+  }
+}
+:root[data-shell-style="lean"] {
+  #window-character-back, #window-character-front {
+    right: calc(var(--shell-right) - var(--art-width) * 0.40);
+    bottom: calc(var(--shell-bottom) - var(--art-height) * 0.385);
+  }
+  /* 坐姿与腿在前，向左垂落的长飘带由主面板遮挡，形成绕过窗沿的层次。 */
+  #window-character-front {
+    clip-path: polygon(12% 0, 100% 0, 100% 100%, 45% 100%, 42% 68%, 0 64%, 0 52%);
+  }
+  #window-contact-shadow {
+    right: var(--shell-right);
+    bottom: calc(var(--shell-bottom) - 2px);
+    width: calc(var(--art-width) * 0.32);
+    height: 4px;
+  }
+}
+#window-contact-shadow { position: absolute; z-index: 3; background: rgba(0, 0, 0, .22); border-radius: 50%; filter: blur(1px); pointer-events: none; }

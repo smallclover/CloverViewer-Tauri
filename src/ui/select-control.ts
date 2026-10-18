@@ -112,17 +112,22 @@ export function createSelectControl(select: HTMLSelectElement) {
 
   function positionMenu() {
     const rect = trigger.getBoundingClientRect();
-    if (!rect.width || !rect.height || rect.bottom < 0 || rect.top > window.innerHeight) {
+    const panel = document.getElementById("app")?.getBoundingClientRect();
+    const left = panel?.left ?? 0,
+      top = panel?.top ?? 0;
+    const right = panel?.right ?? window.innerWidth,
+      bottom = panel?.bottom ?? window.innerHeight;
+    if (!rect.width || !rect.height || rect.bottom < top || rect.top > bottom) {
       close();
       return;
     }
-    menu.style.minWidth = `${Math.min(rect.width, window.innerWidth - 24)}px`;
+    menu.style.minWidth = `${Math.min(rect.width, right - left - 24)}px`;
     menu.style.maxHeight = "280px";
-    const below = window.innerHeight - rect.bottom - 18;
-    const above = rect.top - 18;
+    const below = bottom - rect.bottom - 18;
+    const above = rect.top - top - 18;
     const placeAbove = menu.offsetHeight > below && above > below;
     menu.style.maxHeight = `${Math.max(32, Math.min(280, placeAbove ? above : below))}px`;
-    menu.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 12))}px`;
+    menu.style.left = `${Math.max(left + 12, Math.min(rect.left, right - menu.offsetWidth - 12))}px`;
     menu.style.top = `${placeAbove ? rect.top - menu.offsetHeight - 6 : rect.bottom + 6}px`;
   }
 

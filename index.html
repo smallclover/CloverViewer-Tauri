@@ -312,6 +312,43 @@
               </div>
             </section>
 
+            <section class="settings-group" data-settings-section="general">
+              <span class="settings-group-title" data-i18n="settings.windowDecoration">窗口装饰</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-window-decoration" data-i18n="settings.windowDecorationStyle">装饰样式</label>
+                    <span class="setting-desc" data-i18n="settings.windowDecoration.desc">角色随主窗口移动，鼠标可穿透；最大化、全屏和截图时自动隐藏。</span>
+                  </div>
+                  <select id="set-window-decoration">
+                    <option value="off" data-i18n="settings.windowDecoration.off">关闭</option>
+                    <option value="lean" data-i18n="settings.windowDecoration.lean">A · 右下角倚靠</option>
+                    <option value="peek" data-i18n="settings.windowDecoration.peek">B · 右上角探头</option>
+                  </select>
+                </div>
+                <div class="setting-row decoration-previews">
+                  <figure class="decoration-preview decoration-preview-lean">
+                    <div class="decoration-preview-stage"><img class="decoration-preview-back" src="/window-decorations/lean.png" alt="" loading="lazy" /><div class="decoration-preview-window"></div><img class="decoration-preview-front" src="/window-decorations/lean.png" alt="" loading="lazy" /></div>
+                    <figcaption data-i18n="settings.windowDecoration.lean">A · 右下角倚靠</figcaption>
+                  </figure>
+                  <figure class="decoration-preview decoration-preview-peek">
+                    <div class="decoration-preview-stage"><img class="decoration-preview-back" src="/window-decorations/peek.png" alt="" loading="lazy" /><div class="decoration-preview-window"></div><img class="decoration-preview-front" src="/window-decorations/peek.png" alt="" loading="lazy" /></div>
+                    <figcaption data-i18n="settings.windowDecoration.peek">B · 右上角探头</figcaption>
+                  </figure>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-window-decoration-scale" data-i18n="settings.windowDecorationScale">装饰大小</label>
+                    <span class="setting-desc" data-i18n="settings.windowDecorationScale.desc">60%–140%，松开滑杆后生效并记住选择。</span>
+                  </div>
+                  <div class="zoom-row">
+                    <input id="set-window-decoration-scale" type="range" min="60" max="140" step="5" value="100" />
+                    <output class="setting-value" id="set-window-decoration-scale-value" for="set-window-decoration-scale">100%</output>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section class="settings-group" data-settings-section="view">
               <span class="settings-group-title" data-i18n="settings.group.browsing">浏览</span>
               <div class="settings-card">

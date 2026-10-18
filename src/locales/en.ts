@@ -125,6 +125,17 @@ export const en = {
   "settings.language.en": "English",
   "settings.language.ja": "日本語",
   "settings.theme": "Theme",
+  "settings.windowDecoration": "Window decoration",
+  "settings.windowDecorationStyle": "Decoration style",
+  "settings.windowDecoration.desc":
+    "Follows the window and lets clicks pass through. Hidden when maximized, full screen, or capturing screenshots.",
+  "settings.windowDecoration.off": "Off",
+  "settings.windowDecoration.lean": "A · Bottom-right companion",
+  "settings.windowDecoration.peek": "B · Top-right peek",
+  "settings.windowDecorationScale": "Decoration size",
+  "settings.windowDecorationScale.desc":
+    "60%–140%. Applies when released and remembers your choice.",
+  "toast.windowDecorationFailed": "Couldn't load the window decoration: {msg}",
   "settings.theme.desc": "Follow the system, or pin dark / light.",
   "settings.theme.system": "System",
   "settings.theme.dark": "Dark",

@@ -1,0 +1,16 @@
+.decoration-previews { gap: 16px; }
+.decoration-preview { flex: 1; min-width: 0; margin: 0; }
+.decoration-preview-stage { position: relative; height: 148px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-hover); }
+.decoration-preview-window { position: absolute; inset: 36px 28px 30px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); box-shadow: 0 3px 12px var(--shadow); }
+.decoration-preview-window::before { content: ""; display: block; height: 12px; border-bottom: 1px solid var(--border); }
+.decoration-preview img { position: absolute; object-fit: contain; pointer-events: none; }
+.decoration-preview-back { z-index: 1; }
+.decoration-preview-window { z-index: 2; }
+.decoration-preview-front { z-index: 3; }
+.decoration-preview-lean .decoration-preview-window { inset: 20px 42px 46px 12px; }
+.decoration-preview-lean img { height: 114px; width: 76px; right: 11.6px; bottom: 2.11px; }
+.decoration-preview-peek .decoration-preview-window { inset: 46px 12px 20px; }
+.decoration-preview-peek img { width: 100px; height: 50px; right: 40px; top: 0.25px; }
+.decoration-preview-peek .decoration-preview-front { clip-path: var(--peek-hand-clip); }
+.decoration-preview-lean .decoration-preview-front { clip-path: polygon(12% 0, 100% 0, 100% 100%, 45% 100%, 42% 68%, 0 64%, 0 52%); }
+.decoration-preview figcaption { margin-top: 8px; color: var(--fg-dim); font-size: 12px; text-align: center; }

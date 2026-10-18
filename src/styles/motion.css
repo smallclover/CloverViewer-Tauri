@@ -117,7 +117,7 @@
 #update-overlay.is-visible { opacity: 1; pointer-events: auto; }
 #update-panel {
   width: min(560px, 100%);
-  max-height: min(620px, calc(100vh - 40px));
+  max-height: min(620px, calc(var(--panel-height, 100vh) - 40px));
   display: flex;
   flex-direction: column;
   overflow: hidden;

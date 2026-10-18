@@ -24,6 +24,8 @@ export interface HotkeysConfig {
   scroll_capture: string;
 }
 
+export type WindowDecoration = "off" | "lean" | "peek";
+
 export interface AppConfig {
   language: "Zh" | "En" | "Ja";
   theme: "dark" | "light" | "system";
@@ -46,6 +48,10 @@ export interface AppConfig {
   desktop_pet_enabled: boolean;
   /** 桌宠相对于 360×540 标准窗口的缩放百分比（60–200）。 */
   desktop_pet_scale: number;
+  /** 主窗口附属的透明角色装饰，与独立桌宠分开控制。 */
+  window_decoration: WindowDecoration;
+  /** 窗口装饰大小百分比（60–140），不随界面文字缩放。 */
+  window_decoration_scale: number;
   launch_on_startup: boolean;
   /** 0 = 不自动清理；其它值为临时截图最长保留小时数。 */
   cache_cleanup_after_hours: number;
@@ -60,6 +66,27 @@ export interface AppConfig {
 export const getConfig = () => invoke<AppConfig>("get_config");
 
 export const setConfig = (config: AppConfig) => invoke<AppConfig>("set_config", { config });
+
+export interface WindowShellLayout {
+  /** 原生客户区中的物理像素留白；界面和角色共用此坐标系。 */
+  insets: { left: number; top: number; right: number; bottom: number };
+  style: WindowDecoration;
+  artworkWidth: number;
+  artworkHeight: number;
+  controlsWidth: number;
+  captureId: number | null;
+}
+
+/** 主页面挂载后启用透明外壳；不修改偏好。 */
+export const initializeWindowDecoration = () =>
+  invoke<WindowShellLayout>("initialize_window_decoration");
+export const listenWindowShellLayout = (
+  handler: (layout: WindowShellLayout) => void,
+): Promise<UnlistenFn> =>
+  listen<WindowShellLayout>("window-shell-layout", (event) => handler(event.payload));
+/** 角色图层隐藏并完成绘制后，允许后台开始截图。 */
+export const windowShellCaptureReady = (captureId: number) =>
+  invoke<void>("window_shell_capture_ready", { captureId });
 
 /** 退出请求先交给主窗口的未保存编辑守卫，通过后才真正退出。 */
 export const listenExitRequested = (handler: () => void): Promise<UnlistenFn> =>

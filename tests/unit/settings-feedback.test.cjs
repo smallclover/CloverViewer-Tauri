@@ -95,6 +95,42 @@ test("explicit hotkey apply and cache cleanup keep their result feedback", async
   assert.ok(f.notices.every(notice => notice.kind === "success"));
 });
 
+test("window decoration choices save quietly and size persists only on release", async () => {
+  const f = fixture();
+  assert.equal(f.element("set-window-decoration").value, "off");
+  assert.equal(f.element("set-window-decoration-scale").disabled, true);
+  for (const style of ["lean", "peek", "off"]) {
+    f.element("set-window-decoration").value = style;
+    f.element("set-window-decoration").fire("change");
+    await flush();
+    assert.equal(f.config().window_decoration, style);
+    assert.equal(f.element("set-window-decoration-scale").disabled, style === "off");
+  }
+  const before = f.writes.length;
+  f.element("set-window-decoration-scale").value = "125";
+  f.element("set-window-decoration-scale").fire("input");
+  assert.equal(f.element("set-window-decoration-scale-value").textContent, "125%");
+  assert.equal(f.writes.length, before);
+  f.element("set-window-decoration-scale").fire("change");
+  await flush();
+  assert.equal(f.config().window_decoration_scale, 125);
+  assert.deepEqual(f.notices, []);
+});
+
+test("failed decoration persistence restores style, size and disabled controls", async () => {
+  const f = fixture({ setConfig: async () => { throw Error("disk full"); } });
+  f.element("set-window-decoration").value = "lean";
+  f.element("set-window-decoration").fire("change");
+  await flush();
+  assert.equal(f.element("set-window-decoration").value, "off");
+  assert.equal(f.element("set-window-decoration-scale").disabled, true);
+  f.element("set-window-decoration-scale").value = "140";
+  f.element("set-window-decoration-scale").fire("change");
+  await flush();
+  assert.equal(f.element("set-window-decoration-scale").value, "100");
+  assert.ok(f.notices.every(notice => notice.message === "toast.saveFailed" && notice.kind === "error"));
+});
+
 test("color hotkey apply waits for persistence and reports failure without a success toast", async () => {
   let reject;
   const pending = new Promise((_, fail) => { reject = fail; });

@@ -16,7 +16,7 @@ pub fn get_config(store: State<'_, ConfigStore>) -> Config {
 }
 
 #[tauri::command]
-pub fn set_config(
+pub async fn set_config(
     app: tauri::AppHandle,
     store: State<'_, ConfigStore>,
     config: Config,
@@ -30,6 +30,7 @@ pub fn set_config(
         crate::ui_scale::apply_all(&app);
     }
     crate::tray_menu::refresh(&app);
+    crate::window_decoration::sync(&app);
     Ok(saved)
 }
 

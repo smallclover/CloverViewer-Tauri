@@ -99,6 +99,26 @@ pub enum SelectionBorderStyle {
     Dashed,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowDecoration {
+    Lean,
+    Peek,
+    #[default]
+    #[serde(other)]
+    Off,
+}
+
+pub fn normalize_decoration_scale(scale: u16) -> u16 {
+    scale.clamp(60, 140)
+}
+
+fn deserialize_decoration_scale<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<u16, D::Error> {
+    u16::deserialize(deserializer).map(normalize_decoration_scale)
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct Config {
     #[serde(default)]
@@ -140,6 +160,13 @@ pub struct Config {
     /// 桌宠相对于 360×540 标准窗口的缩放百分比（60–200）。
     #[serde(default = "default_desktop_pet_scale")]
     pub desktop_pet_scale: u16,
+    #[serde(default)]
+    pub window_decoration: WindowDecoration,
+    #[serde(
+        default = "default_ui_scale",
+        deserialize_with = "deserialize_decoration_scale"
+    )]
+    pub window_decoration_scale: u16,
     #[serde(default = "default_launch_on_startup")]
     pub launch_on_startup: bool,
     /// 长截图「在查看器中打开」时产生的临时 PNG 保留时长（小时）。
@@ -219,6 +246,8 @@ impl Default for Config {
             screenshot_hides_main_window: false,
             desktop_pet_enabled: false,
             desktop_pet_scale: default_desktop_pet_scale(),
+            window_decoration: WindowDecoration::Off,
+            window_decoration_scale: default_ui_scale(),
             launch_on_startup: default_launch_on_startup(),
             cache_cleanup_after_hours: default_cache_cleanup_after_hours(),
             lan_share_duration_seconds: default_lan_share_duration_seconds(),
@@ -283,6 +312,7 @@ impl Config {
     /// 普通设置只替换前端拥有的字段；专用命令和窗口事件的值在锁内保留。
     pub fn apply_preferences(&mut self, mut next: Config) {
         next.ui_scale = normalize_ui_scale(next.ui_scale);
+        next.window_decoration_scale = normalize_decoration_scale(next.window_decoration_scale);
         next.window_pos = self.window_pos;
         next.window_size = self.window_size;
         next.desktop_pet_enabled = self.desktop_pet_enabled;
@@ -328,12 +358,13 @@ impl ConfigStore {
         Arc::new(config.clone())
     }
 
-    pub fn replace(&self, new_config: Config) {
+    pub fn update_geometry(&self, position: (f32, f32), size: (f32, f32)) {
         let mut config = self
             .config
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *config = new_config;
+            .unwrap_or_else(|error| error.into_inner());
+        config.window_pos = Some(position);
+        config.window_size = Some(size);
     }
 }
 
@@ -393,6 +424,29 @@ mod tests {
         let old: Config = serde_json::from_str("{}").unwrap();
         assert_eq!(old.ui_scale, 100);
         assert_eq!(Config::default().ui_scale, 100);
+    }
+
+    #[test]
+    fn decoration_preferences_are_compatible_and_bounded() {
+        let legacy: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.window_decoration, WindowDecoration::Off);
+        assert_eq!(legacy.window_decoration_scale, 100);
+        let unknown: Config = serde_json::from_str(r#"{"window_decoration":"future"}"#).unwrap();
+        assert_eq!(unknown.window_decoration, WindowDecoration::Off);
+        for (input, expected) in [(0, 60), (60, 60), (100, 100), (140, 140), (65535, 140)] {
+            for style in [WindowDecoration::Lean, WindowDecoration::Peek] {
+                let mut config = Config::default();
+                config.apply_preferences(Config {
+                    window_decoration: style,
+                    window_decoration_scale: input,
+                    ..Config::default()
+                });
+                let restored: Config =
+                    serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+                assert_eq!(restored.window_decoration, style);
+                assert_eq!(restored.window_decoration_scale, expected);
+            }
+        }
     }
 
     #[test]

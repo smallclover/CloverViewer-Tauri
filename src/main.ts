@@ -14,6 +14,7 @@ import { bindDirectoryRefreshShortcut } from "./viewer/refresh-shortcut";
 import { createPageNavigationController } from "./ui/page-navigation-controller";
 import { createSettingsController } from "./ui/settings-controller";
 import { createDesktopPetController } from "./ui/desktop-pet-controller";
+import { initializeWindowShell } from "./ui/window-shell";
 import { bindWindowChrome } from "./ui/window-chrome";
 import { createGridController } from "./viewer/grid-controller";
 import { createImagePixelExporter, IMAGE_EXTENSIONS } from "./viewer/image-pixels";
@@ -904,6 +905,9 @@ appMenu = createAppMenuController({
     applyTheme("system");
   }
   applyI18n(document);
+  const shellError = (error: unknown) =>
+    toast(t("toast.windowDecorationFailed", { msg: String(error) }), "error");
+  void initializeWindowShell(shellError).catch(shellError);
   refreshStatus();
   // 预热推迟到启动之后：--startup 隐藏查看器时定时器照样会跑，
   // 而 requestAnimationFrame 在那里会停摆，导致首次托盘截图仍是冷启动。

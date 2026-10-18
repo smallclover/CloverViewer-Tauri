@@ -37,6 +37,7 @@ require("./thumbnail-loader.test.cjs");
 require("./single-image-controller.test.cjs");
 require("./single-image-loader.test.cjs");
 require("./desktop-pet-policy.test.cjs");
+require("./window-shell.test.cjs");
 require("./screenshot-geometry.test.cjs");
 require("./screenshot-editor-input.test.cjs");
 require("./screenshot-refresh.test.cjs");

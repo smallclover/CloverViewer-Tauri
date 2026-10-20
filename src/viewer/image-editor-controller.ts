@@ -4,7 +4,7 @@ import type { EditedImageFormat, ImageEntry } from "../api";
 import { createAnnotationLayers } from "../image-editor/annotation-layers";
 import { createAnnotationSelection } from "../image-editor/annotation-selection";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
-import { annotationFont } from "../image-editor/annotation-style";
+import { annotationFont, imageAnnotationSizes } from "../image-editor/annotation-style";
 import {
   createCanvasMosaicRenderer,
   mosaicBlockSize,
@@ -103,6 +103,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     actualSize: () => cropViewport.actualSize(),
   });
   const { color, sizes, format, outputScale } = toolbar;
+  const drawingSizes = () =>
+    imageAnnotationSizes(sizes, canvas.getBoundingClientRect().width / canvas.width);
 
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D is unavailable");
@@ -124,7 +126,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let crop: Rect | null = null;
   let cropSnapshot: EditSnapshot | null = null;
   let textStart: Pt | null = null;
-  let textStyle = { color: color.value, fontSize: sizes.fontSize };
+  let textStyle = { color: color.value, fontSize: sizes.fontSize, strokeWidth: sizes.strokeWidth };
   let rotation = 0;
   let repaint = true;
   let dragging = false;
@@ -138,7 +140,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const mosaicCursor = createMosaicCursor({
     surface: canvas,
     layer: workspace,
-    getSize: () => (current?.tool === "mosaic" ? mosaicBlockSize(current) : sizes.blockSize),
+    getSize: () =>
+      current?.tool === "mosaic" ? mosaicBlockSize(current) : drawingSizes().blockSize,
     isEnabled: () => !!image && tool === "mosaic" && !options.root.classList.contains("hidden"),
   });
   toolbar.width.addEventListener("change", mosaicCursor.refresh);
@@ -384,7 +387,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
           y: textStart.y + lines.length * textStyle.fontSize * 1.2,
         },
         color: textStyle.color,
-        strokeWidth: sizes.strokeWidth,
+        strokeWidth: textStyle.strokeWidth,
         fontSize: textStyle.fontSize,
         text,
       });
@@ -441,7 +444,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const beginTextInput = (point: Pt) => {
     commitTextInput();
     textStart = point;
-    textStyle = { color: color.value, fontSize: sizes.fontSize };
+    textStyle = { color: color.value, ...drawingSizes() };
     textInput.value = "";
     textInput.classList.remove("hidden");
     textInput.classList.add("editing");
@@ -702,13 +705,15 @@ export function createImageEditorController(options: ImageEditorControllerOption
       return;
     }
     canvas.setPointerCapture(event.pointerId);
+    const style = drawingSizes();
     current = {
       tool,
       start: point,
       end: point,
       color: color.value,
-      strokeWidth: sizes.strokeWidth,
-      blockSize: tool === "mosaic" ? sizes.blockSize : undefined,
+      strokeWidth: style.strokeWidth,
+      blockSize: tool === "mosaic" ? style.blockSize : undefined,
+      arrowHeadSize: tool === "arrow" ? style.arrowHeadSize : undefined,
       points: tool === "pen" || tool === "mosaic" ? [point] : undefined,
     };
     dragging = true;
@@ -848,7 +853,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     options.root.classList.remove("hidden");
     toolbar.updateLayout();
     cropViewport.fit();
-    toolbar.initializeSizes(canvas.getBoundingClientRect().width / canvas.width);
+    toolbar.resetSizes();
     cropOverlay.refreshImage();
     return true;
   };

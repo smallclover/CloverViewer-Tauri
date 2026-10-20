@@ -1,13 +1,7 @@
 import type { Tool } from "./geometry";
 import { createSelectControl } from "../ui/select-control";
 import { editorIcon } from "./toolbar-icons";
-import {
-  createAnnotationSizes,
-  createPreviewAnnotationSizing,
-  SIZE_LABELS,
-  SIZE_PRESETS,
-  sizeKind,
-} from "./annotation-style";
+import { createAnnotationSizes, SIZE_LABELS, SIZE_PRESETS, sizeKind } from "./annotation-style";
 
 export type EditorTool = Tool | "select" | "crop";
 
@@ -48,7 +42,6 @@ export function createEditorToolbar(options: ToolbarOptions) {
   let activeTool: EditorTool = "select";
   let hasSelection = false;
   const sizes = createAnnotationSizes();
-  let sizePresets = SIZE_PRESETS;
 
   const translated = (tag: "span" | "strong", key: string) => {
     const node = document.createElement(tag);
@@ -261,7 +254,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
     width.title = `${options.translate(widthKey)} · ${options.translate("editor.imageSizePixels")}`;
     width.ariaLabel = width.title;
     width.replaceChildren(
-      ...sizePresets[kind].map(
+      ...SIZE_PRESETS[kind].map(
         (value) =>
           new Option(`${value} px`, String(value), value === sizes[kind], value === sizes[kind]),
       ),
@@ -327,10 +320,8 @@ export function createEditorToolbar(options: ToolbarOptions) {
     refreshTranslations,
     closePanels,
     updateLayout,
-    initializeSizes: (previewScale: number) => {
-      const adapted = createPreviewAnnotationSizing(previewScale);
-      Object.assign(sizes, adapted.sizes);
-      sizePresets = adapted.presets;
+    resetSizes: () => {
+      Object.assign(sizes, createAnnotationSizes());
       refreshContext();
     },
     refreshHistory: (canUndo: boolean, canRedo: boolean) => {

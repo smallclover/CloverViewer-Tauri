@@ -10,8 +10,10 @@
   display: flex;
   flex-direction: column;
   padding: 16px 14px 20px;
+  min-height: 0;
+  overflow-y: auto;
 }
-.settings-search { position: relative; margin-bottom: 20px; }
+.settings-search { position: relative; flex: none; margin-bottom: 20px; }
 .settings-search .ic {
   position: absolute;
   top: 50%;
@@ -40,7 +42,7 @@
   background: var(--bg-panel);
 }
 
-.settings-nav-group { display: flex; flex-direction: column; gap: 1px; margin-bottom: 16px; }
+.settings-nav-group { display: flex; flex: none; flex-direction: column; gap: 1px; margin-bottom: 16px; }
 .settings-nav-label {
   padding: 0 10px 7px;
   color: var(--fg-dim);
@@ -404,6 +406,16 @@
   color: var(--fg-dim);
   font-size: 11.5px;
   opacity: 0.8;
+}
+
+#ocr-model-progress { width: min(100%, 280px); height: 6px; margin-top: 10px; accent-color: var(--accent); }
+#ocr-model-status[data-state="ready"] { color: var(--accent); font-weight: 600; }
+#ocr-model-download[data-state="ready"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  opacity: 1;
+  cursor: default;
 }
 
 /* 窄窗口里先显示完整说明，再排列控件，避免长文案被控件挤成逐字换行。 */

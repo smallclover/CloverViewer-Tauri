@@ -14,6 +14,8 @@ require("./share-status.test.cjs");
 require("./share-panels.test.cjs");
 require("./settings-persistence.test.cjs");
 require("./settings-feedback.test.cjs");
+require("./settings-navigation.test.cjs");
+require("./ocr-settings.test.cjs");
 require("./image-sort.test.cjs");
 require("./image-source.test.cjs");
 require("./open-image-bridge.test.cjs");

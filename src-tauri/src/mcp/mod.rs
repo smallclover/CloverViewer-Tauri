@@ -78,7 +78,7 @@ struct GetScreenshotParams {
 #[derive(Deserialize, schemars::JsonSchema)]
 struct OcrParams {
     capture_id: String,
-    /// OCR 语言偏好：「zh」「en」或「ja」；省略时用系统语言。
+    /// OCR 语言偏好：「zh」「en」或「ja」；省略时用应用 OCR 设置。
     language: Option<String>,
 }
 
@@ -187,12 +187,13 @@ impl CloverMcpServer {
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let store = Arc::clone(&self.artifacts);
         let id = capture_id.clone();
+        let explicit_language = language.is_some();
         let language = parse_language(language.as_deref())?;
         let text = tokio::task::spawn_blocking(move || {
             let artifact = store.get(&id)?;
             let image = image::open(&artifact.path)
                 .map_err(|e| format!("Failed to read screenshot: {e}"))?;
-            crate::ocr::recognize_text(image, language)
+            crate::ocr::recognize_text(image, explicit_language.then_some(language))
         })
         .await
         .map_err(join_error)?

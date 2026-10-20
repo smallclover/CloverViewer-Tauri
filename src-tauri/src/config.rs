@@ -17,6 +17,37 @@ pub enum Language {
     Ja,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OcrEngine {
+    Paddle,
+    #[default]
+    #[serde(other)]
+    System,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OcrLanguage {
+    Zh,
+    En,
+    Ja,
+    #[default]
+    #[serde(other)]
+    Auto,
+}
+
+impl OcrLanguage {
+    pub fn preferred(self, fallback: Language) -> Language {
+        match self {
+            Self::Auto => fallback,
+            Self::Zh => Language::Zh,
+            Self::En => Language::En,
+            Self::Ja => Language::Ja,
+        }
+    }
+}
+
 impl Language {
     pub fn detect_system() -> Self {
         get_locale()
@@ -123,6 +154,10 @@ fn deserialize_decoration_scale<'de, D: serde::Deserializer<'de>>(
 pub struct Config {
     #[serde(default)]
     pub language: Language,
+    #[serde(default)]
+    pub ocr_engine: OcrEngine,
+    #[serde(default)]
+    pub ocr_language: OcrLanguage,
     #[serde(default)]
     pub theme: ThemePreference,
     /// 主界面和截图界面的缩放百分比；旧配置默认恢复到 100%。
@@ -232,6 +267,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             language: Language::default(),
+            ocr_engine: OcrEngine::System,
+            ocr_language: OcrLanguage::Auto,
             theme: ThemePreference::default(),
             ui_scale: default_ui_scale(),
             zoom_sensitivity: default_zoom_sensitivity(),
@@ -371,6 +408,23 @@ impl ConfigStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn older_configs_keep_lightweight_ocr_and_allow_independent_languages() {
+        let old: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(old.ocr_engine, OcrEngine::System);
+        assert_eq!(old.ocr_language, OcrLanguage::Auto);
+        for (tag, expected) in [
+            ("zh", Language::Zh),
+            ("en", Language::En),
+            ("ja", Language::Ja),
+        ] {
+            let config: Config =
+                serde_json::from_value(serde_json::json!({"language":"En", "ocr_language":tag}))
+                    .unwrap();
+            assert_eq!(config.ocr_language.preferred(config.language), expected);
+        }
+    }
 
     #[test]
     fn stale_preferences_preserve_latest_backend_owned_values() {

@@ -19,6 +19,7 @@ mod image_tasks;
 mod lan_share;
 pub mod mcp;
 mod ocr;
+pub use ocr::run_worker as run_ocr_worker;
 mod screenshot;
 // 声明为 pub：延迟探针（examples 下的二进制）要复用同一条捕获路径做基准测试，不经过 UI。
 pub mod screenshot_capture;
@@ -28,6 +29,7 @@ mod screenshot_window;
 /// （兼容性探测 + 完整会话 CLI + 标尺校验）。
 pub mod scroll_capture;
 mod startup;
+mod temp_cache;
 mod thumbnails;
 mod tray_menu;
 mod ui_scale;
@@ -182,6 +184,10 @@ pub fn run() {
             lan_share::stop_lan_share,
             lan_share::is_lan_share_active,
             ocr::ocr_image,
+            ocr::models::get_ocr_model_status,
+            ocr::models::download_ocr_model,
+            ocr::models::cancel_ocr_model_download,
+            ocr::models::remove_ocr_model,
             scroll_capture::tauri::start_scroll_capture,
             scroll_capture::tauri::stop_scroll_capture,
             scroll_capture::tauri::scroll_capture_progress,
@@ -202,6 +208,12 @@ pub fn run() {
             // 只在启动时清一次，避免用户当前正在查看的临时长截图被后台删掉。
             if cache_cleanup_after_hours > 0 {
                 match commands::clear_temp_cache(cache_cleanup_after_hours) {
+                    Ok(result) if result.failed_files > 0 => tracing::warn!(
+                        "自动清理临时缓存：已清理 {} 个，{} 个未能清理：{}",
+                        result.files,
+                        result.failed_files,
+                        result.first_error.as_deref().unwrap_or_default()
+                    ),
                     Ok(result) if result.files > 0 => tracing::info!(
                         "已自动清理 {} 个临时截图（{} 字节）",
                         result.files,

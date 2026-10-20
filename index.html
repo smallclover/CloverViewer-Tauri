@@ -189,21 +189,33 @@
                 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg>
                 <span data-i18n="settings.tab.general">常规</span>
               </button>
-              <button type="button" data-settings-tab="view">
-                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                <span data-i18n="settings.tab.view">查看</span>
+              <button type="button" data-settings-tab="appearance">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z"/></svg>
+                <span data-i18n="settings.tab.appearance">外观与桌宠</span>
               </button>
             </div>
 
             <div class="settings-nav-group" data-settings-nav-group>
-              <span class="settings-nav-label" data-i18n="settings.navGroup.capture">截图</span>
+              <span class="settings-nav-label" data-i18n="settings.navGroup.features">功能</span>
+              <button type="button" data-settings-tab="view">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span data-i18n="settings.tab.view">图片查看</span>
+              </button>
               <button type="button" data-settings-tab="capture">
                 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/></svg>
                 <span data-i18n="settings.tab.capture">截图</span>
               </button>
+              <button type="button" data-settings-tab="ocr">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 9h8M12 9v7"/></svg>
+                <span data-i18n="settings.tab.ocr">文字识别</span>
+              </button>
               <button type="button" data-settings-tab="hotkeys">
                 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
                 <span data-i18n="settings.tab.hotkeys">快捷键</span>
+              </button>
+              <button type="button" data-settings-tab="sharing">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>
+                <span data-i18n="settings.tab.sharing">局域网分享</span>
               </button>
             </div>
 
@@ -211,7 +223,7 @@
               <span class="settings-nav-label" data-i18n="settings.navGroup.maintenance">维护</span>
               <button type="button" data-settings-tab="cache">
                 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
-                <span data-i18n="settings.tab.cache">缓存</span>
+                <span data-i18n="settings.tab.cache">更新与缓存</span>
               </button>
             </div>
 
@@ -222,6 +234,23 @@
             <p class="settings-tab-desc" id="settings-current-desc"></p>
           </header>
           <div class="settings-body">
+            <section class="settings-group" data-settings-section="general">
+              <span class="settings-group-title" data-i18n="settings.language">语言 / Language</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-language" data-i18n="settings.language">语言 / Language</label>
+                    <span class="setting-desc" data-i18n="settings.language.desc">界面显示语言，切换后立即生效。</span>
+                  </div>
+                  <select id="set-language">
+                    <option value="Zh" data-i18n="settings.language.zh">简体中文</option>
+                    <option value="En" data-i18n="settings.language.en">English</option>
+                    <option value="Ja" data-i18n="settings.language.ja">日本語</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
             <section class="settings-group" data-settings-section="general">
               <span class="settings-group-title" data-i18n="settings.group.startup">启动与窗口</span>
               <div class="settings-card">
@@ -239,40 +268,12 @@
                   </div>
                   <input id="set-minimize" type="checkbox" />
                 </div>
-                <div class="setting-row">
-                  <div class="setting-text">
-                    <label for="set-desktop-pet" data-i18n="settings.desktopPet">桌面小宠物</label>
-                    <span class="setting-desc" data-i18n="settings.desktopPet.desc">显示四叶草小伙伴；可按住角色拖动，截图时会自动隐藏。</span>
-                  </div>
-                  <input id="set-desktop-pet" type="checkbox" />
-                </div>
-                <div class="setting-row">
-                  <div class="setting-text">
-                    <label for="set-desktop-pet-scale" data-i18n="settings.desktopPetScale">桌宠缩放</label>
-                    <span class="setting-desc" data-i18n="settings.desktopPetScale.desc">拖动后松开即可立即生效，适合按屏幕分辨率调整。</span>
-                  </div>
-                  <div class="zoom-row">
-                    <input id="set-desktop-pet-scale" type="range" min="60" max="200" step="5" value="100" />
-                    <output class="setting-value" id="set-desktop-pet-scale-value" for="set-desktop-pet-scale">100%</output>
-                  </div>
-                </div>
               </div>
             </section>
 
-            <section class="settings-group" data-settings-section="general">
-              <span class="settings-group-title" data-i18n="settings.group.appearance">语言与外观</span>
+            <section class="settings-group" data-settings-section="appearance">
+              <span class="settings-group-title" data-i18n="settings.group.appearance">界面外观</span>
               <div class="settings-card">
-                <div class="setting-row">
-                  <div class="setting-text">
-                    <label for="set-language" data-i18n="settings.language">语言 / Language</label>
-                    <span class="setting-desc" data-i18n="settings.language.desc">界面显示语言，切换后立即生效。</span>
-                  </div>
-                  <select id="set-language">
-                    <option value="Zh" data-i18n="settings.language.zh">简体中文</option>
-                    <option value="En" data-i18n="settings.language.en">English</option>
-                    <option value="Ja" data-i18n="settings.language.ja">日本語</option>
-                  </select>
-                </div>
                 <div class="setting-row">
                   <div class="setting-text">
                     <label for="set-theme" data-i18n="settings.theme">主题</label>
@@ -299,20 +300,7 @@
               </div>
             </section>
 
-            <section class="settings-group" data-settings-section="general">
-              <span class="settings-group-title" data-i18n="settings.group.update">更新</span>
-              <div class="settings-card">
-                <div class="setting-row">
-                  <div class="setting-text">
-                    <span data-i18n="settings.update">软件更新</span>
-                    <span class="setting-desc" data-i18n="settings.update.desc">检查是否有可用更新并在线安装。</span>
-                  </div>
-                  <button id="check-update" class="mini-btn" type="button" data-i18n="settings.checkUpdate">检查更新</button>
-                </div>
-              </div>
-            </section>
-
-            <section class="settings-group" data-settings-section="general">
+            <section class="settings-group" data-settings-section="appearance">
               <span class="settings-group-title" data-i18n="settings.windowDecoration">窗口装饰</span>
               <div class="settings-card">
                 <div class="setting-row">
@@ -344,6 +332,29 @@
                   <div class="zoom-row">
                     <input id="set-window-decoration-scale" type="range" min="60" max="140" step="5" value="100" />
                     <output class="setting-value" id="set-window-decoration-scale-value" for="set-window-decoration-scale">100%</output>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="appearance">
+              <span class="settings-group-title" data-i18n="settings.desktopPet">桌面小宠物</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-desktop-pet" data-i18n="settings.desktopPet">桌面小宠物</label>
+                    <span class="setting-desc" data-i18n="settings.desktopPet.desc">显示四叶草小伙伴；可按住角色拖动，截图时会自动隐藏。</span>
+                  </div>
+                  <input id="set-desktop-pet" type="checkbox" />
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-desktop-pet-scale" data-i18n="settings.desktopPetScale">桌宠缩放</label>
+                    <span class="setting-desc" data-i18n="settings.desktopPetScale.desc">拖动后松开即可立即生效，适合按屏幕分辨率调整。</span>
+                  </div>
+                  <div class="zoom-row">
+                    <input id="set-desktop-pet-scale" type="range" min="60" max="200" step="5" value="100" />
+                    <output class="setting-value" id="set-desktop-pet-scale-value" for="set-desktop-pet-scale">100%</output>
                   </div>
                 </div>
               </div>
@@ -424,31 +435,48 @@
               </div>
             </section>
 
-            <section class="settings-group" data-settings-section="capture">
-              <span class="settings-group-title" data-i18n="settings.group.lanShare">局域网分享</span>
+            <section class="settings-group" data-settings-section="ocr">
+              <span class="settings-group-title" data-i18n="settings.tab.ocr">文字识别</span>
               <div class="settings-card">
                 <div class="setting-row">
                   <div class="setting-text">
-                    <label for="set-lan-share-duration" data-i18n="settings.lanShareDuration">默认有效期</label>
-                    <span class="setting-desc" data-i18n="settings.lanShareDuration.desc">从创建分享链接起开始计时。</span>
+                    <label for="set-ocr-engine" data-i18n="ocr.engine">识别引擎</label>
+                    <span class="setting-desc" data-i18n="ocr.engine.hint">默认使用 Windows 自带识别，无需额外下载。高精度引擎下载后可手动切换，识别全程在本机完成。</span>
                   </div>
-                  <select id="set-lan-share-duration">
-                    <option value="60" data-i18n="settings.lanShareDuration.1m">1 分钟</option>
-                    <option value="300" data-i18n="settings.lanShareDuration.5m">5 分钟</option>
-                    <option value="600" data-i18n="settings.lanShareDuration.10m">10 分钟</option>
-                    <option value="1800" data-i18n="settings.lanShareDuration.30m">30 分钟</option>
-                    <option value="3600" data-i18n="settings.lanShareDuration.1h">1 小时</option>
+                  <select id="set-ocr-engine">
+                    <option value="system" data-i18n="ocr.engine.system">系统 OCR（默认）</option>
+                    <option id="ocr-paddle-option" value="paddle" disabled data-i18n="ocr.engine.paddle">高精度 OCR（PaddleOCR）</option>
                   </select>
                 </div>
                 <div class="setting-row">
                   <div class="setting-text">
-                    <label for="set-lan-share-download-limit" data-i18n="settings.lanShareDownloads">默认下载规则</label>
-                    <span class="setting-desc" data-i18n="settings.lanShareDownloads.desc">预览图片不会计入下载次数。</span>
+                    <label for="set-ocr-language" data-i18n="ocr.language">系统 OCR 语言</label>
+                    <span class="setting-desc" data-i18n="ocr.language.hint">自动模式尝试已安装的中英日语言包；指定语言可减少混淆。高精度模型自动识别中英日混合文字。</span>
                   </div>
-                  <select id="set-lan-share-download-limit">
-                    <option value="0" data-i18n="settings.lanShareDownloads.unlimited">有效期内不限次数</option>
-                    <option value="1" data-i18n="settings.lanShareDownloads.once">成功下载一次后失效</option>
+                  <select id="set-ocr-language">
+                    <option value="auto" data-i18n="ocr.language.auto">自动（中 / 英 / 日）</option>
+                    <option value="zh" data-i18n="ocr.language.zh">中文</option>
+                    <option value="en" data-i18n="ocr.language.en">English</option>
+                    <option value="ja" data-i18n="ocr.language.ja">日本語</option>
                   </select>
+                </div>
+              </div>
+            </section>
+            <section class="settings-group" data-settings-section="ocr">
+              <span class="settings-group-title" data-i18n="ocr.model.title">可选高精度组件</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label data-i18n="ocr.model.name">PP-OCRv5 · 中 / 英 / 日</label>
+                    <span class="setting-desc" data-i18n="ocr.model.hint">按需下载模型及运行库，不增加初始安装包体积。来源：RapidAI / ModelScope、Microsoft / GitHub；下载时联网，图片不上传。</span>
+                    <span id="ocr-model-status" class="setting-desc" role="status" aria-live="polite" data-i18n="ocr.model.loading">正在检查组件…</span>
+                    <progress id="ocr-model-progress" hidden aria-label="下载进度" data-i18n-aria-label="ocr.model.progress"></progress>
+                  </div>
+                  <div class="cache-action-row">
+                    <button id="ocr-model-download" class="mini-btn" type="button" disabled data-i18n="ocr.model.download">下载高精度组件</button>
+                    <button id="ocr-model-cancel" class="mini-btn" type="button" hidden data-i18n="ocr.model.cancel">取消下载</button>
+                    <button id="ocr-model-remove" class="mini-btn" type="button" disabled data-i18n="ocr.model.remove">删除组件</button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -485,6 +513,48 @@
                     <input id="set-scroll-hotkey" type="text" spellcheck="false" placeholder="Alt+Shift+S" />
                     <button id="set-scroll-hotkey-apply" class="mini-btn" data-i18n="settings.apply">应用</button>
                   </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="sharing">
+              <span class="settings-group-title" data-i18n="settings.group.lanShare">局域网分享</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-lan-share-duration" data-i18n="settings.lanShareDuration">默认有效期</label>
+                    <span class="setting-desc" data-i18n="settings.lanShareDuration.desc">从创建分享链接起开始计时。</span>
+                  </div>
+                  <select id="set-lan-share-duration">
+                    <option value="60" data-i18n="settings.lanShareDuration.1m">1 分钟</option>
+                    <option value="300" data-i18n="settings.lanShareDuration.5m">5 分钟</option>
+                    <option value="600" data-i18n="settings.lanShareDuration.10m">10 分钟</option>
+                    <option value="1800" data-i18n="settings.lanShareDuration.30m">30 分钟</option>
+                    <option value="3600" data-i18n="settings.lanShareDuration.1h">1 小时</option>
+                  </select>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <label for="set-lan-share-download-limit" data-i18n="settings.lanShareDownloads">默认下载规则</label>
+                    <span class="setting-desc" data-i18n="settings.lanShareDownloads.desc">预览图片不会计入下载次数。</span>
+                  </div>
+                  <select id="set-lan-share-download-limit">
+                    <option value="0" data-i18n="settings.lanShareDownloads.unlimited">有效期内不限次数</option>
+                    <option value="1" data-i18n="settings.lanShareDownloads.once">成功下载一次后失效</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-group" data-settings-section="cache">
+              <span class="settings-group-title" data-i18n="settings.group.update">更新</span>
+              <div class="settings-card">
+                <div class="setting-row">
+                  <div class="setting-text">
+                    <span data-i18n="settings.update">软件更新</span>
+                    <span class="setting-desc" data-i18n="settings.update.desc">检查是否有可用更新并在线安装。</span>
+                  </div>
+                  <button id="check-update" class="mini-btn" type="button" data-i18n="settings.checkUpdate">检查更新</button>
                 </div>
               </div>
             </section>

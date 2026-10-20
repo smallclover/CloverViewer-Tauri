@@ -25,9 +25,13 @@ export interface HotkeysConfig {
 }
 
 export type WindowDecoration = "off" | "lean" | "peek";
+export type OcrEngine = "system" | "paddle";
+export type OcrLanguage = "auto" | "zh" | "en" | "ja";
 
 export interface AppConfig {
   language: "Zh" | "En" | "Ja";
+  ocr_engine: OcrEngine;
+  ocr_language: OcrLanguage;
   theme: "dark" | "light" | "system";
   /** 主界面和截图界面的缩放百分比，默认 100%。 */
   ui_scale: 100 | 110 | 125 | 150;
@@ -156,7 +160,10 @@ export interface CacheSummary {
   bytes: number;
 }
 
-export interface CacheCleanupResult extends CacheSummary {}
+export interface CacheCleanupResult extends CacheSummary {
+  failed_files: number;
+  first_error: string | null;
+}
 
 export const getCacheSummary = () => invoke<CacheSummary>("get_cache_summary");
 
@@ -330,6 +337,19 @@ export const openContainingFolder = (path: string) =>
   invoke<void>("open_containing_folder", { path });
 
 export const ocrImage = (png: string) => invoke<string>("ocr_image", { png });
+
+export interface OcrModelStatus {
+  supported: boolean;
+  installed: boolean;
+  busy: boolean;
+  downloaded_bytes: number;
+  download_bytes: number;
+  installed_bytes: number;
+}
+export const getOcrModelStatus = () => invoke<OcrModelStatus>("get_ocr_model_status");
+export const downloadOcrModel = () => invoke<OcrModelStatus>("download_ocr_model");
+export const cancelOcrModelDownload = () => invoke<void>("cancel_ocr_model_download");
+export const removeOcrModel = () => invoke<OcrModelStatus>("remove_ocr_model");
 
 /** 物理坐标 (x, y) 处的顶层窗口矩形（用于绿框跟随鼠标自动框选窗口） */
 export interface WindowRect {

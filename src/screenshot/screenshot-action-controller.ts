@@ -1,3 +1,4 @@
+import { ocrErrorMessage } from "../ui/ocr-error";
 import {
   closeScreenshot,
   finishScreenshot,
@@ -109,7 +110,10 @@ export function createScreenshotActionController(options: ScreenshotActionContro
       await finishScreenshot("open", png, text);
     } catch (error) {
       if (current !== generation) return;
-      options.showNotice(options.translate("shot.ocrFailed", { msg: String(error) }), "error");
+      options.showNotice(
+        options.translate("shot.ocrFailed", { msg: ocrErrorMessage(error, options.translate) }),
+        "error",
+      );
     } finally {
       if (current === generation) {
         busy = false;

@@ -50,7 +50,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Right-click menu**: copy image, copy path, view, edit image
 *   **LAN sharing**: right-click an image to create a temporary link and QR code for devices on the same network to preview or download; configure its lifetime and one-download expiry in Settings
 *   **Rotate & flip**: R to rotate, H/V to flip
-*   **Image editing**: enter from the right-click menu or Ctrl+E; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete and undo/redo. Cropping offers a rule-of-thirds grid, edge and corner handles and selection movement; the exterior is dimmed while retaining its colors. Releasing the mouse smoothly centers and fits the retained area, with a stable scale during dragging. The bottom toolbar shows active-tool parameters; Save options provides format, output scale, save a copy and overwrite. Overwriting and discarding unsaved edits use an in-app confirmation. Small previews enlarge automatically up to 2×; wheel and button zoom, fit, 100%, and Space/middle-button panning are supported. Zoom controls share the bottom dock; in crop mode the frame stays fixed while zooming or panning the image to adjust the composition. Edits made while saving still require confirmation before exit. Exports are static and omit original EXIF/ICC data; JPEG uses 90% quality with white behind transparent pixels. Crop changes remain a draft until Enter applies or Esc cancels; image rotation has its own button. Reselect shapes and text to move or rotate them with corner handles; pen and mosaic strokes stay fixed. Text is adjustable immediately after entry. Reset all edits can be undone; contextual controls align above the drawing tools and hide when nothing is selected
+*   **Image editing**: enter from the right-click menu or Ctrl+E; crop, rotate, annotate (rectangle, ellipse, arrow, pen, mosaic, text), select/delete and undo/redo. Cropping offers a rule-of-thirds grid, edge and corner handles and selection movement; the exterior is dimmed while retaining its colors. Releasing the mouse smoothly centers and fits the retained area, with a stable scale during dragging. The bottom toolbar shows active-tool parameters; Save options provides format, output scale, save a copy and overwrite. Overwriting and discarding unsaved edits use an in-app confirmation. Small previews enlarge automatically up to 2×; wheel and button zoom, fit, 100%, and Space/middle-button panning are supported. Zoom controls share the bottom dock; in crop mode the frame stays fixed while zooming or panning the image to adjust the composition. Edits made while saving still require confirmation before exit. Exports are static and omit original EXIF/ICC data; JPEG uses 90% quality with white behind transparent pixels. Crop changes remain a draft until Enter applies or Esc cancels; image rotation has its own button. Reselect shapes and text to move or rotate them with corner handles; pen and mosaic strokes stay fixed. Text is adjustable immediately after entry. Reset all edits can be undone; contextual controls align above the drawing tools and hide when nothing is selected. New stroke, text, arrow and mosaic sizes are converted using the current preview scale; tool changes retain size choices.
 
 ### 📸 Screenshot & Annotation
 
@@ -63,7 +63,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
 *   **Export**: Enter to copy to clipboard / save to Desktop; the toolbar can open a regular screenshot directly in the viewer
 *   **LAN sharing**: after annotating, create a temporary link and QR code for devices on the same network to preview or download the screenshot
-*   **OCR text recognition**: based on the native Windows UWP OCR engine (`Windows.Media.Ocr`), multi-language (Chinese/English/Japanese), with grayscale + 2× nearest-neighbor upscaling preprocessing; opens the captured image and copyable, temporarily editable text in the viewer
+*   **OCR text recognition**: Windows OCR by default, with automatic or explicit Chinese/English/Japanese selection, original detail preservation and gentle enhancement for empty results. Settings → Text recognition offers an optional PP-OCRv5 download and manual engine switching or removal (about 154 MiB to download, 98 MiB installed; models and runtime are not bundled). Both engines run locally; copy or temporarily edit results in the viewer. After downloading, a Downloaded indicator distinguishes ready components from the active engine.
 
 ### 🤖 MCP Server (New)
 
@@ -90,7 +90,7 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 
 *   **Trilingual UI**: 简体中文 / English / 日本語, switchable on the fly; synchronizes the page language and adapts settings descriptions and editing controls to narrow windows
 *   **Light/dark theme**: follow system / dark / light; settings and image editing share rounded dropdown menus with mouse and keyboard selection; system-theme changes apply immediately
-*   **Interface scale**: defaults to 100%; choose 110% / 125% / 150% in Settings → General → Language & appearance. The viewer and screenshot interface update immediately and remember your choice; screenshots keep their original pixel dimensions
+*   **Interface scale**: defaults to 100%; choose 110% / 125% / 150% in Settings → Appearance & pet. The viewer and screenshot interface update immediately and remember your choice; screenshots keep their original pixel dimensions
 *   **Title-bar menus**: File (open image, open folder, settings) / Capture (screenshot, scrolling screenshot, capture settings) / Help (shortcuts, check for updates, about). F1 opens a two-column shortcut guide; click elsewhere or press Esc to close a menu
 *   **Global hotkey**: default **Alt+S** to summon the screenshot (available from tray; customizable)
 *   **System tray**: optionally minimize to tray on close; the right-click menu provides the main window, screenshot, scrolling screenshot, settings and quit. Menu language and capture-hotkey hints follow your settings
@@ -98,9 +98,9 @@ Wire it up in Claude Desktop's `claude_desktop_config.json`:
 *   **Single instance**: named mutex prevents repeated launches
 *   **Config compatibility**: shares `%APPDATA%\CloverViewer\config.json` with the egui version (falls back next to the exe for portable mode)
 *   **Desktop pet**: Displays a Live2D character with idle, blink, periodic nod, and mouse-follow behavior; it can be dragged, scaled from 60% to 200% in Settings, and automatically hides during screenshots. Right-click for screenshot, scrolling capture, main window, or quit.
-*   **Window character decorations**: Settings → General offers Off, A “Bottom-right companion”, or B “Top-right peek”, with a 60%–140% size slider. Transparent characters follow the main window and let clicks pass through; they hide when maximized, full screen, or capturing screenshots, and are controlled separately from the desktop pet.
-*   **Settings panel**: a full-page settings screen with categories and search (General / View / Capture / Hotkeys / Cache) and a description under every option — language, theme, zoom sensitivity, nearby image previews, the desktop pet and its scale, the three global hotkeys, magnifier, minimize to tray, launch on startup and software updates; LAN-sharing rules are under Capture
-*   **Temporary cache management**: Settings → Cache shows the count and size of temporary PNGs created when opening ordinary screenshots, long screenshots or OCR results in the viewer under `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand; this does not clear thumbnails or MCP screenshot storage
+*   **Window character decorations**: Settings → Appearance & pet offers Off, A “Bottom-right companion”, or B “Top-right peek”, with a 60%–140% size slider. Transparent characters follow the main window and let clicks pass through; they hide when maximized, full screen, or capturing screenshots, and are controlled separately from the desktop pet.
+*   **Settings panel**: Full-page settings with eight searchable categories: General, Appearance & pet, Image viewing, Capture, Text recognition, Hotkeys, LAN sharing, and Updates & cache. Search category names, group names or individual options; OCR downloads, engine selection, window decoration and sharing rules have dedicated sections
+*   **Temporary cache management**: Settings → Updates & cache shows the count and size of temporary PNGs created when opening ordinary screenshots, long screenshots or OCR results in the viewer under `%TEMP%\CloverViewer`, lets you set a retention period (7 days by default, cleaned on startup) or clear by age on demand; this does not clear thumbnails or MCP screenshot storage. Read and deletion failures include diagnostics; partial failure is not reported as a successful cleanup.
 *   **Software updates**: checked manually; persistent download progress and errors identify each stage, network downloads get up to three attempts, and installation starts only after signature verification
 
 ## 🖼️ Supported Formats
@@ -114,7 +114,7 @@ PNG · JPEG · GIF · BMP · WebP · TIFF (.tif / .tiff) · AVIF
 | Framework | [Tauri 2](https://tauri.app) |
 | Frontend | Vite · TypeScript · Canvas |
 | Screenshot | xcap |
-| OCR | Windows.Media.Ocr (native UWP) |
+| OCR | Windows.Media.Ocr (default); optional PP-OCRv5 + ONNX Runtime download |
 | MCP | rmcp + axum (streamable HTTP) |
 | Images | image · imageproc · kamadak-exif |
 | System integration | global-shortcut · single-instance · tray · winreg |
@@ -202,7 +202,7 @@ Windows 10 and 11 with WebView2 Runtime installed. The installer is a per-user N
 
 ### Does it upload my images or screenshots?
 
-There is no automatic upload to third-party services. Image browsing, capture, annotation, long-screenshot stitching and OCR all happen locally; there is no account system and no usage data collection. A LAN share you create temporarily lets devices on the same network access the image using its link. When you enable MCP, screenshots can be delivered to your connected AI client. Software updates contact GitHub Releases only when you press “Check for updates” under Settings → General → Software updates, then download an installer after confirmation; there is no background auto-check.
+There is no automatic upload to third-party services. Image browsing, capture, annotation, long-screenshot stitching and OCR all happen locally; there is no account system and no usage data collection. A LAN share you create temporarily lets devices on the same network access the image using its link. When you enable MCP, screenshots can be delivered to your connected AI client. Software updates contact GitHub Releases only when you press “Check for updates” under Settings → Updates & cache → Software updates, then download an installer after confirmation; there is no background auto-check. High-accuracy OCR components contact ModelScope and GitHub only when you request a download in Settings; recognition images are not uploaded.
 
 ### Does scrolling capture work in every app?
 
@@ -226,6 +226,7 @@ Configure `CloverViewer.exe --mcp` in `claude_desktop_config.json` as described 
 |----------|----------|
 | [MCP guide](docs/mcp-guide.md) | Setup, tool parameters, typical workflows, privacy and limits |
 | [Architecture and directories](docs/architecture.md) | Frontend / Rust backend responsibilities, data flow and maintenance boundaries |
+| [OCR engines and optional components](docs/ocr.md) | Recognition languages, high-accuracy downloads and removal, local inference, sizes and licenses |
 | [Scrolling capture V2 design](docs/scroll-capture-v2.md) | Manual-scroll-first invariants, modules and verification |
 | [Software updates and release signing](docs/auto-update.md) | Manual updates, signing keys, GitHub Secrets and update verification steps |
 | [Desktop pet assets](docs/desktop-pet-rigging.md) | Live2D model locations, runtime behavior and export checks |

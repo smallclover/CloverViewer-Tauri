@@ -7,6 +7,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--ocr-worker") {
+        cloverviewer_tauri_lib::run_ocr_worker();
+        return;
+    }
     // WebView2 创建后再设置透明背景仍可能先闪白；必须在创建任何 WebView
     // 和后台线程之前指定初始 ARGB 背景。仅影响本进程，不改系统环境变量。
     #[cfg(target_os = "windows")]

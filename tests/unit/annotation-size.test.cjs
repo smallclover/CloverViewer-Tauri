@@ -4,7 +4,7 @@ const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { runInNewContext } = require("node:vm");
 const ts = require("typescript");
-const { createAnnotationSizes, createPreviewAnnotationSizing, sizeKind } = require("../../.unit-test-dist/image-editor/annotation-style.js");
+const { createAnnotationSizes, imageAnnotationSizes, SIZE_PRESETS, sizeKind } = require("../../.unit-test-dist/image-editor/annotation-style.js");
 const { resizeShape } = require("../../.unit-test-dist/screenshot/resize.js");
 
 test("tool changes retain independent font, stroke and mosaic sizes", () => {
@@ -17,19 +17,39 @@ test("tool changes retain independent font, stroke and mosaic sizes", () => {
   assert.equal(sizes[sizeKind("mosaic")], 32);
 });
 
-test("image-editor defaults and every size preset stay legible in fitted large-image previews", () => {
-  for (const scale of [1, 0.75, 0.25, 0.2, 0.05]) {
-    const { sizes, presets } = createPreviewAnnotationSizing(scale);
-    for (const [kind, target] of Object.entries(createAnnotationSizes())) {
-      assert.ok(Math.abs(sizes[kind] * scale - target) <= scale / 2 + 0.00001);
-      assert.ok(presets[kind].includes(sizes[kind]), "adapted default must be selectable");
-      assert.ok(presets[kind].every(size => Number.isInteger(size) && size > 0));
+test("new annotation defaults and every preset retain their screen size at every preview zoom", () => {
+  for (const scale of [0.05, 0.2, 0.25, 0.75, 1, 2, 8, 40]) {
+    for (const [kind, presets] of Object.entries(SIZE_PRESETS)) {
+      for (const target of presets) {
+        const selected = { ...createAnnotationSizes(), [kind]: target };
+        const converted = imageAnnotationSizes(selected, scale);
+        assert.ok(Math.abs(converted[kind] * scale - target) < 0.00001);
+        assert.equal(selected[kind], target, "conversion does not change the toolbar selection");
+      }
     }
+    const converted = imageAnnotationSizes(createAnnotationSizes(), scale);
+    assert.equal(converted.arrowHeadSize * scale, 16);
   }
-  for (const scale of [0, NaN, Infinity, -1, 2]) {
-    assert.deepEqual(createPreviewAnnotationSizing(scale).sizes, createAnnotationSizes());
+  for (const scale of [0, NaN, Infinity, -1]) {
+    const { arrowHeadSize, ...sizes } = imageAnnotationSizes(createAnnotationSizes(), scale);
+    assert.deepEqual(sizes, createAnnotationSizes());
+    assert.equal(arrowHeadSize, 16);
   }
   assert.deepEqual(createAnnotationSizes(), {strokeWidth: 2, fontSize: 24, blockSize: 16});
+});
+
+test("arrow heads and strokes use the captured image size in both preview and export", () => {
+  const { drawAnnotation } = require("../../.unit-test-dist/image-editor/annotation-renderer.js");
+  for (const zoom of [0.2, 1, 2, 40]) {
+    const moves = [];
+    const context = { beginPath() {}, moveTo: (...args) => moves.push(args), lineTo() {}, stroke() {} };
+    const shape = { tool: "arrow", start: {x: 0, y: 100}, end: {x: 200, y: 100}, color: "red",
+      ...imageAnnotationSizes(createAnnotationSizes(), zoom) };
+    drawAnnotation(context, shape);
+    assert.equal(context.lineWidth * zoom, 2);
+    assert.ok(Math.abs((shape.end.x - moves[1][0]) * zoom - 16) < 0.00001);
+    assert.ok(Math.abs((moves[1][1] - shape.end.y) * zoom - 8) < 0.00001);
+  }
 });
 
 test("screenshot preview and export use image pixels regardless of interface scale", () => {

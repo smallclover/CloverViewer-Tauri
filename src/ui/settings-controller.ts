@@ -12,8 +12,10 @@ import {
 } from "../api";
 import { createConfigWriter } from "./config-writer";
 import type { Lang } from "../i18n";
-import { playEnterAnimation, setAnimatedVisibility, type ToastKind } from "./presentation";
+import { setAnimatedVisibility, type ToastKind } from "./presentation";
 import { createSelectControl } from "./select-control";
+import { createSettingsNavigation } from "./settings-navigation";
+import { createOcrSettingsController } from "./ocr-settings-controller";
 import { createUpdateController } from "./update-controller";
 import { createUpdateStatusView } from "./update-status-view";
 
@@ -94,8 +96,8 @@ export function createSettingsController(options: SettingsControllerOptions) {
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"));
   const navGroups = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-nav-group]"));
   const groups = Array.from(document.querySelectorAll<HTMLElement>("[data-settings-section]"));
-  let activeTab = "general";
   let clearingCache = false;
+  let cacheSummaryRequest = 0;
   let updateResolver: ((install: boolean) => void) | undefined;
 
   const refreshBorderControls = () => {
@@ -103,64 +105,19 @@ export function createSettingsController(options: SettingsControllerOptions) {
     for (const select of selects) select.refresh();
   };
 
-  const tabOf = (button: HTMLButtonElement) => button.dataset.settingsTab ?? "general";
-
-  /**
-   * 唯一的渲染入口：搜索词同时过滤左栏分类与右侧设置行，
-   * 过滤后当前分类若不可见就自动落到第一个可见分类。
-   */
-  const render = (animate = false) => {
-    const query = search.value.trim().toLowerCase();
-    const groupHits = new Map<HTMLElement, number>();
-    const tabHits = new Map<string, number>();
-    for (const group of groups) {
-      const tab = group.dataset.settingsSection ?? "general";
-      let hits = 0;
-      for (const row of group.querySelectorAll<HTMLElement>(".setting-row")) {
-        const hit = !query || (row.textContent ?? "").toLowerCase().includes(query);
-        row.hidden = !hit;
-        if (hit) hits += 1;
-      }
-      groupHits.set(group, hits);
-      tabHits.set(tab, (tabHits.get(tab) ?? 0) + hits);
-    }
-
-    for (const tab of tabs) {
-      tab.hidden =
-        Boolean(query) &&
-        !(tab.textContent ?? "").toLowerCase().includes(query) &&
-        (tabHits.get(tabOf(tab)) ?? 0) === 0;
-    }
-    for (const group of navGroups) {
-      group.hidden = !Array.from(
-        group.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"),
-      ).some((tab) => !tab.hidden);
-    }
-    searchEmpty.hidden = tabs.some((tab) => !tab.hidden);
-
-    const activeButton = tabs.find((tab) => tabOf(tab) === activeTab);
-    if (!activeButton || activeButton.hidden) {
-      const fallback = tabs.find((tab) => !tab.hidden);
-      if (fallback) activeTab = tabOf(fallback);
-    }
-    for (const tab of tabs) tab.classList.toggle("active", tabOf(tab) === activeTab);
-
-    for (const group of groups) {
-      const visible =
-        group.dataset.settingsSection === activeTab && (groupHits.get(group) ?? 0) > 0;
-      group.hidden = !visible;
-      if (visible && animate) playEnterAnimation(group, "tab-enter");
-    }
-
-    currentTabTitle.textContent = options.translate(`settings.tab.${activeTab}`);
-    currentTabDesc.textContent = options.translate(`settings.tab.${activeTab}.desc`);
-    for (const select of selects) select.refresh();
-  };
-
-  const selectTab = (tab: string) => {
-    activeTab = tab;
-    render(true);
-  };
+  const { render, selectTab } = createSettingsNavigation({
+    search,
+    tabs,
+    navGroups,
+    groups,
+    empty: searchEmpty,
+    title: currentTabTitle,
+    description: currentTabDesc,
+    translate: options.translate,
+    refreshControls: () => {
+      for (const select of selects) select.refresh();
+    },
+  });
 
   const writer = createConfigWriter({
     read: options.getConfig,
@@ -187,24 +144,35 @@ export function createSettingsController(options: SettingsControllerOptions) {
         return false;
       });
 
+  const ocr = createOcrSettingsController({
+    getConfig: options.getConfig,
+    save,
+    translate: options.translate,
+    toast: options.toast,
+  });
   const close = () => {
+    ocr.close();
     for (const select of selects) select.close();
     setAnimatedVisibility(overlay, false, 220);
     button.classList.remove("active");
     button.setAttribute("aria-pressed", "false");
   };
   const refreshCacheSummary = async () => {
+    const request = ++cacheSummaryRequest;
     try {
       const summary = await getCacheSummary();
+      if (request !== cacheSummaryRequest) return;
       cacheSummary.textContent = options.translate("settings.cacheUsageValue", {
         files: summary.files,
         size: formatSize(summary.bytes),
       });
     } catch {
+      if (request !== cacheSummaryRequest) return;
       cacheSummary.textContent = options.translate("settings.cacheUsageUnavailable");
     }
   };
   const fillValues = (config: AppConfig) => {
+    ocr.fillValues(config);
     language.value = config.language;
     theme.value = config.theme;
     uiScale.value = String(config.ui_scale);
@@ -228,6 +196,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     experimentalAutoScroll.checked = config.experimental_auto_scroll;
     minimize.checked = config.minimize_on_close;
     desktopPet.checked = config.desktop_pet_enabled;
+    desktopPetScale.disabled = !config.desktop_pet_enabled;
     desktopPetScale.value = String(config.desktop_pet_scale);
     desktopPetScaleValue.textContent = `${config.desktop_pet_scale}%`;
     autostart.checked = config.launch_on_startup;
@@ -241,6 +210,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     if (!config) return;
     fillValues(config);
     void refreshCacheSummary();
+    void ocr.refresh();
     // 每次打开都回到干净状态：无搜索词、停在「常规」。
     search.value = "";
     selectTab("general");
@@ -284,17 +254,6 @@ export function createSettingsController(options: SettingsControllerOptions) {
   });
   const checkForUpdate = updater.run;
 
-  tabs.forEach((tab) => {
-    tab.addEventListener("click", () => selectTab(tabOf(tab)));
-  });
-  search.addEventListener("input", () => render());
-  search.addEventListener("keydown", (event) => {
-    // Esc 先清空搜索词，不要顺手把整个设置页关掉。
-    if (event.key !== "Escape" || !search.value) return;
-    event.stopPropagation();
-    search.value = "";
-    render();
-  });
   overlay.addEventListener("mousedown", (event) => {
     if (event.target === overlay) close();
   });
@@ -304,6 +263,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
     options.setLanguage(next);
     options.applyI18n();
     updateStatus.render();
+    ocr.render();
     // 文案换了语言，分组标题与描述都要跟着重算。
     render();
     if (!updateOverlay.classList.contains("hidden") && !updateNotes.dataset.hasNotes) {
@@ -356,8 +316,10 @@ export function createSettingsController(options: SettingsControllerOptions) {
   minimize.addEventListener("change", () => save({ minimize_on_close: minimize.checked }));
   desktopPet.addEventListener("change", () => {
     const enabled = desktopPet.checked;
+    desktopPetScale.disabled = !enabled;
     void options.setDesktopPetEnabled(enabled).catch((error) => {
       desktopPet.checked = options.getConfig()?.desktop_pet_enabled ?? !enabled;
+      desktopPetScale.disabled = !desktopPet.checked;
       options.toast(options.translate("toast.desktopPetFailed", { msg: String(error) }), "error");
     });
   });
@@ -410,14 +372,24 @@ export function createSettingsController(options: SettingsControllerOptions) {
     clearCacheButton.disabled = true;
     void clearTempCache(Number(cacheClearAge.value))
       .then((result) => {
+        const failed = result.failed_files;
+        const key =
+          failed > 0
+            ? result.files > 0
+              ? "toast.cacheClearPartial"
+              : "toast.cacheClearIncomplete"
+            : result.files > 0
+              ? "toast.cacheCleared"
+              : "toast.cacheNothingToClear";
         options.toast(
-          options.translate("toast.cacheCleared", {
+          options.translate(key, {
             files: result.files,
             size: formatSize(result.bytes),
+            failed,
+            msg: result.first_error ?? "",
           }),
-          "success",
+          failed > 0 ? "error" : result.files > 0 ? "success" : "info",
         );
-        void refreshCacheSummary();
       })
       .catch((error) =>
         options.toast(options.translate("toast.cacheClearFailed", { msg: String(error) }), "error"),
@@ -425,6 +397,7 @@ export function createSettingsController(options: SettingsControllerOptions) {
       .finally(() => {
         clearingCache = false;
         clearCacheButton.disabled = false;
+        void refreshCacheSummary();
       });
   });
   checkUpdateButton.addEventListener("click", () => void checkForUpdate());

@@ -49,7 +49,7 @@ export const translations = {
     scrollStep2: "滚动内容",
     scrollStep3: "保存长图",
     ocrTitle: "让文字走出图片。",
-    ocrBody: "Windows 原生 OCR，识别中、英、日文字。提取后可直接复制，无需上传到在线识别服务。",
+    ocrBody: "默认使用 Windows OCR，支持自动或指定中、英、日语言；可按需下载 PP-OCRv5 高精度组件并手动切换。两种引擎都在本机识别，模型不捆绑进安装包。",
     ocrSample: "把灵感留在眼前。",
     ocrResult: "识别结果",
     ocrTag: "中文 / English / 日本語",
@@ -90,7 +90,7 @@ export const translations = {
       "支持 Windows 10 / 11，需要 WebView2 运行时。在 GitHub Releases 下载 NSIS 安装包即可，无需管理员权限；也可以使用便携版 CloverViewer.exe。",
     faq3: "图片和截图会上传吗？",
     answer3:
-      "不会上传到第三方服务。图片浏览、截图、标注、拼接和 OCR 都在本地完成。如果你主动创建局域网分享，持有链接的同一网络设备可以临时访问该图片；手动检查更新时会连接 GitHub Releases。",
+      "不会上传到第三方服务。图片浏览、截图、标注、拼接和 OCR 都在本地完成。如果你主动创建局域网分享，持有链接的同一网络设备可以临时访问该图片；手动检查更新时连接 GitHub Releases，主动下载高精度 OCR 组件时连接 ModelScope 和 GitHub，识别图片不上传。",
     faq4: "滚动截图支持所有应用吗？",
     answer4:
       "不能保证所有应用都成功。默认按你手动滚动的节奏拼接，自动滚动是默认关闭的试验功能。动态内容、大面积动画等可能影响拼接。Enter 完成并保留已验证内容，Esc 取消并丢弃本次截图。",
@@ -169,7 +169,7 @@ export const translations = {
     scrollStep3: "Save the capture",
     ocrTitle: "Free the words from the image.",
     ocrBody:
-      "Native Windows OCR recognizes Chinese, English and Japanese. Copy the extracted text without uploading to an online service.",
+      "Windows OCR by default, with automatic or explicit Chinese, English and Japanese selection. Download optional PP-OCRv5 components to switch to high-accuracy OCR. Both engines run locally; models are not bundled with the installer.",
     ocrSample: "Keep inspiration in sight.",
     ocrResult: "Recognized text",
     ocrTag: "中文 / English / 日本語",
@@ -213,7 +213,7 @@ export const translations = {
       "Windows 10 / 11 with the WebView2 runtime. Download the NSIS installer from GitHub Releases; no administrator access is needed. A portable CloverViewer.exe is also available.",
     faq3: "Are my images or screenshots uploaded?",
     answer3:
-      "They are not uploaded to third-party services. Viewing, capture, annotations, stitching and OCR run locally. A LAN share you create temporarily lets devices on the same network access the image using its link. Manual update checks connect to GitHub Releases.",
+      "They are not uploaded to third-party services. Viewing, capture, annotations, stitching and OCR run locally. A LAN share you create temporarily lets devices on the same network access the image using its link. Manual update checks connect to GitHub Releases; optional OCR component downloads connect to ModelScope and GitHub without uploading recognition images.",
     faq4: "Does scrolling capture work with every app?",
     answer4:
       "Success varies by app. Manual scrolling is the default; automatic scrolling is an optional experiment. Dynamic content and large animations can affect stitching. Enter finishes and keeps verified content; Esc cancels and discards this capture.",
@@ -293,7 +293,7 @@ export const translations = {
     scrollStep3: "長い画像を保存",
     ocrTitle: "画像の文字を、そのまま使う。",
     ocrBody:
-      "Windows 標準の OCR で日本語・英語・中国語を認識。オンラインサービスへ送信せず、抽出した文字をコピーできます。",
+      "標準の Windows OCR で日本語・英語・中国語を自動または個別に指定。必要に応じて PP-OCRv5 を取得し、高精度 OCR に切り替えられます。両エンジンとも端末内で認識し、モデルはインストーラーに同梱しません。",
     ocrSample: "ひらめきを、いつも目の前に。",
     ocrResult: "認識結果",
     ocrTag: "中文 / English / 日本語",
@@ -336,7 +336,7 @@ export const translations = {
       "Windows 10 / 11 と WebView2 ランタイムが必要です。GitHub Releases の NSIS インストーラーは管理者権限不要。ポータブル版 CloverViewer.exe も利用できます。",
     faq3: "画像やキャプチャはアップロードされますか？",
     answer3:
-      "外部サービスへアップロードしません。閲覧、キャプチャ、注釈、結合、OCR はローカル処理です。自分で LAN 共有を作成した場合のみ、リンクを持つ同一ネットワークの端末が一時アクセスできます。手動更新確認では GitHub Releases に接続します。",
+      "外部サービスへアップロードしません。閲覧、キャプチャ、注釈、結合、OCR はローカル処理です。自分で LAN 共有を作成した場合のみ、リンクを持つ同一ネットワークの端末が一時アクセスできます。手動更新確認は GitHub Releases、任意の OCR コンポーネント取得は ModelScope と GitHub に接続しますが、認識画像は送信しません。",
     faq4: "どのアプリでもスクロールキャプチャできますか？",
     answer4:
       "すべてのアプリでの成功は保証できません。既定は手動スクロールで、自動スクロールは任意の試験機能です。動的な内容や大きなアニメーションは結合に影響します。Enterで完了して検証済みの内容を保持し、Escでキャンセルして今回の撮影を破棄します。",

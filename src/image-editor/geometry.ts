@@ -21,6 +21,8 @@ export interface Shape {
   strokeWidth: number;
   fontSize?: number;
   blockSize?: number;
+  /** 箭头头部长度（原图像素），缺省时按线粗推导。 */
+  arrowHeadSize?: number;
   text?: string;
   /** 标注选框的顺时针角度；文字、矩形和椭圆绘制时也使用此局部角度。 */
   rotation?: number;

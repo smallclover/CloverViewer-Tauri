@@ -42,6 +42,7 @@ export function createAnnotationLayers(options: AnnotationLayerOptions) {
     shape.points,
     shape.points?.length,
     shape.rotation,
+    shape.arrowHeadSize,
   ];
   const same = (a: readonly unknown[], b: readonly unknown[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);

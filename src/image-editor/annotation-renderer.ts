@@ -1,7 +1,7 @@
 import { normRect, rotateVector, shapeBBox, type Pt, type Shape } from "./geometry";
 import { annotationFont, textFontSize } from "./annotation-style";
 
-function drawArrow(context: CanvasRenderingContext2D, start: Pt, end: Pt, strokeWidth: number) {
+function drawArrow(context: CanvasRenderingContext2D, start: Pt, end: Pt, size: number) {
   context.beginPath();
   context.moveTo(start.x, start.y);
   context.lineTo(end.x, end.y);
@@ -10,7 +10,6 @@ function drawArrow(context: CanvasRenderingContext2D, start: Pt, end: Pt, stroke
   if (!length) return;
   const ux = (end.x - start.x) / length;
   const uy = (end.y - start.y) / length;
-  const size = 12 + strokeWidth * 2;
   context.beginPath();
   context.moveTo(end.x - ux * size - uy * size * 0.5, end.y - uy * size + ux * size * 0.5);
   context.lineTo(end.x, end.y);
@@ -58,7 +57,14 @@ export function drawAnnotation(context: CanvasRenderingContext2D, shape: Shape, 
       context.stroke();
       break;
     case "arrow":
-      drawArrow(context, shape.start, shape.end, shape.strokeWidth * scale);
+      drawArrow(
+        context,
+        shape.start,
+        shape.end,
+        shape.arrowHeadSize !== undefined
+          ? shape.arrowHeadSize * scale
+          : 12 + shape.strokeWidth * scale * 2,
+      );
       break;
     case "pen":
       if (!shape.points || shape.points.length < 2) break;

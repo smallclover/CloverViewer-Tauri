@@ -42,7 +42,7 @@
 - CSS：按页面或组件分组，统一保留设计 token/全局变量，避免按单条属性机械分文件。
 - 先提取低耦合、已有测试覆盖的部分；每次拆分后保持行为不变，并补充模块级测试。
 
-## 当前基线（2026-10-18）
+## 当前基线（2026-10-20）
 
 按物理行数盘点，以下项目自有源码文件超过 500 行。它们目前都未达到 1,000 有效代码行，不需要仅因行数安排拆分：
 
@@ -53,11 +53,12 @@
 | `src-tauri/src/screenshot.rs` | 622 | 截图原生实现；屏幕像素、窗口创建和后台图像任务已提取为独立模块。 |
 | `src-tauri/src/scroll_capture/platform.rs` | 692 | 滚动截图平台交互；保持平台调用与算法边界。 |
 | `src-tauri/src/scroll_capture/tauri.rs` | 800 | 滚动截图命令桥接；共享结果与后台导出归宿主协调，算法放入领域模块。 |
-| `src/viewer/image-editor-controller.ts` | 865 | 图片编辑会话；保存、裁剪事务与视图、标注选择和旋转、缩放输入及工具栏已拆为独立模块。 |
-| `src-tauri/src/mcp/mod.rs` | 566 | MCP 入口与组装；图片响应和文件 IO 通过受控后台任务执行。 |
-| `src-tauri/src/ocr.rs` | 515 | Windows OCR 与图像预处理；包含依赖 feature 裁剪的参考像素回归测试。 |
+| `src/viewer/image-editor-controller.ts` | 870 | 图片编辑会话；保存、裁剪事务与视图、标注选择和旋转、缩放输入及工具栏已拆为独立模块。 |
+| `src-tauri/src/mcp/mod.rs` | 567 | MCP 入口与组装；图片响应和文件 IO 通过受控后台任务执行。 |
 
 `src/live2d-framework/` 是引入的框架源码，不按项目自有业务文件的行数目标拆分。多语言静态数据同样属于上文的例外。
+
+OCR 已拆分为 `ocr.rs`（命令路由与系统引擎）及 `ocr/processing.rs`（输入与文字处理）、`assets.rs`（资产版本与哈希）、`models.rs`（下载与删除）、`paddle.rs`（模型推理）、`worker.rs`（独立进程）。各模块均低于 500 有效代码行；前端组件设置由 `ui/ocr-settings-controller.ts` 管理，分类搜索由 `ui/settings-navigation.ts` 管理，均不回填到页面入口。
 
 页面骨架文件（`index.html`、`screenshot.html`）不计入本规范的统计口径。主窗口样式已由 `src/styles.css` 入口按职责拆分到 `src/styles/`；截图覆盖窗样式同样由 `src/styles/screenshot.css` 入口按基础、工具栏、编辑 UI、分享、滚动截图与提示拆分到 `src/styles/screenshot/`。
 

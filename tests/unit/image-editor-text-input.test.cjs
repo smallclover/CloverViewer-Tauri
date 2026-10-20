@@ -89,10 +89,8 @@ async function setup() {
         toolbarActions = actions;
         toolbar = { color: { value: "#ff0000" }, width: { addEventListener: () => {} }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
           refreshTranslations: () => {}, refreshHistory: () => {}, setSelection: selected => {toolbar.selected=selected;}, setActiveTool: tool => {activeTool=tool;}, closePanels: () => {}, updateLayout: () => {},
-          initializeSizes: scale => {
-            assert.equal(root.classList.contains("hidden"), false, "measure the visible editor");
-            const { createPreviewAnnotationSizing } = require("../../.unit-test-dist/image-editor/annotation-style.js");
-            Object.assign(toolbar.sizes, createPreviewAnnotationSizing(scale).sizes);
+          resetSizes: () => {
+            Object.assign(toolbar.sizes, require("../../.unit-test-dist/image-editor/annotation-style.js").createAnnotationSizes());
           } };
         return toolbar;
       } };
@@ -548,22 +546,52 @@ test("mosaic retains every input point, paints once per frame and commits a retu
   assert.equal(fixture.drawn.filter(item => item.tool === "mosaic").length, 1);
 });
 
-test("manual sizes and committed annotations survive tool switching and later preview resizing", async () => {
+test("manual screen sizes survive tool switches and adapt new text to the latest preview zoom", async () => {
   const fixture = await setup();
   fixture.click(); fixture.flush(); fixture.input.value = "First"; fixture.key();
   const first = JSON.stringify(fixture.drawn[0]);
-  fixture.toolbar.sizes.fontSize = 160;
-  fixture.toolbar.sizes.strokeWidth = 20;
+  fixture.toolbar.sizes.fontSize = 32;
+  fixture.toolbar.sizes.strokeWidth = 4;
   fixture.toolbarActions.setTool("rect");
   fixture.toolbarActions.setTool("text");
   fixture.resizePreview(0.1);
   fixture.click(); fixture.flush(); fixture.input.value = "Second"; fixture.key();
-  assert.equal(parseFloat(fixture.input.style.font.split(" ")[1]), 16);
-  assert.equal(fixture.toolbar.sizes.fontSize, 160);
-  assert.equal(fixture.toolbar.sizes.strokeWidth, 20);
-  assert.equal(fixture.drawn.at(-1).fontSize, 160);
-  assert.equal(fixture.drawn.at(-1).strokeWidth, 20);
+  assert.equal(parseFloat(fixture.input.style.font.split(" ")[1]), 32);
+  assert.equal(fixture.toolbar.sizes.fontSize, 32);
+  assert.equal(fixture.toolbar.sizes.strokeWidth, 4);
+  assert.equal(fixture.drawn.at(-1).fontSize, 320);
+  assert.equal(fixture.drawn.at(-1).strokeWidth, 40);
   assert.equal(JSON.stringify(fixture.drawn[0]), first);
+});
+
+test("crop enlargement keeps new strokes, arrow heads, text and mosaic at the selected screen size", async () => {
+  for (const tool of ["rect", "circle", "arrow", "pen", "mosaic", "text"]) {
+    const f = await setup();
+    f.click(); f.flush(); f.input.value = "Before crop"; f.key();
+    const original = JSON.stringify(f.drawn[0]);
+    f.toolbarActions.setTool("crop");
+    f.cropGesture({ x: 500, y: 200, w: 200, h: 150 });
+    f.toolbarActions.applyCrop();
+    f.resizePreview(2);
+    f.toolbarActions.setTool(tool);
+    f.click(300, 160);
+    if (tool === "text") {
+      f.flush();
+      assert.ok(f.input.style.font.startsWith("600 24px"));
+      f.input.value = "After crop"; f.key();
+    } else {
+      f.canvas.fire("pointerup", {clientX: 400, clientY: 260, pointerId: 1});
+    }
+    const shape = f.drawn.at(-1);
+    assert.equal(shape.tool, tool);
+    assert.equal(shape.strokeWidth * 2, 2);
+    if (tool === "arrow") assert.equal(shape.arrowHeadSize * 2, 16);
+    if (tool === "mosaic") assert.equal(shape.blockSize * 2, 16);
+    if (tool === "text") assert.equal(shape.fontSize * 2, 24);
+    assert.equal(JSON.stringify(f.drawn[0]), original, "existing annotations retain their image sizes");
+    f.toolbarActions.undo(); f.toolbarActions.redo();
+    assert.equal(f.drawn.at(-1).strokeWidth, shape.strokeWidth);
+  }
 });
 
 test("IME confirmation and Shift+Enter remain in the text field; a normal Enter commits", async () => {

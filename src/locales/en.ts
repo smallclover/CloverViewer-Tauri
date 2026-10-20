@@ -1,6 +1,57 @@
 import type { TranslationDictionary } from "./zh-CN";
 
 export const en = {
+  "settings.tab.ocr": "Text recognition",
+  "settings.tab.ocr.desc":
+    "Choose OCR languages and manage optional local high-accuracy components.",
+  "ocr.engine": "Recognition engine",
+  "ocr.engine.hint":
+    "Windows OCR requires no extra download. After downloading the high-accuracy engine, select it manually. Recognition runs locally.",
+  "ocr.engine.system": "System OCR (default)",
+  "ocr.engine.paddle": "High-accuracy OCR (PaddleOCR)",
+  "ocr.language": "System OCR language",
+  "ocr.language.hint":
+    "Auto tries installed Chinese, English and Japanese OCR packs. Choose a language to reduce ambiguity. The high-accuracy model recognizes mixed text automatically.",
+  "ocr.language.auto": "Auto (Chinese / English / Japanese)",
+  "ocr.language.zh": "Chinese",
+  "ocr.language.en": "English",
+  "ocr.language.ja": "Japanese",
+  "ocr.model.title": "Optional high-accuracy components",
+  "ocr.model.name": "PP-OCRv5 · Chinese / English / Japanese",
+  "ocr.model.hint":
+    "Download models and runtime as needed; images are never uploaded. Sources: RapidAI / ModelScope and Microsoft / GitHub. About 154 MiB to download, 98 MiB installed; excluded from the initial installer.",
+  "ocr.model.loading": "Checking components…",
+  "ocr.model.progress": "Download progress",
+  "ocr.model.download": "Download components",
+  "ocr.model.complete": "✓ Downloaded",
+  "ocr.model.cancel": "Cancel download",
+  "ocr.model.remove": "Delete components",
+  "ocr.model.absent":
+    "Not installed · Full download: {total}; saved: {size}. Retry or delete saved files.",
+  "ocr.model.ready": "✓ Ready · {size} · Not enabled. Select high-accuracy OCR above to use it.",
+  "ocr.model.active": "✓ Downloaded and enabled · {size} · High-accuracy OCR is in use.",
+  "ocr.model.downloading": "Downloading and verifying {received} / {total}…",
+  "ocr.model.removing": "Deleting components…",
+  "ocr.model.unsupported": "High-accuracy components currently support Windows x64.",
+  "ocr.model.unavailable": "Component status is unavailable. Reopen settings to retry.",
+  "ocr.model.downloaded": "Components are ready. You can now select the high-accuracy engine.",
+  "ocr.model.downloadFailed":
+    "Download or verification failed. Check your connection and retry; completed files are kept.",
+  "ocr.model.cancelFailed": "Could not cancel the download. Please retry.",
+  "ocr.model.removed": "Components deleted. System OCR is now selected.",
+  "ocr.model.removeFailed":
+    "Some components could not be deleted. Retry later. System OCR is now selected.",
+  "ocr.error.language":
+    "Windows OCR support for this language is missing. Install its language pack in Windows settings or download the high-accuracy components.",
+  "ocr.error.missing":
+    "High-accuracy components are missing or incomplete. Download them in Text recognition settings or select System OCR.",
+  "ocr.error.corrupt":
+    "Component verification failed. Delete the components and download them again.",
+  "ocr.error.busy": "Components are in use or being managed. Please retry shortly.",
+  "ocr.error.worker":
+    "High-accuracy recognition could not finish. Try a smaller selection or select System OCR.",
+  "ocr.error.unsupported": "The selected OCR engine is not supported on this system.",
+  "ocr.error.large": "This image is too large. Try a smaller selection.",
   "toolbar.open": "Open Folder",
   "toolbar.openTitle": "Open Folder (Ctrl+O)",
   "toolbar.rotate": "Rotate (R)",
@@ -99,20 +150,26 @@ export const en = {
   "settings.search": "Search settings…",
   "settings.searchEmpty": "No matching settings",
   "settings.navGroup.app": "App",
-  "settings.navGroup.capture": "Capture",
+  "settings.navGroup.features": "Features",
   "settings.navGroup.maintenance": "Maintenance",
   "settings.tab.general": "General",
-  "settings.tab.view": "View",
+  "settings.tab.appearance": "Appearance & pet",
+  "settings.tab.view": "Image viewing",
   "settings.tab.capture": "Capture",
-  "settings.tab.cache": "Cache",
+  "settings.tab.sharing": "LAN sharing",
+  "settings.tab.cache": "Updates & cache",
   "settings.tab.hotkeys": "Hotkeys",
-  "settings.tab.general.desc": "Language, theme, startup, and software updates.",
+  "settings.tab.general.desc": "Language, startup, and what happens when you close the window.",
+  "settings.tab.appearance.desc": "Theme, interface size, window decoration, and desktop pet.",
   "settings.tab.view.desc": "Fine-tune how images respond while browsing.",
   "settings.tab.capture.desc": "Capture behaviour and assistive options.",
   "settings.tab.hotkeys.desc": "Global shortcuts; press Apply to make a change take effect.",
-  "settings.tab.cache.desc": "Where temporary captures live and when they are cleaned up.",
+  "settings.tab.sharing.desc":
+    "Default expiration and download rules for shared images and captures.",
+  "settings.tab.cache.desc":
+    "Check for updates, view temporary capture cache usage, and manage cleanup.",
   "settings.group.startup": "Startup & window",
-  "settings.group.appearance": "Language & appearance",
+  "settings.group.appearance": "Interface appearance",
   "settings.group.update": "Updates",
   "settings.group.browsing": "Browsing",
   "settings.group.capture": "Capture behaviour",
@@ -268,6 +325,10 @@ export const en = {
     "The desktop pet timed out. Trying to turn it off; restart the app if it stays unresponsive.",
   "toast.saveFailed": "Save failed",
   "toast.cacheCleared": "Cleared {files} temporary files, freed {size}",
+  "toast.cacheClearPartial":
+    "Cleared {files} temporary files, freed {size}; could not clear {failed} files: {msg}",
+  "toast.cacheClearIncomplete": "Could not clear {failed} temporary files: {msg}",
+  "toast.cacheNothingToClear": "No temporary files match the cleanup conditions",
   "toast.cacheClearFailed": "Failed to clear cache: {msg}",
   "toast.openFolderFailed": "Could not open containing folder: {msg}",
   "prop.filename": "File Name",
@@ -373,7 +434,7 @@ export const en = {
   "editor.sizePixels":
     "px means original image pixels. Preview zoom and reduced-size export scale annotations proportionally.",
   "editor.imageSizePixels":
-    "Defaults adapt to the preview scale when an image opens. Values are original image pixels; existing annotations scale with the image in preview and export.",
+    "px means screen pixels when drawing. New annotations adapt to the current preview zoom; existing annotations scale with the image in preview and export.",
   "shot.rect": "Rectangle",
   "shot.circle": "Ellipse",
   "shot.arrow": "Arrow",

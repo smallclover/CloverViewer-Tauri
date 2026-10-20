@@ -69,7 +69,7 @@ list_monitors → take_screenshot → AI 分析图片
 | `list_monitors` | 返回当前显示器的 ID、索引、名称、虚拟桌面坐标、尺寸、主屏状态和可用缩放信息。 |
 | `take_screenshot` | 捕获活动窗口、指定显示器、全部显示器或单显示器内的区域。 |
 | `get_screenshot` | 通过 `captureId` 重新读取本 MCP 服务进程创建的截图。 |
-| `ocr_screenshot` | 对已有截图进行 Windows OCR；语言可选 `zh`、`en` 或 `ja`。 |
+| `ocr_screenshot` | 使用应用选定的本地 OCR 引擎识别已有截图；系统 OCR 语言可选 `zh`、`en` 或 `ja`。 |
 | `delete_screenshot` | 删除指定截图。 |
 
 `take_screenshot` 的主要参数：
@@ -87,7 +87,7 @@ list_monitors → take_screenshot → AI 分析图片
 | 工具 | 输入 |
 | --- | --- |
 | `get_screenshot` | 必填 `capture_id`；可选 `delivery`、`max_width`，与截图工具的交付选项相同。 |
-| `ocr_screenshot` | 必填 `capture_id`；可选 `language: "zh" / "en" / "ja"`，省略时按系统语言选择。 |
+| `ocr_screenshot` | 必填 `capture_id`；可选 `language: "zh" / "en" / "ja"`，覆盖系统 OCR 语言偏好；省略时使用应用 OCR 设置。高精度模型始终自动识别中英日混合文字。 |
 | `delete_screenshot` | 必填 `capture_id`。 |
 
 `delivery: "image"` 返回 PNG 图片内容和结构化元数据；`"both"` 额外包含服务端文件路径。

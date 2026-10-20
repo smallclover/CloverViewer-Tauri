@@ -1,5 +1,23 @@
 # Third-party notices
 
+## Optional OCR components
+
+The default installer contains neither OCR model weights nor the ONNX Runtime DLLs.
+Users may download the following components from Settings → Text recognition:
+
+- PP-OCRv5 detection and recognition models, developed by PaddlePaddle/PaddleOCR,
+  under Apache-2.0. The ONNX conversions are distributed by RapidAI/RapidOCR on
+  ModelScope. The complete [PaddleOCR license](docs/PaddleOCR-LICENSE) is copied
+  into the component directory during installation.
+- Microsoft ONNX Runtime 1.22.0 CPU DLLs under the MIT License. The official
+  runtime archive's `LICENSE` and `ThirdPartyNotices.txt` are retained alongside
+  the DLLs, including notices for its dependencies.
+
+The application uses the `ort` Rust bindings (MIT OR Apache-2.0) for dynamic
+loading. Model versions, sources, hashes and installation behavior are documented
+in the [OCR guide](docs/ocr.md). Repository-owned OCR integration code remains
+under this repository's MIT License.
+
 ## Live2D Cubism SDK for Web
 
 This repository bundles components of the Live2D Cubism SDK for Web:

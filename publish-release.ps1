@@ -154,12 +154,17 @@ try {
   }
 
   $remoteSha = $null
-  foreach ($line in (Invoke-Git @('ls-remote', '--tags', 'origin', "refs/tags/$Tag")).Output) {
-    if ($line -and $line -notmatch '\^\{\}') {
-      $remoteSha = ($line -split '\s+')[0]
+  $remoteTag = Invoke-Git @('ls-remote', '--exit-code', '--tags', 'origin', "refs/tags/$Tag")
+  # 2 表示没有匹配的引用；网络或鉴权失败不得按「标签不存在」继续。
+  if ($remoteTag.ExitCode -notin @(0, 2)) { Fail '无法检查远端标签，请检查网络 / SSH 凭据。' }
+  $remotePattern = '^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})\s+refs/tags/' + [regex]::Escape($Tag) + '$'
+  foreach ($line in $remoteTag.Output) {
+    if ($line -match $remotePattern) {
+      $remoteSha = $Matches[1]
       break
     }
   }
+  if ($remoteTag.ExitCode -eq 0 -and -not $remoteSha) { Fail '远端标签查询未返回合法引用，拒绝继续发布。' }
 
   if ($localSha -and $localSha -ne $headSha -and -not $MoveExistingTag) {
     Fail "本地标签 $Tag 已存在且指向 $($localSha.Substring(0, 7))，不是当前 HEAD。确需把它移到 HEAD 请加 -MoveExistingTag。"

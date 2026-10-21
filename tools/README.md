@@ -51,6 +51,10 @@ node tools/scroll-ui-geometry-check.cjs
 两种模式重新运行前都需适配当前截图命令和视口就绪流程，并按文件头说明处理 Windows manifest。
 日常验证仍运行上面的单元测试；真实混合 DPI 与多屏检查按架构文档执行。
 
+## 发布标签守卫
+
+运行 `./tools/test-release-tag-check.ps1`，验证发布脚本只把精确匹配的 Git 引用识别为远端标签，并在网络失败时停止。测试提取实际守卫，使用模拟 Git 输出，不访问网络、不创建或推送标签；发布工作流同样执行它。
+
 ## Live2D 模型包校验
 
 ```powershell

@@ -116,6 +116,7 @@ Invoke-RestMethod -Method Post -Uri "$repo/pages" -Headers $h -Body (@{ build_ty
 
 ```powershell
 npm run release:check        # CHANGELOG 段落、三语同步、介绍页/sitemap 一致性、密钥忽略
+./tools/test-release-tag-check.ps1 # 远端标签守卫：SSH 提示、网络失败与引用匹配
 npm run version:sync         # 确保派生版本文件已同步（幂等）
 npm run check                # 格式 / lint / 类型 / 单元测试 / 版本一致性
 cargo fmt --check --manifest-path src-tauri/Cargo.toml

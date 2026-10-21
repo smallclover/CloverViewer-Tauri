@@ -61,6 +61,10 @@ jobs:
       - name: Check frontend
         run: npm run check
 
+      - name: Check release tag guard
+        shell: pwsh
+        run: ./tools/test-release-tag-check.ps1
+
       # package.json 是应用版本的唯一来源；标签必须与它完全一致，避免发布包、
       # About 页面和 Release 标题出现不同版本。
       - name: Verify release version

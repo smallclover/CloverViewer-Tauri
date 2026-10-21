@@ -48,7 +48,7 @@ export function createToast(toastEl: HTMLElement) {
     if (hideTimer !== undefined) window.clearTimeout(hideTimer);
     toastEl.textContent = "";
     toastEl.setAttribute("role", kind === "error" ? "alert" : "status");
-    const icon = kind === "success" ? "✓" : kind === "error" ? "✕" : "";
+    const icon = kind === "success" ? "✓" : kind === "error" ? "!" : "";
     if (icon || kind === "progress") {
       const iconElement = document.createElement("span");
       iconElement.className = `toast-ic ${kind}`;

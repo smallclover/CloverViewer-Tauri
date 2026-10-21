@@ -231,16 +231,22 @@ test("failed metadata checks retain feedback and release the button for another 
 
 function setupStatusView() {
   const nodes = new Map();
+  const timers = new Map();
+  let now = 0;
+  let nextTimer = 0;
+  let dismissals = 0;
   const node = id => {
     if (!nodes.has(id)) {
       const classes = new Set(["hidden"]);
       const attributes = new Map();
+      const listeners = new Map();
       nodes.set(id, {
         hidden: true,
         classList: { toggle: (name, enabled) => enabled ? classes.add(name) : classes.delete(name), contains: name => classes.has(name) },
         setAttribute: (name, value) => attributes.set(name, value),
         removeAttribute: name => attributes.delete(name),
-        addEventListener: () => {},
+        addEventListener: (name, listener) => listeners.set(name, listener),
+        click: () => listeners.get("click")?.(),
       });
     }
     return nodes.get(id);
@@ -252,17 +258,41 @@ function setupStatusView() {
   }).outputText, {
     exports,
     require: name => {
+      if (name === "../version") return { APP_VERSION: "0.1.25" };
       assert.equal(name, "../api");
       return { formatSize: bytes => `${bytes} bytes` };
     },
     document: { getElementById: node },
+    Date: { now: () => now },
+    window: {
+      setTimeout: (callback, delay) => {
+        const id = ++nextTimer;
+        timers.set(id, { callback, at: now + delay });
+        return id;
+      },
+      clearTimeout: id => timers.delete(id),
+    },
   });
   let busy = true;
   const view = exports.createUpdateStatusView({
     checkButton: node("check-update"), translate: (key, vars) => `${key}:${JSON.stringify(vars ?? {})}`,
-    isBusy: () => busy, onRetry: () => {}, onDismiss: () => {},
+    isBusy: () => busy, onRetry: () => {}, onDismiss: () => {
+      dismissals++;
+      view.render({ phase: "idle" });
+    },
   });
-  return { view, node, finish: () => { busy = false; } };
+  const advance = milliseconds => {
+    const end = now + milliseconds;
+    while (true) {
+      const next = [...timers].sort((a, b) => a[1].at - b[1].at)[0];
+      if (!next || next[1].at > end) break;
+      now = next[1].at;
+      timers.delete(next[0]);
+      next[1].callback();
+    }
+    now = end;
+  };
+  return { view, node, advance, timers, dismissals: () => dismissals, finish: () => { busy = false; } };
 }
 
 test("status panel keeps checking and download feedback visible and uses real progress values", () => {
@@ -272,6 +302,8 @@ test("status panel keeps checking and download feedback visible and uses real pr
   assert.equal(node("check-update").disabled, true);
   assert.equal(node("update-status-spinner").hidden, false);
   assert.match(node("update-status-message").textContent, /update.checking/);
+  assert.equal(node("update-status-description").hidden, false);
+  assert.match(node("update-status-description").textContent, /update.checkingDescription.*0.1.25/);
   view.render({ phase: "downloading", percent: 50, downloaded: 500, total: 1000 });
   assert.equal(node("update-status").classList.contains("hidden"), false);
   assert.equal(node("update-progress").hidden, false);
@@ -279,6 +311,7 @@ test("status panel keeps checking and download feedback visible and uses real pr
   view.render({ phase: "downloading", downloaded: 65536 });
   assert.match(node("update-status-message").textContent, /update.downloadingUnknown/);
   assert.match(node("update-status-message").textContent, /65536 bytes/);
+  assert.equal(node("update-status-description").hidden, true);
 });
 
 test("download failures stay visible with details and retry, and differ from installation failures", () => {
@@ -296,4 +329,60 @@ test("download failures stay visible with details and retry, and differ from ins
   assert.match(node("update-status-message").textContent, /update.installFailed/);
   view.render({ phase: "idle" });
   assert.equal(node("update-status").classList.contains("hidden"), true);
+});
+
+test("latest result shows the current version and closes after five seconds without resetting on redraw", () => {
+  const { view, node, finish, advance, timers, dismissals } = setupStatusView();
+  view.render({ phase: "latest" });
+  assert.equal(timers.size, 0); // Wait for the controller to release its resources.
+  finish();
+  view.render();
+  assert.equal(node("update-status-icon").hidden, false);
+  assert.equal(node("update-status-spinner").hidden, true);
+  assert.match(node("update-status-description").textContent, /update.latestDescription.*0.1.25/);
+  assert.match(node("update-dismiss-countdown").textContent, /"seconds":5/);
+  advance(2000);
+  view.render(); // Includes a language-change redraw.
+  assert.equal(timers.size, 1);
+  assert.match(node("update-dismiss-countdown").textContent, /"seconds":3/);
+  advance(2999);
+  assert.equal(dismissals(), 0);
+  advance(1);
+  assert.equal(dismissals(), 1);
+  assert.equal(node("update-status").classList.contains("hidden"), true);
+  assert.equal(timers.size, 0);
+});
+
+test("a new check or error cancels the previous countdown and errors remain visible", () => {
+  const { view, node, finish, advance, timers, dismissals } = setupStatusView();
+  finish();
+  view.render({ phase: "latest" });
+  advance(2000);
+  view.render({ phase: "checking" });
+  assert.equal(timers.size, 0);
+  advance(5000);
+  assert.equal(dismissals(), 0);
+  view.render({ phase: "latest" });
+  assert.match(node("update-dismiss-countdown").textContent, /"seconds":5/);
+  view.render({ phase: "error", errorStage: "checking", error: "network unavailable" });
+  advance(10000);
+  assert.equal(dismissals(), 0);
+  assert.equal(node("update-status").classList.contains("hidden"), false);
+  assert.equal(node("update-dismiss-countdown").hidden, true);
+  assert.equal(node("update-status-icon").textContent, "!");
+});
+
+test("manual dismissal clears the timer so it cannot close a later result", () => {
+  const { view, node, finish, advance, timers, dismissals } = setupStatusView();
+  finish();
+  view.render({ phase: "latest" });
+  advance(2000);
+  node("update-dismiss").click();
+  assert.equal(dismissals(), 1);
+  assert.equal(timers.size, 0);
+  view.render({ phase: "latest" });
+  advance(3000);
+  assert.equal(dismissals(), 1);
+  advance(2000);
+  assert.equal(dismissals(), 2);
 });

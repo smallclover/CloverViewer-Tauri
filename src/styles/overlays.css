@@ -47,15 +47,8 @@
   bottom: 40px;
   transform: translateX(-50%);
   z-index: 1000; /* 高于设置面板(300),保证改动提示能盖在遮罩之上 */
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 16px var(--shadow);
-  color: var(--fg);
-  font-size: 13px;
+  max-height: calc(var(--panel-height, 100vh) - 100px);
+  overflow-y: auto;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.25s;
@@ -66,50 +59,27 @@
   left: 50%;
   bottom: 86px;
   z-index: 999;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  max-width: min(420px, calc(100% - 32px));
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-panel);
-  box-shadow: 0 4px 16px var(--shadow);
-  color: var(--fg);
-  font-size: 13px;
   pointer-events: none;
   transform: translateX(-50%);
 }
 
-.pet-loading-spinner {
-  display: inline-block;
-  color: var(--accent);
-  animation: pet-loading-spin 1.6s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pet-loading-spinner { animation: none; }
-}
-
-@keyframes pet-loading-spin { to { transform: rotate(360deg); } }
 .toast-ic {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 7px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
   flex: none;
 }
-.toast-ic.success { background: #2f8f4e; }
-.toast-ic.error { background: #d64545; }
+.toast-ic.success { background: var(--floating-accent-soft); color: var(--floating-accent); }
+.toast-ic.error { background: color-mix(in srgb, var(--floating-error) 11%, var(--floating-bg)); color: var(--floating-error); }
 .toast-ic.progress {
-  width: 14px;
-  height: 14px;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
   border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-top-color: var(--accent);
   animation: toast-progress-spin .8s linear infinite;

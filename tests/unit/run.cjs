@@ -12,6 +12,7 @@ require("./editor-zoom-toolbar.test.cjs");
 require("./theme-controller.test.cjs");
 require("./share-status.test.cjs");
 require("./share-panels.test.cjs");
+require("./share-receiver.test.cjs");
 require("./settings-persistence.test.cjs");
 require("./settings-feedback.test.cjs");
 require("./settings-navigation.test.cjs");

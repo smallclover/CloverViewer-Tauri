@@ -23,26 +23,31 @@ export function createLanSharePanel({
 }): LanSharePanel {
   const element = document.createElement("section");
   element.id = "lan-share-panel";
-  element.className = "ui-interactive";
+  element.className = "ui-interactive floating-surface floating-share";
   const title = document.createElement("strong");
+  title.className = "floating-title";
   title.dataset.i18n = "shot.shareTitle";
   title.textContent = t("shot.shareTitle");
   const description = document.createElement("p");
+  description.className = "floating-share-description";
   description.dataset.i18n = "shot.shareDescription";
   description.textContent = t("shot.shareDescription");
   const qr = document.createElement("img");
   qr.alt = t("shot.shareQrAlt");
   const url = document.createElement("code");
+  url.className = "floating-share-link";
   const expires = document.createElement("span");
   expires.className = "lan-share-expires";
   expires.setAttribute("role", "status");
   const downloadRule = document.createElement("span");
   downloadRule.className = "lan-share-download-rule";
   const status = document.createElement("div");
-  status.className = "lan-share-status";
+  status.className = "lan-share-status floating-share-status";
   status.append(expires, downloadRule);
   const copy = makeBtn("copy", "shot.shareCopy");
+  copy.classList.add("floating-action", "primary");
   const stop = makeBtn("cancel", "shot.shareStop");
+  stop.classList.add("floating-action");
   const copyLabel = document.createElement("span");
   copyLabel.dataset.i18n = "shot.shareCopy";
   copyLabel.textContent = t("shot.shareCopy");
@@ -52,8 +57,8 @@ export function createLanSharePanel({
   stopLabel.textContent = t("shot.shareStop");
   stop.append(" ", stopLabel);
   const actions = document.createElement("div");
-  actions.className = "lan-share-actions";
-  actions.append(copy, stop);
+  actions.className = "lan-share-actions floating-actions";
+  actions.append(stop, copy);
   element.append(title, description, qr, url, status, actions);
   uiLayer.append(element);
 

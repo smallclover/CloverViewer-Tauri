@@ -5,15 +5,10 @@
   padding: 0;
   overflow: hidden;
 }
-.sh-panel-head {
-  padding: 12px 13px;
-  border-bottom: 1px solid var(--s-toolbar-border);
-}
 .sh-panel-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 13px 13px;
 }
 .sh-mode-switch {
   display: grid;
@@ -84,11 +79,7 @@
 }
 .sh-option-row input { margin: 0; accent-color: var(--s-accent-solid); cursor: pointer; }
 .sh-option-row input:focus-visible { outline: 2px solid var(--s-accent); outline-offset: 2px; }
-#scroll-panel .sh-actions {
-  flex-wrap: nowrap;
-  margin-top: 0;
-}
-#scroll-panel .sh-actions .sh-btn.primary { flex: 1; justify-content: center; }
+#scroll-panel .sh-actions { margin-top: 2px; }
 .sh-status {
   color: var(--s-fg-dim);
 }
@@ -115,46 +106,6 @@
 #scroll-hud.clickthrough {
   pointer-events: none;
 }
-.sh-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.sh-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  border: 1px solid var(--s-toolbar-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--s-fg);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.sh-btn:hover:not(:disabled) {
-  background: var(--s-btn-hover-bg);
-  color: var(--s-btn-hover-fg);
-}
-.sh-btn.primary {
-  background: var(--s-accent-solid);
-  border-color: transparent;
-  color: #fff;
-}
-/* 主按钮不能继承通用 hover 的灰色遮罩，否则浅色主题里会变成灰底白字、对比不足。 */
-.sh-btn.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--s-accent-solid) 84%, #000 16%);
-  border-color: transparent;
-  box-shadow: 0 3px 9px var(--s-accent-shadow);
-  color: #fff;
-}
-.sh-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 /* 采集中：左边展示实际画面，右边按“状态 / 信息 / 消息 / 操作”分区。
    蓝色半透明层代表已经验证并写入长图的内容；下方小窗保留此刻候选帧，
    绿色边框表示可继续匹配，黄色则明确表示该帧尚未采用。 */
@@ -169,11 +120,11 @@
   min-width: 0;
   min-height: 260px;
   flex-direction: column;
-  padding: 0 11px 10px;
+  padding: 0 var(--floating-padding) var(--floating-padding);
 }
 .sh-capture-module {
   min-width: 0;
-  padding: 9px 0;
+  padding: var(--floating-gap) 0;
   border-bottom: 1px solid var(--s-toolbar-border);
 }
 .sh-capture-module-label {
@@ -191,21 +142,11 @@
 .sh-capture-side .sh-detail { min-height: 31px; }
 .sh-capture-side .sh-actions {
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: var(--floating-gap);
 }
 .sh-capture-side .sh-actions .sh-btn {
-  width: 100%;
-  justify-content: center;
-}
-.sh-capture-side .sh-actions .sh-btn.primary {
-  background: var(--s-accent-solid);
-  border-color: transparent;
-  color: #fff;
-}
-.sh-capture-side .sh-actions .sh-btn.primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--s-accent-solid) 84%, #000 16%);
-  box-shadow: 0 3px 9px var(--s-accent-shadow);
-  color: #fff;
+  flex: 1;
+  padding-inline: 6px;
 }
 /* 结果缩略图永远在固定视口内等比缩放；图片加载或比例变化都不能撑开 HUD。 */
 .sh-result-summary {
@@ -238,7 +179,7 @@
   grid-template-columns: 104px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
-  padding: 12px;
+  padding: var(--floating-padding);
 }
 .sh-result-body.without-preview { grid-template-columns: minmax(0, 1fr); }
 .sh-result-side {
@@ -344,27 +285,23 @@
 .sh-preview.on {
   display: block;
 }
-.sh-result-actions {
+.sh-result-actions.floating-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
   margin-top: auto;
 }
 .sh-result-actions .sh-btn {
   justify-content: center;
   width: 100%;
-  padding: 5px 6px;
-  font-size: 11px;
-  white-space: nowrap;
+  padding: 6px;
 }
 .sh-result-actions .sh-btn.primary { grid-column: 1 / -1; }
-.sh-result-header {
+.sh-result-header.floating-header {
   display: none;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
-  border-bottom: 1px solid var(--s-toolbar-border);
 }
 .sh-result-title {
   color: var(--s-panel-title);

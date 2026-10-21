@@ -12,6 +12,12 @@ interface ImageShareControllerOptions {
   onClose: () => void;
 }
 
+const SHARE_STATES = {
+  pending: { title: "prop.sharePreparing", hint: "prop.sharePreparingHint", icon: "refresh" },
+  expired: { title: "prop.shareExpired", hint: "prop.shareExpiredHint", icon: "linkOff" },
+  failed: { title: "prop.shareFailed", hint: "prop.shareFailedHint", icon: "alert" },
+} as const;
+
 /** 负责临时的局域网分享抽屉；关闭抽屉只会丢弃回调，不会中断已建立的链接。 */
 export function createImageShareController(options: ImageShareControllerOptions) {
   let requestToken = 0;
@@ -23,11 +29,12 @@ export function createImageShareController(options: ImageShareControllerOptions)
   };
   const header = () => {
     const row = document.createElement("header");
-    row.className = "image-share-header";
+    row.className = "image-share-header floating-share-heading";
     const title = document.createElement("h3");
+    title.className = "floating-title";
     title.textContent = options.translate("prop.shareTitle");
     const close = document.createElement("button");
-    close.className = "image-share-close";
+    close.className = "image-share-close floating-close";
     close.type = "button";
     close.innerHTML = uiIcon("close");
     close.title = options.translate("shot.close");
@@ -36,30 +43,46 @@ export function createImageShareController(options: ImageShareControllerOptions)
     row.append(title, close);
     return row;
   };
-  const retry = (entry: ImageEntry) => {
+  const showState = (entry: ImageEntry, phase: keyof typeof SHARE_STATES, error?: unknown) => {
+    const state = SHARE_STATES[phase];
+    const body = document.createElement("div");
+    body.className = `floating-empty image-share-empty ${phase}`;
+    const icon = document.createElement("span");
+    icon.className = "floating-empty-icon";
+    icon.innerHTML = uiIcon(state.icon);
+    icon.ariaHidden = "true";
+    const copy = document.createElement("div");
+    copy.className = "floating-empty-copy";
+    copy.setAttribute("role", phase === "failed" ? "alert" : "status");
+    const title = document.createElement("h3");
+    title.className = "floating-title";
+    title.textContent = options.translate(state.title);
+    const hint = document.createElement("p");
+    hint.className = "floating-hint";
+    hint.textContent = options.translate(state.hint);
+    if (error !== undefined) hint.title = String(error);
+    copy.append(title, hint);
     const button = document.createElement("button");
-    button.className = "image-share-retry";
+    button.className = "floating-action primary";
     button.type = "button";
-    button.textContent = options.translate("prop.share");
-    button.addEventListener("click", () => open(entry));
-    return button;
-  };
-  const showPending = (entry: ImageEntry) => {
-    clearTimer();
-    options.panel.replaceChildren(header());
-    const text = document.createElement("p");
-    text.className = "image-share-message";
-    text.textContent = options.translate("prop.sharePreparing");
-    options.panel.append(text);
-    return entry;
-  };
-  const showError = (entry: ImageEntry, error: unknown) => {
-    options.panel.replaceChildren(header());
-    const text = document.createElement("p");
-    text.className = "image-share-message error";
-    text.textContent = options.translate("prop.shareFailed");
-    text.title = String(error);
-    options.panel.append(text, retry(entry));
+    button.disabled = phase === "pending";
+    const buttonIcon = document.createElement("span");
+    buttonIcon.innerHTML = uiIcon("refresh");
+    const label = document.createElement("span");
+    label.textContent = options.translate(
+      phase === "pending"
+        ? "prop.shareGenerating"
+        : phase === "expired"
+          ? "prop.shareAgain"
+          : "prop.shareRetry",
+    );
+    button.append(buttonIcon, label);
+    if (phase !== "pending") button.addEventListener("click", () => open(entry));
+    const actions = document.createElement("div");
+    actions.className = "floating-actions";
+    actions.append(button);
+    body.append(icon, copy, actions);
+    options.panel.replaceChildren(header(), body);
   };
   const showShare = (entry: ImageEntry, info: LanShareInfo) => {
     const token = requestToken;
@@ -67,23 +90,27 @@ export function createImageShareController(options: ImageShareControllerOptions)
       stopping = false;
     const current = () => token === requestToken && active;
     options.panel.replaceChildren();
+    const body = document.createElement("div");
+    body.className = "floating-share-body";
+    const content = document.createElement("div");
+    content.className = "floating-share-stack";
     const name = document.createElement("div");
     name.className = "image-share-file";
     name.textContent = entry.name;
     name.title = entry.name;
     const hint = document.createElement("p");
-    hint.className = "image-share-hint";
+    hint.className = "image-share-hint floating-share-description";
     hint.textContent = options.translate("prop.shareDescription");
     const qr = document.createElement("img");
     qr.className = "image-share-qr";
     qr.src = info.qr_code;
     qr.alt = options.translate("prop.shareQrAlt");
     const link = document.createElement("code");
-    link.className = "image-share-link";
+    link.className = "image-share-link floating-share-link";
     link.textContent = info.url;
     link.title = info.url;
     const status = document.createElement("div");
-    status.className = "image-share-status";
+    status.className = "image-share-status floating-share-status";
     const expires = document.createElement("span");
     expires.setAttribute("role", "status");
     const rule = document.createElement("span");
@@ -92,25 +119,29 @@ export function createImageShareController(options: ImageShareControllerOptions)
     );
     status.append(expires, rule);
     const actions = document.createElement("div");
-    actions.className = "image-share-actions";
+    actions.className = "image-share-actions floating-actions";
     const copy = document.createElement("button");
     copy.type = "button";
-    copy.textContent = options.translate("prop.shareCopy");
+    copy.className = "floating-action primary";
+    const copyIcon = document.createElement("span");
+    copyIcon.innerHTML = uiIcon("copy");
+    const copyLabel = document.createElement("span");
+    copyLabel.textContent = options.translate("prop.shareCopy");
+    copy.append(copyIcon, copyLabel);
     const stop = document.createElement("button");
     stop.type = "button";
+    stop.className = "floating-action";
     stop.textContent = options.translate("prop.shareStop");
-    actions.append(copy, stop);
-    options.panel.append(header(), name, hint, qr, link, status, actions);
+    actions.append(stop, copy);
+    content.append(name, hint, qr, link, status, actions);
+    body.append(content);
+    options.panel.append(header(), body);
 
     const showEnded = () => {
       if (!current()) return;
       active = false;
       clearTimer();
-      const message = document.createElement("p");
-      message.className = "image-share-message";
-      message.setAttribute("role", "status");
-      message.textContent = options.translate("shot.shareExpired");
-      options.panel.replaceChildren(header(), message, retry(entry));
+      showState(entry, "expired");
     };
     stopWatching = watchShareStatus({
       seconds: info.expires_in_seconds,
@@ -135,12 +166,12 @@ export function createImageShareController(options: ImageShareControllerOptions)
           () => {
             if (!current() || stopping) return;
             copy.classList.add("feedback");
-            copy.textContent = options.translate("prop.shareCopied");
+            copyLabel.textContent = options.translate("prop.shareCopied");
           },
           () => {
             if (!current() || stopping) return;
             copy.classList.add("error");
-            copy.textContent = options.translate("prop.shareCopyFailed");
+            copyLabel.textContent = options.translate("prop.shareCopyFailed");
           },
         )
         .finally(() =>
@@ -148,7 +179,7 @@ export function createImageShareController(options: ImageShareControllerOptions)
             if (!current() || stopping) return;
             copy.disabled = false;
             copy.classList.remove("feedback", "error");
-            copy.textContent = options.translate("prop.shareCopy");
+            copyLabel.textContent = options.translate("prop.shareCopy");
           }, 1400),
         );
     });
@@ -170,13 +201,14 @@ export function createImageShareController(options: ImageShareControllerOptions)
   };
   const open = (entry: ImageEntry) => {
     const current = ++requestToken;
-    showPending(entry);
+    clearTimer();
+    showState(entry, "pending");
     void options.startLanShare(entry.path).then(
       (info) => {
         if (current === requestToken) showShare(entry, info);
       },
       (error) => {
-        if (current === requestToken) showError(entry, error);
+        if (current === requestToken) showState(entry, "failed", error);
       },
     );
   };

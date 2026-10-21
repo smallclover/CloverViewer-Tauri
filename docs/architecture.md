@@ -51,6 +51,7 @@ Rust Tauri 命令与应用状态
 | `src/ui/select-control.ts` | 设置与图片编辑共用的主题下拉菜单；保留原始 select 的值和 change 事件，处理键盘选择、焦点和视口边界。 |
 | `src/ui/app-menu-controller.ts` / `shortcut-dialog.ts` | 组装顶部文件、截图、帮助三组菜单，复用既有按钮与动作；管理可用状态、快捷键提示、弹出层边界和键盘导航，以及按当前配置生成的快捷键说明。 |
 | `src/ui/update-controller.ts` / `update-status-view.ts` | 用户触发的更新检查、带重试的签名验证下载与安装编排；持续状态面板显示检查、下载进度和分阶段错误，切换页面后仍保留。 |
+| `src/styles/floating-ui.css` | 主窗口与截图窗共用的紧凑浮层外壳、标题、状态图标、关闭与操作区；按轻提示、异步状态、操作确认、内容对话框、任务面板分类，见 [浮层规范](floating-ui.md)。 |
 | `src/locales/` | 各语言的静态翻译表。新增文案须同步更新所有语言表。 |
 | `src/i18n.ts` | 语言选择、插值、页面翻译应用；不承载具体翻译数据。 |
 | `src/styles.css` / `src/styles/` | 样式入口与按职责拆分的样式：主窗口的基础 token、查看器、设置、浮层、工作区与动效；截图窗口由 `styles/screenshot.css` 及其基础、工具栏、编辑 UI、分享、滚动截图和提示子模块组成。 |
@@ -153,6 +154,8 @@ Windows 进程入口在创建 WebView 和后台线程之前设置 `WEBVIEW2_DEFA
 截图 OCR 成功后在查看器打开的原选区也写入上述临时目录。设置页的缓存清理不涉及缩略图目录或 MCP 的 `CloverViewer/mcp-captures`；MCP 的截图 ID、保留期与清理时机见 [MCP 使用指南](mcp-guide.md)。
 
 局域网分享由 `lan_share.rs` 持有单个临时 HTTP 服务状态；前端只经 `api.ts` 调用 `startLanShare`、`startImageLanShare` 和 `stopLanShare`。服务向同一局域网暴露带随机令牌的预览与下载地址，内容只保存在内存；到期、达到一次下载限制或主动停止后即失效。`AppConfig` 保存默认有效期和下载限制，截图与查看器各自的分享控制器只负责其界面状态。
+
+浏览器接收页由 `lan_share_page.rs` 嵌入 `lan_share_page/` 下的 HTML、CSS、JavaScript 与中英日三份 JSON 文案，不依赖外部资源或桌面 Tauri API。页面按接收方浏览器语言呈现居中图片卡片，使用图片实际像素与已分享数据大小展示文件信息；窄屏下载按钮独占一行，输入框和操作目标适配触控。带令牌的 `/status` 只返回有效期与剩余下载次数，不消耗下载额度；页面倒计时、定期检查和恢复前台检查共同维护有效状态，网络失败展示可重试状态。链接分享在浏览器允许时调用系统分享；局域网 HTTP 下退回复制及手动选择链接，不保证直接打开微信。大图查看使用独立 `/image` 入口，只有 `/download` 消耗一次下载额度。
 
 OCR 的配置、组件管理、下载来源、许可和推理限制见 [OCR 引擎说明](ocr.md)。`src/ui/ocr-settings-controller.ts` 独立管理状态与进度；模型和运行库按需下载，不进入初始安装包。
 

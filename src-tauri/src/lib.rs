@@ -17,6 +17,7 @@ mod image_io;
 mod image_scan;
 mod image_tasks;
 mod lan_share;
+mod lan_share_page;
 pub mod mcp;
 mod ocr;
 pub use ocr::run_worker as run_ocr_worker;

@@ -1,0 +1,134 @@
+/* 浮层按用途复用外壳：轻提示、异步状态、确认/内容对话框、任务面板。
+   主窗口和截图窗只映射主题颜色，间距、标题、图标与操作区共用同一规则。 */
+:root {
+  --floating-bg: var(--bg-panel, var(--s-panel-bg));
+  --floating-fg: var(--fg, var(--s-fg));
+  --floating-dim: var(--fg-dim, var(--s-fg-dim));
+  --floating-border: var(--border, var(--s-popup-border));
+  --floating-hover: var(--bg-hover, var(--s-btn-hover-bg));
+  --floating-accent: var(--accent, var(--s-accent));
+  --floating-accent-soft: var(--accent-soft, var(--s-accent-soft));
+  --floating-primary: var(--accent-solid, var(--s-accent-solid));
+  --floating-error: var(--danger, var(--s-error));
+  --floating-shadow: var(--s-shadow, 0 8px 28px var(--shadow));
+  --floating-radius: 12px;
+  --floating-padding: 18px;
+  --floating-gap: 12px;
+  --floating-button-radius: 7px;
+  --floating-warning: #efc475;
+}
+:root[data-theme="light"] { --floating-warning: #946318; }
+.floating-surface {
+  box-sizing: border-box;
+  border: 1px solid var(--floating-border);
+  border-radius: var(--floating-radius);
+  background: var(--floating-bg);
+  box-shadow: var(--floating-shadow);
+  color: var(--floating-fg);
+  font: 13px/1.5 "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+.floating-surface [hidden] { display: none !important; }
+.floating-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(420px, calc(100% - 32px));
+  padding: 11px 16px;
+  border-radius: 9px;
+}
+.floating-header {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--floating-gap);
+  padding: var(--floating-padding);
+}
+.floating-heading { flex: 1; min-width: 0; }
+.floating-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.floating-hint { margin: 5px 0 0; color: var(--floating-dim); font-size: 12px; line-height: 1.5; }
+.floating-body { min-width: 0; min-height: 0; padding: 0 var(--floating-padding) var(--floating-padding); }
+.floating-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.floating-footer { flex: none; padding: 0 var(--floating-padding) var(--floating-padding); }
+.floating-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 30px;
+  padding: 6px 13px;
+  border: 1px solid var(--floating-border);
+  border-radius: var(--floating-button-radius);
+  background: var(--floating-hover);
+  color: var(--floating-fg);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.floating-action:hover:not(:disabled) { background: color-mix(in srgb, var(--floating-hover) 70%, var(--floating-bg)); }
+.floating-action.primary { background: var(--floating-primary); border-color: var(--floating-primary); color: #fff; }
+.floating-action.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--floating-primary) 85%, #000); }
+.floating-action.danger { background: #b83232; border-color: #b83232; color: #fff; }
+.floating-action.danger:hover:not(:disabled) { background: #a22b2b; border-color: #a22b2b; }
+.floating-action:disabled { opacity: .5; cursor: default; }
+.floating-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--floating-dim);
+  cursor: pointer;
+}
+.floating-close svg { display: block; width: 16px; height: 16px; }
+.floating-close:hover { background: var(--floating-hover); color: var(--floating-fg); }
+.floating-close:focus-visible, .floating-action:focus-visible { outline: 2px solid var(--floating-accent); outline-offset: 2px; }
+.floating-symbol {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--floating-accent-soft);
+  color: var(--floating-accent);
+  font-size: 19px;
+  font-weight: 600;
+}
+.floating-symbol svg { width: 18px; height: 18px; }
+.floating-symbol.warning { color: var(--floating-warning); background: color-mix(in srgb, var(--floating-warning) 12%, var(--floating-bg)); }
+.floating-share-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--floating-gap); }
+.floating-share-description { margin: 5px 0 12px; color: var(--floating-dim); font-size: 12px; line-height: 1.5; }
+.floating-share-link { display: block; width: 100%; overflow: hidden; color: var(--floating-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.floating-share-status { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; color: var(--floating-dim); font-size: 12px; }
+.floating-share-status span + span::before { content: "·"; margin-right: 8px; }
+/* 分享内容及暂无可用内容时的状态引导共用居中容器。 */
+.floating-empty, .floating-share-body { display: flex; flex: 1 0 auto; flex-direction: column; align-items: center; justify-content: center; min-height: 240px; padding: 12px 0 40px; text-align: center; }
+.floating-share-stack { display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0; }
+.floating-empty-icon { display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 15px; border-radius: 13px; background: var(--floating-hover); color: var(--floating-dim); }
+.floating-empty-icon svg { display: block; width: 21px; height: 21px; }
+.floating-empty-copy { width: 100%; max-width: 220px; overflow-wrap: anywhere; }
+.floating-empty .floating-hint { margin-top: 7px; line-height: 1.65; }
+.floating-empty > .floating-actions { justify-content: center; margin-top: 20px; }
+.floating-empty .floating-action { max-width: 100%; }
+.floating-empty .floating-action svg { display: block; width: 15px; height: 15px; }
+.floating-empty.pending .floating-empty-icon { background: var(--floating-accent-soft); color: var(--floating-accent); }
+.floating-empty.pending .floating-empty-icon svg { animation: floating-empty-spin .8s linear infinite; }
+.floating-empty.failed .floating-empty-icon { background: color-mix(in srgb, var(--floating-error) 11%, var(--floating-bg)); color: var(--floating-error); }
+@keyframes floating-empty-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .floating-empty.pending .floating-empty-icon svg { animation: none; }
+}
+@media (max-width: 430px) {
+  :root { --floating-padding: 16px; }
+  .floating-actions { row-gap: 8px; }
+}

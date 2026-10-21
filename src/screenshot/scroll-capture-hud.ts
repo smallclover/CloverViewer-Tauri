@@ -68,7 +68,7 @@ function createMetric(): ScrollCaptureMetric {
 
 function createButton(onClick: () => void): HTMLButtonElement {
   const button = document.createElement("button");
-  button.className = "sh-btn";
+  button.className = "sh-btn floating-action";
   button.addEventListener("mousedown", (event) => {
     event.stopPropagation();
     event.preventDefault();
@@ -98,7 +98,7 @@ export function createScrollCaptureHud({
 
   const hud = document.createElement("div");
   hud.id = "scroll-hud";
-  hud.className = "ui-interactive";
+  hud.className = "ui-interactive floating-surface";
   const title = document.createElement("div");
   title.className = "sh-title";
   // 红点只创建一次，否则进度更新会重启 CSS 呼吸动画。
@@ -158,9 +158,9 @@ export function createScrollCaptureHud({
   messageModule.append(messageLabel, detail);
 
   const resultHeader = document.createElement("div");
-  resultHeader.className = "sh-result-header";
+  resultHeader.className = "sh-result-header floating-header";
   const resultTitleText = document.createElement("span");
-  resultTitleText.className = "sh-result-title";
+  resultTitleText.className = "sh-result-title floating-title";
   const resultBadge = document.createElement("span");
   resultBadge.className = "sh-badge";
   resultHeader.append(resultTitleText, resultBadge);
@@ -188,9 +188,9 @@ export function createScrollCaptureHud({
   previewSlot.className = "sh-preview-slot";
   previewSlot.appendChild(preview);
   const actions = document.createElement("div");
-  actions.className = "sh-actions";
+  actions.className = "sh-actions floating-actions";
   const resultActions = document.createElement("div");
-  resultActions.className = "sh-result-actions";
+  resultActions.className = "sh-result-actions floating-actions";
   const resultBody = document.createElement("div");
   resultBody.className = "sh-result-body";
   const resultSide = document.createElement("div");
@@ -204,7 +204,7 @@ export function createScrollCaptureHud({
   const openButton = createButton(() => onAction("open"));
   const escStop = document.createElement("div");
   escStop.className = "sh-esc-stop";
-  actions.append(stopButton, cancelButton);
+  actions.append(cancelButton, stopButton);
   resultActions.append(copyButton, saveButton, openButton);
   resultSide.append(resultSummary, resultElapsed, resultActions);
   resultBody.append(previewSlot, resultSide);
@@ -233,7 +233,7 @@ export function createScrollCaptureHud({
 
   const notice = document.createElement("div");
   notice.id = "scroll-notice";
-  notice.className = "ui-interactive";
+  notice.className = "ui-interactive floating-surface floating-notice";
   uiLayer.appendChild(notice);
 
   return {

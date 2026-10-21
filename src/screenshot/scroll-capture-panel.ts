@@ -38,12 +38,12 @@ export function createScrollCaptureStartPanel({
 }: ScrollCaptureStartPanelOptions): ScrollCaptureStartPanel {
   const panel = document.createElement("div");
   panel.id = "scroll-panel";
-  panel.className = "ui-interactive";
+  panel.className = "ui-interactive floating-surface";
 
   const panelTitle = document.createElement("div");
-  panelTitle.className = "sh-title";
+  panelTitle.className = "sh-title floating-title";
   const panelHead = document.createElement("div");
-  panelHead.className = "sh-head sh-panel-head";
+  panelHead.className = "sh-head sh-panel-head floating-header";
   const panelBadge = document.createElement("span");
   panelBadge.className = "sh-badge";
   panelHead.append(panelTitle, panelBadge);
@@ -75,20 +75,20 @@ export function createScrollCaptureStartPanel({
   hint.className = "sh-status";
 
   const actions = document.createElement("div");
-  actions.className = "sh-actions";
+  actions.className = "sh-actions floating-actions";
   const startButton = document.createElement("button");
-  startButton.className = "sh-btn primary";
+  startButton.className = "sh-btn floating-action primary";
   startButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onStart();
   });
   const quitButton = document.createElement("button");
-  quitButton.className = "sh-btn";
+  quitButton.className = "sh-btn floating-action";
   quitButton.addEventListener("click", (event) => {
     event.stopPropagation();
     onQuit();
   });
-  actions.append(startButton, quitButton);
+  actions.append(quitButton, startButton);
 
   // 默认从当前可见位置开始；自动模式下才允许选择先回到页面顶部。
   const fromTop = document.createElement("input");
@@ -122,7 +122,7 @@ export function createScrollCaptureStartPanel({
   });
 
   const panelBody = document.createElement("div");
-  panelBody.className = "sh-panel-body";
+  panelBody.className = "sh-panel-body floating-body";
   panelBody.append(modeSwitch, selectionCard, hint, fromTopLabel, actions);
   panel.append(panelHead, panelBody);
   uiLayer.appendChild(panel);

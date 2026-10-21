@@ -136,42 +136,54 @@
 
       <div id="context-menu" class="hidden"></div>
       <div id="drop-overlay" class="hidden" data-i18n="drop.open">松开以打开</div>
-      <div id="toast" class="hidden"></div>
-      <div id="pet-loading-status" class="hidden" role="status" aria-live="polite">
-        <span class="pet-loading-spinner" aria-hidden="true">✦</span>
+      <div id="toast" class="hidden floating-surface floating-notice"></div>
+      <div id="pet-loading-status" class="hidden floating-surface floating-notice" role="status" aria-live="polite">
+        <span class="pet-loading-spinner toast-ic progress" aria-hidden="true"></span>
         <span id="pet-loading-status-text" data-i18n="pet.loading">正在加载桌宠，首次打开可能需要一点时间…</span>
       </div>
 
       <div id="update-overlay" class="hidden">
-        <section id="update-panel" role="dialog" aria-modal="true" aria-labelledby="update-title">
-          <header class="update-header">
-            <h2 id="update-title" data-i18n="update.title">发现新版本</h2>
-            <p><span data-i18n="update.versionAvailable">可更新至</span> <strong id="update-version"></strong></p>
+        <section id="update-panel" class="floating-surface" role="dialog" aria-modal="true" aria-labelledby="update-title">
+          <header class="update-header floating-header">
+            <span class="floating-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span>
+            <div class="floating-heading">
+              <h2 id="update-title" class="floating-title" data-i18n="update.title">发现新版本</h2>
+              <p class="floating-hint"><span data-i18n="update.versionAvailable">可更新至</span> <strong id="update-version"></strong></p>
+            </div>
           </header>
-          <div class="update-body">
+          <div class="update-body floating-body">
             <h3 data-i18n="update.releaseNotes">更新日志</h3>
             <div id="update-notes" class="update-notes"></div>
           </div>
-          <footer class="update-actions">
-            <button id="update-later" class="mini-btn" type="button" data-i18n="update.later">稍后更新</button>
-            <button id="update-now" class="update-primary-btn" type="button" data-i18n="update.updateNow">立即更新</button>
+          <footer class="update-actions floating-actions floating-footer">
+            <button id="update-later" class="floating-action" type="button" data-i18n="update.later">稍后更新</button>
+            <button id="update-now" class="floating-action primary" type="button" data-i18n="update.updateNow">立即更新</button>
           </footer>
         </section>
       </div>
 
-      <section id="update-status" class="hidden" aria-label="更新状态" data-i18n-aria-label="update.status">
+      <section id="update-status" class="hidden floating-surface" aria-label="更新状态" data-i18n-aria-label="update.status">
         <div class="update-status-line">
-          <span id="update-status-spinner" class="toast-ic progress" aria-hidden="true"></span>
-          <p id="update-status-message" role="status" aria-live="polite" aria-atomic="true"></p>
-        </div>
-        <progress id="update-progress" hidden max="100" aria-label="下载进度" data-i18n-aria-label="update.progress"></progress>
-        <details id="update-error-details" hidden>
-          <summary data-i18n="update.details">详细错误</summary>
-          <pre id="update-error-message"></pre>
-        </details>
-        <div class="update-status-actions">
-          <button id="update-retry" class="mini-btn" type="button" hidden data-i18n="update.retry">重试</button>
-          <button id="update-dismiss" class="mini-btn" type="button" hidden data-i18n="update.dismiss">关闭提示</button>
+          <div class="update-status-symbol">
+            <span id="update-status-spinner" class="toast-ic progress" aria-hidden="true"></span>
+            <span id="update-status-icon" class="floating-symbol" hidden aria-hidden="true"></span>
+          </div>
+          <div class="update-status-copy">
+            <p id="update-status-message" role="status" aria-live="polite" aria-atomic="true"></p>
+            <p id="update-status-description" hidden></p>
+            <progress id="update-progress" hidden max="100" aria-label="下载进度" data-i18n-aria-label="update.progress"></progress>
+            <details id="update-error-details" hidden>
+              <summary data-i18n="update.details">详细错误</summary>
+              <pre id="update-error-message"></pre>
+            </details>
+            <div class="update-status-actions floating-actions">
+              <button id="update-retry" class="floating-action primary" type="button" hidden data-i18n="update.retry">重试</button>
+            </div>
+          </div>
+          <div class="update-status-rail">
+            <button id="update-dismiss" class="floating-close" type="button" hidden aria-label="关闭提示" data-i18n-aria-label="update.dismiss" title="关闭提示" data-i18n-title="update.dismiss"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+            <span id="update-dismiss-countdown" hidden></span>
+          </div>
         </div>
       </section>
 
@@ -190,7 +202,7 @@
                 <span data-i18n="settings.tab.general">常规</span>
               </button>
               <button type="button" data-settings-tab="appearance">
-                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18Z"/></svg>
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg>
                 <span data-i18n="settings.tab.appearance">外观与桌宠</span>
               </button>
             </div>

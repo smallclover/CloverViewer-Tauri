@@ -10,7 +10,7 @@ use axum::{
     http::{header, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::get,
-    Router,
+    Json, Router,
 };
 use base64::Engine;
 use image::{codecs::jpeg::JpegEncoder, GenericImageView};
@@ -89,11 +89,7 @@ impl LanShareStore {
         let mut active = self.active.lock().unwrap();
         let share = active.as_ref()?;
         if share.token == token && share.expires_at > Instant::now() {
-            return Some(SharedImage {
-                data: Arc::clone(&share.data),
-                mime: share.mime,
-                filename: share.filename.clone(),
-            });
+            return Some(share.snapshot());
         }
         if share.expires_at <= Instant::now() {
             if let Some(expired) = active.take() {
@@ -111,11 +107,7 @@ impl LanShareStore {
         if share.token != token || share.expires_at <= Instant::now() {
             return None;
         }
-        let asset = SharedImage {
-            data: Arc::clone(&share.data),
-            mime: share.mime,
-            filename: share.filename.clone(),
-        };
+        let asset = share.snapshot();
         share.downloads += 1;
         if share.download_limit != 0 && share.downloads >= share.download_limit {
             if let Some(expired) = active.take() {
@@ -126,10 +118,29 @@ impl LanShareStore {
     }
 }
 
-struct SharedImage {
-    data: Arc<Vec<u8>>,
-    mime: &'static str,
-    filename: String,
+pub(super) struct SharedImage {
+    pub(super) data: Arc<Vec<u8>>,
+    pub(super) mime: &'static str,
+    pub(super) filename: String,
+    pub(super) expires_in_seconds: u64,
+    pub(super) downloads_remaining: Option<u32>,
+}
+
+impl ActiveLanShare {
+    fn snapshot(&self) -> SharedImage {
+        SharedImage {
+            data: Arc::clone(&self.data),
+            mime: self.mime,
+            filename: self.filename.clone(),
+            expires_in_seconds: self
+                .expires_at
+                .saturating_duration_since(Instant::now())
+                .as_secs_f64()
+                .ceil() as u64,
+            downloads_remaining: (self.download_limit != 0)
+                .then(|| self.download_limit.saturating_sub(self.downloads)),
+        }
+    }
 }
 
 fn token() -> String {
@@ -314,6 +325,7 @@ async fn start_share(
     let app = Router::new()
         .route("/s/{token}", get(share_page))
         .route("/s/{token}/image", get(share_image))
+        .route("/s/{token}/status", get(share_status))
         .route("/s/{token}/download", get(download_image))
         .with_state(store.inner_clone());
     tauri::async_runtime::spawn(async move {
@@ -361,16 +373,42 @@ impl LanShareStore {
 }
 
 async fn share_page(State(store): State<LanShareStore>, Path(token): Path<String>) -> Response {
-    let Some(asset) = store.get(&token) else {
-        return StatusCode::NOT_FOUND.into_response();
+    let asset = store.get(&token);
+    let status = if asset.is_some() {
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
     };
-    let image_url = format!("/s/{token}/image");
-    let download_url = format!("/s/{token}/download");
-    Html(format!(
-        "<!doctype html><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Shared screenshot</title><style>body{{margin:0;background:#17191f;color:#eef0f4;font:16px system-ui;text-align:center}}main{{max-width:1100px;margin:auto;padding:24px}}img{{max-width:100%;height:auto;border-radius:8px}}a{{display:inline-block;margin:16px;padding:10px 16px;background:#4ea85c;color:white;border-radius:8px;text-decoration:none}}</style><main><img src=\"{image_url}\" alt=\"Shared screenshot\"><br><a href=\"{download_url}\" download=\"{}\">Download image</a></main>",
-        asset.filename
-    ))
-    .into_response()
+    let mut response = (
+        status,
+        Html(crate::lan_share_page::render(&token, asset.as_ref())),
+    )
+        .into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+#[derive(Serialize)]
+struct ShareStatus {
+    active: bool,
+    expires_in_seconds: u64,
+    downloads_remaining: Option<u32>,
+}
+
+async fn share_status(State(store): State<LanShareStore>, Path(token): Path<String>) -> Response {
+    let asset = store.get(&token);
+    let mut response = Json(ShareStatus {
+        active: asset.is_some(),
+        expires_in_seconds: asset.as_ref().map_or(0, |image| image.expires_in_seconds),
+        downloads_remaining: asset.and_then(|image| image.downloads_remaining),
+    })
+    .into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 async fn share_image(State(store): State<LanShareStore>, Path(token): Path<String>) -> Response {
@@ -436,6 +474,37 @@ mod tests {
         assert!(store.take_download("single").is_some());
         assert!(store.get("single").is_none());
         assert!(store.take_download("single").is_none());
+    }
+
+    #[tokio::test]
+    async fn receiver_status_and_page_do_not_consume_the_download_limit() {
+        let store = LanShareStore::new();
+        let (shutdown, _) = oneshot::channel();
+        *store.active.lock().unwrap() = Some(ActiveLanShare {
+            token: "receiver".into(),
+            data: Arc::new(vec![1, 2, 3]),
+            mime: "image/png",
+            filename: "receiver.png".into(),
+            expires_at: Instant::now() + Duration::from_secs(60),
+            download_limit: 1,
+            downloads: 0,
+            shutdown,
+        });
+        let status = share_status(State(store.clone()), Path("receiver".into())).await;
+        assert_eq!(status.headers()[header::CACHE_CONTROL], "no-store");
+        let bytes = axum::body::to_bytes(status.into_body(), 4096)
+            .await
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(value["active"], true);
+        assert_eq!(value["downloads_remaining"], 1);
+        let page = share_page(State(store.clone()), Path("receiver".into())).await;
+        assert_eq!(page.status(), StatusCode::OK);
+        assert_eq!(page.headers()[header::CACHE_CONTROL], "no-store");
+        assert!(store.take_download("receiver").is_some());
+        let expired = share_page(State(store.clone()), Path("receiver".into())).await;
+        assert_eq!(expired.status(), StatusCode::NOT_FOUND);
+        assert!(store.get("receiver").is_none());
     }
 
     #[test]

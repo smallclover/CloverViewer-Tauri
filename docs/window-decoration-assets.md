@@ -7,7 +7,7 @@
 | `public/window-decorations/lean.png` | A：右下角倚靠，全身坐姿 |
 | `public/window-decorations/peek.png` | B：右上角探头，头肩与双手 |
 
-两张图片请求 `transparent_background: true`，保留原始 alpha；直接复制工具生成结果，无后处理。它们由 Vite public 目录原样打包，设置预览与附属窗口共用同一资源。角色资源只用于界面装饰，不参与图片导出。
+两张图片请求 `transparent_background: true`，保留原始 alpha；直接复制工具生成结果，无后处理。它们由 Vite public 目录原样打包，设置预览与主窗口角色图层共用同一资源。角色资源只用于界面装饰，不参与图片导出。
 
 ## 分层与接触点
 

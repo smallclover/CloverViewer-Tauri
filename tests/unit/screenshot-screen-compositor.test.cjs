@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { blitScreenRegion, drawScreenBase } = require("../../.unit-test-dist/screenshot/screen-compositor.js");
+const { blitScreenRegion, drawScreenBase } = require("../../.unit-test-dist/compiled/screenshot/screen-compositor.js");
 
 function createContext() {
   const calls = [];

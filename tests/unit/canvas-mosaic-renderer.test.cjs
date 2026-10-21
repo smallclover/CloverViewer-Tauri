@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createCanvasMosaicRenderer } = require("../../.unit-test-dist/image-editor/canvas-mosaic-renderer.js");
+const { createCanvasMosaicRenderer } = require("../../.unit-test-dist/compiled/image-editor/canvas-mosaic-renderer.js");
 
 function fixture(callback, width = 64, height = 48) {
   const previous = global.document;

@@ -55,11 +55,11 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 ### 📸 Screenshot & Annotation
 
 *   **Selection appearance**: classic black-and-white dashes by default; Settings → Screenshot offers custom colors with dashed or solid lines, and a darker exterior mask makes the selection clearer
-*   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background, transfers raw pixels directly, and aligns the window and content area before showing the capture to reduce delay and occasional image compression. The background stays static while dragging the selection; masks, borders and the magnifier update independently to reduce full-image redraws. Exports retain the original pixels
+*   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background, transfers raw pixels directly, and aligns the window and content area before showing the capture to reduce delay and occasional image compression. The background stays static while dragging the selection; masks, borders and the magnifier update independently to reduce full-image redraws. Exports retain the original pixels When displays, their arrangement or DPI change, the overlay is rebuilt and checked before showing; frames from an obsolete layout are discarded.
 *   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended. Detected fixed headers are kept from the first frame and footers from the last accepted frame. Fixed sidebar texture is ignored during registration, but sidebars are not automatically cropped out; selecting just the article body is recommended. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you. Enter finishes capture and opens the preview; Esc cancels and discards the capture, including while mouse input passes through to the target
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; stroke, font and block sizes are set independently in original image pixels (px), retaining each size when switching tools during a session. Image editing adapts initial sizes and presets to the preview scale so annotations stay clear on large images shown smaller; resizing the window preserves chosen sizes and existing annotations. Screenshots and image editing share a transparent text box with visible circular corner markers that resizes to fit its content. Mosaic uses a brush-size ring and continuous strokes over fixed blocks sampled from the original image, keeping the preview consistent after releasing the mouse. Mosaic blocks on transparent images use an opaque backing to cover original details; unpainted areas retain transparency
 *   **Color & size**: click the toolbar color swatch to open the palette; click the size button to choose stroke width, font size or mosaic block size for the current tool
-*   **Magnifier color picker**: live coordinates and pixel color values; **Alt+C** (customizable) copies the color
+*   **Magnifier color picker**: shown before and during region selection, then hidden once selected; hold **Alt** over the canvas to temporarily show coordinates and pixel colors. **Alt+C** (customizable) copies the color
 *   **Undo/Redo**: Ctrl+Z / Ctrl+Y
 *   **Export**: Enter to copy to clipboard / save to Desktop; the toolbar can open a regular screenshot directly in the viewer
 *   **LAN sharing**: after annotating, create a temporary link and QR code for devices on the same network to preview or download the screenshot
@@ -182,6 +182,7 @@ npm run tauri build
 | Enter | Copy a regular screenshot; start scrolling capture / finish and preview; copy from result preview |
 | Delete | Delete selected annotation |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
+| **Alt** (hold) | Temporarily show the screenshot magnifier |
 | **Alt+C** (customizable) | Copy magnifier center color |
 
 ## 🔄 Relation to the Original

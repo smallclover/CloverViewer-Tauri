@@ -7,6 +7,7 @@ import {
   type GridSection,
   thumbnailPixelSize,
   THUMB_COLUMNS,
+  visibleSectionItems,
 } from "./grid-layout";
 import type { createImageSourceResolver } from "./image-source";
 import { sortImagesByModified } from "./image-sort";
@@ -112,22 +113,12 @@ export function createGridController(options: GridControllerOptions) {
   };
 
   const renderVisible = () => {
-    const needed = new Set<number>();
-    const rowHeight = cellHeight + GRID_GAP;
-    const visibleTop = Math.max(0, options.gridView.scrollTop - rowHeight * 2);
-    const visibleBottom =
-      options.gridView.scrollTop + options.gridView.clientHeight + rowHeight * 2;
-    for (const section of sections) {
-      if (section.itemsBottom <= visibleTop || section.itemsTop >= visibleBottom) continue;
-      const firstRow = Math.max(0, Math.floor((visibleTop - section.itemsTop) / rowHeight));
-      const lastRow = Math.ceil((visibleBottom - section.itemsTop) / rowHeight);
-      const from = section.startIndex + firstRow * columns;
-      const to = Math.min(
-        section.startIndex + section.itemCount,
-        section.startIndex + lastRow * columns,
-      );
-      for (let index = from; index < to; index += 1) needed.add(index);
-    }
+    const needed = visibleSectionItems(
+      options.gridView.scrollTop,
+      options.gridView.clientHeight,
+      sections,
+      layout,
+    );
     const size = thumbnailSize();
     thumbnailLoader.retain(
       new Set(

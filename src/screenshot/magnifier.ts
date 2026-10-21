@@ -2,9 +2,10 @@ import { blitScreenRegion, type ScreenImage } from "./screen-compositor";
 import type { Rect } from "./geometry";
 
 const GRID_SIZE = 15;
-const PIXEL_SIZE = 10;
+const PIXEL_SIZE = 8;
 const OFFSET = 20;
-const INFO_HEIGHT = 64;
+const PADDING = 4;
+const INFO_HEIGHT = 44;
 
 /** 取正方形 RGBA 采样中中心像素的颜色值（复制用的十六进制色）。 */
 export function centerColorHex(data: Uint8ClampedArray, gridSize = GRID_SIZE): string {
@@ -23,6 +24,7 @@ interface MagnifierOptions {
   translate: (key: string, vars?: Record<string, string | number>) => string;
   getCopyColorHotkey: () => string;
   getCopiedAt: () => number;
+  getTheme?: () => "light" | "dark";
 }
 
 function roundRect(
@@ -51,6 +53,7 @@ export function createMagnifierRenderer({
   translate,
   getCopyColorHotkey,
   getCopiedAt,
+  getTheme = () => "dark",
 }: MagnifierOptions) {
   const sampleCanvas = document.createElement("canvas");
   sampleCanvas.width = GRID_SIZE;
@@ -134,8 +137,8 @@ export function createMagnifierRenderer({
 
     let cardCssX = pointerCssX + OFFSET;
     let cardCssY = pointerCssY + OFFSET;
-    const cardCssWidth = gridLogicalSize;
-    const cardCssHeight = gridLogicalSize + INFO_HEIGHT;
+    const cardCssWidth = gridLogicalSize + PADDING * 2;
+    const cardCssHeight = gridLogicalSize + PADDING * 2 + INFO_HEIGHT;
     if (cardCssX + cardCssWidth > viewport.width) cardCssX = pointerCssX - OFFSET - cardCssWidth;
     if (cardCssY + cardCssHeight > viewport.height) cardCssY = pointerCssY - OFFSET - cardCssHeight;
     return {
@@ -159,28 +162,40 @@ export function createMagnifierRenderer({
       h: cardCssHeight,
     } = getBox(pointerX, pointerY);
 
-    const physical = (value: number) => value * scale;
+    // 绘制仍用物理像素；卡片布局始终保持固定 CSS 尺寸。
     context.save();
+    context.translate(cardCssX * scale, cardCssY * scale);
+    context.scale(scale, scale);
     context.setLineDash([]);
-    context.fillStyle = "#ffffff";
-    roundRect(
-      context,
-      physical(cardCssX),
-      physical(cardCssY),
-      physical(cardCssWidth),
-      physical(cardCssHeight),
-      4 * scale,
-    );
+    const light = getTheme() === "light";
+    const foreground = light ? "#262b2a" : "#e5ebe6";
+    const muted = light ? "#66756a" : "#a3b0a7";
+    const accent = light ? "#3d8a49" : "#69b77a";
+    const border = light ? "#cbd8ce" : "#46594c";
+    context.fillStyle = light ? "#ffffff" : "#1c1e24";
+    roundRect(context, 0.5, 0.5, cardCssWidth - 1, cardCssHeight - 1, 8);
     context.fill();
+    context.strokeStyle = border;
+    context.lineWidth = 1;
+    context.stroke();
 
-    const blockSize = physical(PIXEL_SIZE);
-    context.fillStyle = "#000000";
-    context.fillRect(
-      physical(cardCssX),
-      physical(cardCssY),
-      physical(gridLogicalSize),
-      physical(gridLogicalSize),
-    );
+    const infoY = gridLogicalSize + PADDING * 2 - 1;
+    context.save();
+    context.clip();
+    context.fillStyle = light ? "#f3f8f4" : "#212729";
+    context.fillRect(1, infoY, cardCssWidth - 2, cardCssHeight - infoY - 1);
+    context.restore();
+    context.strokeStyle = light ? "#d3e1d6" : "#3e5144";
+    context.beginPath();
+    context.moveTo(1, infoY + 0.5);
+    context.lineTo(cardCssWidth - 1, infoY + 0.5);
+    context.stroke();
+
+    context.save();
+    roundRect(context, PADDING, PADDING, gridLogicalSize, gridLogicalSize, 4);
+    context.clip();
+    context.fillStyle = light ? "#f0f0f0" : "#14161c";
+    context.fillRect(PADDING, PADDING, gridLogicalSize, gridLogicalSize);
     context.imageSmoothingEnabled = false;
     context.drawImage(
       sampleCanvas,
@@ -188,85 +203,71 @@ export function createMagnifierRenderer({
       0,
       GRID_SIZE,
       GRID_SIZE,
-      physical(cardCssX),
-      physical(cardCssY),
-      physical(gridLogicalSize),
-      physical(gridLogicalSize),
+      PADDING,
+      PADDING,
+      gridLogicalSize,
+      gridLogicalSize,
     );
+    context.restore();
 
-    context.strokeStyle = "rgba(0,0,0,0.31)";
+    // 黑白双层框适用于任意像素底色，不再用满铺网格和贯穿十字线。
+    const center = PADDING + half * PIXEL_SIZE;
+    context.strokeStyle = "#14161c";
+    context.lineWidth = 3;
+    context.strokeRect(center, center, PIXEL_SIZE, PIXEL_SIZE);
+    context.strokeStyle = "#ffffff";
     context.lineWidth = 1;
-    context.beginPath();
-    for (let index = 1; index < GRID_SIZE; index += 1) {
-      const vertical = physical(cardCssX) + index * blockSize;
-      context.moveTo(vertical, physical(cardCssY));
-      context.lineTo(vertical, physical(cardCssY) + physical(gridLogicalSize));
-      const horizontal = physical(cardCssY) + index * blockSize;
-      context.moveTo(physical(cardCssX), horizontal);
-      context.lineTo(physical(cardCssX) + physical(gridLogicalSize), horizontal);
-    }
-    context.stroke();
+    context.strokeRect(center, center, PIXEL_SIZE, PIXEL_SIZE);
 
-    const centerX = physical(cardCssX) + half * blockSize;
-    const centerY = physical(cardCssY) + half * blockSize;
-    context.strokeStyle = "#00ffff";
-    context.lineWidth = 1.5 * scale;
-    context.strokeRect(centerX, centerY, blockSize, blockSize);
-    context.strokeStyle = "rgba(0,255,255,0.4)";
-    context.lineWidth = 1;
-    context.beginPath();
-    const gridCenterX = physical(cardCssX) + physical(gridLogicalSize) / 2;
-    const gridCenterY = physical(cardCssY) + physical(gridLogicalSize) / 2;
-    context.moveTo(physical(cardCssX), gridCenterY);
-    context.lineTo(physical(cardCssX) + physical(gridLogicalSize), gridCenterY);
-    context.moveTo(gridCenterX, physical(cardCssY));
-    context.lineTo(gridCenterX, physical(cardCssY) + physical(gridLogicalSize));
-    context.stroke();
-
-    const infoY = physical(cardCssY) + physical(gridLogicalSize);
-    const infoHeight = physical(INFO_HEIGHT);
-    context.strokeStyle = "#e6e6e6";
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(physical(cardCssX), infoY);
-    context.lineTo(physical(cardCssX) + physical(cardCssWidth), infoY);
-    context.stroke();
+    const infoX = 7;
+    const infoWidth = cardCssWidth - infoX * 2;
+    const colorY = infoY + 30;
+    context.textBaseline = "middle";
+    context.textAlign = "left";
+    context.font = '11px "Consolas", "Segoe UI", sans-serif';
+    const text = (value: string, x: number, y: number, width = infoWidth) => {
+      let fitted = value;
+      while (fitted.length && context.measureText(fitted).width > width)
+        fitted = fitted.slice(0, -1);
+      if (fitted !== value) {
+        while (fitted.length && context.measureText(`${fitted}…`).width > width)
+          fitted = fitted.slice(0, -1);
+        fitted += "…";
+      }
+      context.fillText(fitted, x, y);
+    };
+    const copiedRecently = performance.now() - getCopiedAt() < 1500;
+    context.fillStyle = copiedRecently ? accent : muted;
+    text(
+      copiedRecently
+        ? translate("shot.copied")
+        : `${Math.round(pointerX)}, ${Math.round(pointerY)}`,
+      infoX,
+      infoY + 10,
+    );
 
     const color = centerColorHex(data);
-    const rowHeight = infoHeight / 3;
-    const padding = 8 * scale;
-    context.textBaseline = "middle";
-    context.fillStyle = "#282828";
-    context.font = `${12 * scale}px "Segoe UI", sans-serif`;
-    context.textAlign = "left";
-    context.fillText(
-      `(${Math.round(pointerX)}, ${Math.round(pointerY)})`,
-      physical(cardCssX) + padding,
-      infoY + rowHeight * 0.5 + 2 * scale,
-    );
-    const copiedRecently = performance.now() - getCopiedAt() < 1500;
-    const colorText = copiedRecently ? translate("shot.copied") : color;
-    context.fillStyle = copiedRecently ? "#28a03c" : "#282828";
-    context.fillText(colorText, physical(cardCssX) + padding, infoY + rowHeight * 1.5 + 2 * scale);
-
-    const textWidth = context.measureText(colorText).width;
-    const previewSize = 12 * scale;
-    const previewX = physical(cardCssX) + padding + textWidth + 8 * scale;
-    const previewY = infoY + rowHeight * 1.5 + 2 * scale;
     context.fillStyle = color;
-    roundRect(context, previewX, previewY - previewSize / 2, previewSize, previewSize, 2 * scale);
+    roundRect(context, infoX, colorY - 5, 10, 10, 2);
     context.fill();
-    context.strokeStyle = "#c8c8c8";
+    context.strokeStyle = border;
     context.lineWidth = 1;
-    context.strokeRect(previewX, previewY - previewSize / 2, previewSize, previewSize);
+    context.stroke();
+    context.fillStyle = foreground;
+    text(color, infoX + 14, colorY, 52);
 
-    context.fillStyle = "#969696";
-    context.font = `${10 * scale}px "Segoe UI", sans-serif`;
-    context.fillText(
-      translate("shot.copyColorHint", { key: getCopyColorHotkey() }),
-      physical(cardCssX) + padding,
-      infoY + rowHeight * 2.5,
-    );
+    // 键帽与色值并排；复制反馈使用整行，避免日语等较长文案挤占色值。
+    context.font = '11px "Segoe UI", sans-serif';
+    const hotkey = getCopyColorHotkey();
+    const keyWidth = Math.max(34, Math.min(44, context.measureText(hotkey).width + 6));
+    const keyX = cardCssWidth - infoX - keyWidth;
+    context.fillStyle = light ? "#e4eee6" : "#34473a";
+    roundRect(context, keyX, colorY - 9, keyWidth, 18, 4);
+    context.fill();
+    context.strokeStyle = light ? "#c5d8c9" : "#4b6654";
+    context.stroke();
+    context.fillStyle = accent;
+    text(hotkey, keyX + 3, colorY, keyWidth - 6);
     context.restore();
   };
 

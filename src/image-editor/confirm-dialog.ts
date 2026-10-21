@@ -20,7 +20,7 @@ export function createEditorConfirmDialog({ workspace }: EditorConfirmDialogOpti
   const panel = document.createElement("section");
   panel.className = "image-editor-confirm-panel floating-surface";
   const icon = document.createElement("span");
-  icon.className = "image-editor-confirm-icon floating-symbol warning";
+  icon.className = "image-editor-confirm-icon floating-symbol";
   icon.ariaHidden = "true";
   icon.textContent = "!";
   const copy = document.createElement("div");
@@ -38,7 +38,7 @@ export function createEditorConfirmDialog({ workspace }: EditorConfirmDialogOpti
   cancel.className = "image-editor-confirm-cancel floating-action";
   const accept = document.createElement("button");
   accept.type = "button";
-  accept.className = "image-editor-confirm-accept floating-action danger";
+  accept.className = "image-editor-confirm-accept floating-action primary";
   actions.append(cancel, accept);
   panel.append(icon, copy, actions);
   element.append(panel);

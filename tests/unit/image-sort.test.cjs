@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { sortImagesByModified } = require("../../.unit-test-dist/viewer/image-sort.js");
+const { sortImagesByModified } = require("../../.unit-test-dist/compiled/viewer/image-sort.js");
 
 const images = [
   { path: "d.png", modified: "2026-04-02T00:00:00Z" },

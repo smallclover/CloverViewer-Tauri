@@ -6,7 +6,7 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "noEmit": false,
-    "outDir": ".unit-test-dist"
+    "outDir": ".unit-test-dist/compiled"
   },
   "include": [
     "src/viewer/grid-layout.ts",
@@ -18,6 +18,9 @@
     "src/image-editor/frame-update.ts",
     "src/image-editor/save-controller.ts",
     "src/image-editor/canvas-export.ts",
+    "src/image-editor/export-image.ts",
+    "src/image-editor/editor-text-input.ts",
+    "src/image-editor/drawing-session.ts",
     "src/image-editor/mosaic-cursor.ts",
     "src/ui/update-controller.ts",
     "src/viewer/thumbnail-loader.ts",
@@ -30,9 +33,10 @@
     "src/screenshot/annotation-renderer.ts",
     "src/screenshot/editor-renderer.ts",
     "src/screenshot/text-input.ts",
-    "src/screenshot/mosaic.ts",
+    "src/image-editor/mosaic.ts",
     "src/screenshot/magnifier.ts",
     "src/screenshot/magnifier-overlay.ts",
+    "src/screenshot/magnifier-visibility.ts",
     "src/screenshot/selection-overlay.ts",
     "src/screenshot/overlay-layout.ts",
     "src/screenshot/resize.ts",

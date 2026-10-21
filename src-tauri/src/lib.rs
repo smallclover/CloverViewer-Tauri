@@ -192,10 +192,8 @@ pub fn run() {
             scroll_capture::tauri::start_scroll_capture,
             scroll_capture::tauri::stop_scroll_capture,
             scroll_capture::tauri::scroll_capture_progress,
-            scroll_capture::tauri::set_scroll_hud_safe,
             scroll_capture::tauri::finish_scroll_capture,
             scroll_capture::tauri::discard_scroll_capture,
-            scroll_capture::tauri::has_scroll_capture_result,
             scroll_capture::tauri::scroll_capture_running,
             take_startup_notices,
         ])

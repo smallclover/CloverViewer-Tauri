@@ -1,5 +1,5 @@
 import { ShapeHistory } from "./history";
-import type { Rect, Shape, Tool } from "./geometry";
+import { cloneShape, translateShape, type Rect, type Shape, type Tool } from "./geometry";
 
 export interface EditorSessionOptions {
   color: string;
@@ -17,19 +17,29 @@ export function createEditorSession(options: EditorSessionOptions) {
   let selectedIndex: number | null = null;
   const history = new ShapeHistory();
 
-  const checkpoint = (snapshot = shapes) => history.checkpoint(snapshot);
-  const undo = () => {
-    const previous = history.undo(shapes);
-    if (!previous) return false;
-    shapes = previous;
+  // 历史保存选区局部坐标：移动整个选区后，撤销/重做仍落在当前选区，包含已有 redo。
+  const relative = (snapshot: Shape[]) =>
+    snapshot.map((shape) => {
+      const copy = cloneShape(shape);
+      translateShape(copy, -(selection?.x ?? 0), -(selection?.y ?? 0));
+      return copy;
+    });
+  const restore = (snapshot: Shape[]) => {
+    for (const shape of snapshot) translateShape(shape, selection?.x ?? 0, selection?.y ?? 0);
+    shapes = snapshot;
     selectedIndex = null;
+  };
+  const checkpoint = (snapshot = shapes) => history.checkpoint(relative(snapshot));
+  const undo = () => {
+    const previous = history.undo(relative(shapes));
+    if (!previous) return false;
+    restore(previous);
     return true;
   };
   const redo = () => {
-    const next = history.redo(shapes);
+    const next = history.redo(relative(shapes));
     if (!next) return false;
-    shapes = next;
-    selectedIndex = null;
+    restore(next);
     return true;
   };
   const deleteSelected = () => {

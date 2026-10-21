@@ -4,8 +4,8 @@ const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { runInNewContext } = require("node:vm");
 const ts = require("typescript");
-const { createAnnotationSizes, imageAnnotationSizes, SIZE_PRESETS, sizeKind } = require("../../.unit-test-dist/image-editor/annotation-style.js");
-const { resizeShape } = require("../../.unit-test-dist/screenshot/resize.js");
+const { createAnnotationSizes, imageAnnotationSizes, SIZE_PRESETS, sizeKind } = require("../../.unit-test-dist/compiled/image-editor/annotation-style.js");
+const { resizeShape } = require("../../.unit-test-dist/compiled/screenshot/resize.js");
 
 test("tool changes retain independent font, stroke and mosaic sizes", () => {
   const sizes = createAnnotationSizes();
@@ -39,7 +39,7 @@ test("new annotation defaults and every preset retain their screen size at every
 });
 
 test("arrow heads and strokes use the captured image size in both preview and export", () => {
-  const { drawAnnotation } = require("../../.unit-test-dist/image-editor/annotation-renderer.js");
+  const { drawAnnotation } = require("../../.unit-test-dist/compiled/image-editor/annotation-renderer.js");
   for (const zoom of [0.2, 1, 2, 40]) {
     const moves = [];
     const context = { beginPath() {}, moveTo: (...args) => moves.push(args), lineTo() {}, stroke() {} };
@@ -53,7 +53,7 @@ test("arrow heads and strokes use the captured image size in both preview and ex
 });
 
 test("screenshot preview and export use image pixels regardless of interface scale", () => {
-  const { createEditorCanvasRenderer } = require("../../.unit-test-dist/screenshot/editor-renderer.js");
+  const { createEditorCanvasRenderer } = require("../../.unit-test-dist/compiled/screenshot/editor-renderer.js");
   const previousDocument = global.document;
   const stamps = [];
   global.document = { createElement: () => {
@@ -102,7 +102,7 @@ test("screenshot text input matches the scaled preview and captures its own size
   runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
     exports, document: { createElement: tag => tag === "textarea" ? element : { style: {}, appendChild: () => {} } },
     window: { addEventListener: () => {} }, setTimeout: callback => timers.push(callback),
-    require: () => require("../../.unit-test-dist/image-editor/annotation-style.js"),
+    require: () => require("../../.unit-test-dist/compiled/image-editor/annotation-style.js"),
   });
   const style = { color: "#f00", strokeWidth: 2, fontSize: 32 };
   const context = { measureText: text => ({ width: text.length * 16 }) };

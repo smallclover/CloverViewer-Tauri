@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createAnnotationLayers } = require("../../.unit-test-dist/screenshot/annotation-layers.js");
+const { createAnnotationLayers } = require("../../.unit-test-dist/compiled/screenshot/annotation-layers.js");
 
 function fixture(callback) {
   const previous = global.document;

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createSingleImageLoader } = require("../../.unit-test-dist/viewer/single-image-loader.js");
+const { createSingleImageLoader } = require("../../.unit-test-dist/compiled/viewer/single-image-loader.js");
 
 const entry = (path, width = 64) => ({ path, name: path, width, height: width, size: 1, modified: "2026-10-01" });
 const tick = () => new Promise(resolve => setImmediate(resolve));

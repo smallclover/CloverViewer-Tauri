@@ -21,7 +21,7 @@ test("a double-screen capture cannot use a single-screen CSS viewport, even if t
     pause: async () => { if (++pauses === 3) width = 3840; },
   });
   assert.equal(reads, 5);
-  assert.equal(pauses, 3);
+  assert.equal(pauses, 4);
 });
 
 test("DPI and interface zoom may scale both viewport axes uniformly", async () => {
@@ -32,7 +32,7 @@ test("DPI and interface zoom may scale both viewport axes uniformly", async () =
       getPixelRatio: () => scale,
       sync: async () => true, pause: async () => pauses++,
     }), true);
-    assert.equal(pauses, 0);
+    assert.equal(pauses, 1);
   }
 });
 
@@ -44,7 +44,7 @@ test("a stale viewport with the correct aspect ratio cannot squeeze the desktop 
     sync: async () => true,
     pause: async () => { if (++pauses === 2) size = { width: 3840, height: 1080 }; },
   }), true);
-  assert.equal(pauses, 2);
+  assert.equal(pauses, 3);
 });
 
 test("resolution and DPI changes require a new stable viewport for each capture", async () => {
@@ -59,7 +59,7 @@ test("resolution and DPI changes require a new stable viewport for each capture"
       sync: async () => true, pause: async () => pauses++,
     }), true);
     assert.equal(reads, 3);
-    assert.equal(pauses, 1);
+    assert.equal(pauses, 2);
   }
 });
 
@@ -70,6 +70,21 @@ test("matching CSS geometry still waits for native window and WebView bounds to 
     sync: async () => ++nativeCalls >= 3, pause: async () => {},
   }), true);
   assert.equal(nativeCalls, 4);
+});
+
+test("apparently stable IPC reads must yield before accepting a delayed display-change resize", async () => {
+  let reads = 0, pauses = 0, width = 3840;
+  assert.equal(await waitForScreenshotViewport({ data, isCurrent: () => true,
+    root: { getBoundingClientRect: () => { reads++; return { width, height: 1080 }; } },
+    getPixelRatio: () => 1, sync: async () => true,
+    pause: async () => {
+      pauses++;
+      if (pauses === 1) width = 1920; // 第一对 IPC 后才到达的 Windows resize。
+      if (pauses === 3) width = 3840;
+    },
+  }), true);
+  assert.equal(reads, 5);
+  assert.equal(pauses, 4);
 });
 
 test("expired and cancelled sessions stop without displaying or repairing a newer capture", async () => {

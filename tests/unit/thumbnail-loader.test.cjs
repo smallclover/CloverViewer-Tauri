@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createThumbnailLoader } = require("../../.unit-test-dist/viewer/thumbnail-loader.js");
+const { createThumbnailLoader } = require("../../.unit-test-dist/compiled/viewer/thumbnail-loader.js");
 
 test("thumbnail loader bounds concurrent work, deduplicates requests, and drops stale queued work", async () => {
   const resolvers = [];

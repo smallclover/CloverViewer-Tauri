@@ -39,7 +39,7 @@ pub fn run_session(
     cancel: &AtomicBool,
     on_progress: &mut dyn FnMut(ScrollCaptureProgress),
 ) -> Result<ScrollCaptureResult, String> {
-    run_session_ext(req, options, host, cancel, None, None, on_progress)
+    run_session_ext(req, options, host, cancel, None, on_progress)
 }
 
 pub fn run_session_ext(
@@ -47,7 +47,6 @@ pub fn run_session_ext(
     options: &SessionOptions,
     host: &dyn SessionHost,
     cancel: &AtomicBool,
-    _hud_overlap: Option<&AtomicBool>,
     on_frame_capture: Option<Box<dyn FnMut(bool) + Send>>,
     on_progress: &mut dyn FnMut(ScrollCaptureProgress),
 ) -> Result<ScrollCaptureResult, String> {

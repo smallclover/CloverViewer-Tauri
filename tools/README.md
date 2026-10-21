@@ -23,6 +23,9 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib   # 滚动拼接与配准
 npm run test:unit                                    # 前端布局、输入、渲染等单元测试
 ```
 
+前端测试从 `tests/unit/` 自动发现 `*.test.cjs`，不再手工登记。每次运行只清空并重建
+`.unit-test-dist/compiled/` 中的 TypeScript 产物；同级的历史截图、浏览器素材和对照基线保留。
+
 *   `src-tauri/src/scroll_capture/tests.rs` 使用合成帧验证位移、固定首尾栏、固定侧栏旁正文的配准、白色正文不误判、重复帧拒绝和未匹配后继续拼接。
 *   `tests/unit/screenshot-overlay-layout.test.cjs` 直接导入编译后的 `src/screenshot/overlay-layout.ts`，验证普通选区工具栏和滚动截图面板的定位。调用入口分别为 `editor-ui-controller.ts` 与 `scroll-capture-layout.ts`，逻辑已不在 `src/screenshot.ts` 内。
 
@@ -36,6 +39,17 @@ node tools/scroll-ui-geometry-check.cjs
 4000×2560 的参数打印落点，供理解旧问题使用。它没有导入当前前端，算法也不同于现有
 `placeScrollOverlay`；输出不能证明当前布局正确。维护现有定位时，以直接覆盖产品模块的
 单元测试和真实桌面检查为准。
+
+## 截图性能探针与历史对照
+
+`src-tauri/examples/screenshot_latency_probe.rs` 测量采集、PNG 编码和内存复制耗时，
+需要可交互 Windows 桌面，不显示截图或写入文件。命令见文件头。
+
+`src-tauri/examples/screenshot_transport_probe.rs` 保留旧 PNG 与早期 RGBA 链路的历史比较，
+不是当前截图窗口的回归测试。PNG 模式依赖未跟踪的 `.unit-test-dist/screenshot-baseline-dist/`，
+其中必须是当时仍使用 PNG 数据的完整前端构建，不能直接复制当前 `dist/` 冒充旧基线。
+两种模式重新运行前都需适配当前截图命令和视口就绪流程，并按文件头说明处理 Windows manifest。
+日常验证仍运行上面的单元测试；真实混合 DPI 与多屏检查按架构文档执行。
 
 ## Live2D 模型包校验
 

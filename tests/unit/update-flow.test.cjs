@@ -8,7 +8,7 @@ const {
   createUpdateController,
   UPDATE_CHECK_TIMEOUT_MS,
   UPDATE_DOWNLOAD_TIMEOUT_MS,
-} = require("../../.unit-test-dist/ui/update-controller.js");
+} = require("../../.unit-test-dist/compiled/ui/update-controller.js");
 
 const root = resolve(__dirname, "../..");
 const settingsSource = readFileSync(resolve(root, "src/ui/settings-controller.ts"), "utf8");

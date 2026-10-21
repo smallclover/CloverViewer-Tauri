@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { drawAnnotation } = require("../../.unit-test-dist/screenshot/annotation-renderer.js");
+const { drawAnnotation } = require("../../.unit-test-dist/compiled/screenshot/annotation-renderer.js");
 
 function createContext() {
   const calls = [];
@@ -56,7 +56,7 @@ test("annotation renderer lays out multiline text using scaled line height", () 
 });
 
 test("screenshot mosaic reuses immutable capture samples through drawing, commit and export", () => {
-  const { createEditorCanvasRenderer } = require("../../.unit-test-dist/screenshot/editor-renderer.js");
+  const { createEditorCanvasRenderer } = require("../../.unit-test-dist/compiled/screenshot/editor-renderer.js");
   const canvases = [];
   const makeCanvas = () => {
     const canvas = { width: 200, height: 200 };

@@ -281,7 +281,10 @@ export function createAnnotationSelection(options: {
       options.select(false);
       refresh();
     },
-    cancel: () => finish(true),
+    cancel: (event?: PointerEvent) => {
+      if (event && drag?.id !== event.pointerId) return;
+      finish(true);
+    },
     leave: () => {
       hovered = null;
       refresh();

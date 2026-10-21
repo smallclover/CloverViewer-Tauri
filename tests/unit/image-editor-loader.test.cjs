@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createImageEditorLoader } = require("../../.unit-test-dist/viewer/image-editor-loader.js");
+const { createImageEditorLoader } = require("../../.unit-test-dist/compiled/viewer/image-editor-loader.js");
 
 const deferred = () => {
   let resolve, reject;

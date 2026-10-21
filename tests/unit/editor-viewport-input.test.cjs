@@ -1,6 +1,35 @@
 const assert=require("node:assert/strict");
 const test=require("node:test");
 const loadTs=require("./helpers/load-ts.cjs");
+
+test("viewport pan owns one pointer and reset or blur releases its capture", () => {
+  for (const ending of ["pointercancel", "lostpointercapture", "blur", "reset"]) {
+    const events = new Map(), windowEvents = new Map(), captured = new Set(), moves = [];
+    const {bindEditorViewportInput} = loadTs("image-editor/viewport-input.ts", {}, {
+      window: {addEventListener: (name, handler) => windowEvents.set(name, handler)},
+    });
+    const surface = {
+      classList: {add() {}, remove() {}}, addEventListener: (name, handler) => events.set(name, handler),
+      setPointerCapture: id => captured.add(id), hasPointerCapture: id => captured.has(id),
+      releasePointerCapture: id => { captured.delete(id); events.get("lostpointercapture")({pointerId: id}); },
+    };
+    const input = bindEditorViewportInput({surface, viewport: {panBy: (x,y) => moves.push([x,y])},
+      isActive: () => true, isBusy: () => false});
+    const event = (id, x, y) => ({pointerId: id, button: 1, clientX: x, clientY: y, preventDefault() {}, stopImmediatePropagation() {}});
+    events.get("pointerdown")(event(1, 10, 20));
+    events.get("pointerdown")(event(2, 500, 500));
+    events.get("pointercancel")(event(2, 500, 500));
+    events.get("lostpointercapture")(event(2, 500, 500));
+    events.get("pointermove")(event(1, 20, 40));
+    assert.deepEqual(moves, [[10, 20]]);
+    if (ending === "reset") input.reset();
+    else if (ending === "blur") windowEvents.get("blur")();
+    else events.get(ending)(event(1, 20, 40));
+    assert.equal(captured.size, 0, ending);
+    events.get("pointerup")(event(1, 100, 100));
+    assert.deepEqual(moves, [[10, 20]], "late release cannot move the viewport");
+  }
+});
 test("wheel zoom and Space/middle-button panning use CSS coordinates without starting annotations", () => {
   const events=new Map(),windowEvents=new Map(),calls=[];let busy=false,cropping=false;
   const {bindEditorViewportInput}=loadTs("image-editor/viewport-input.ts",{}, {window:{addEventListener:(name,handler)=>windowEvents.set(name,handler)}});

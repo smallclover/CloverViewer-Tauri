@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { fitCropViewport, createCropViewport } = require("../../.unit-test-dist/image-editor/crop-viewport.js");
+const { fitCropViewport, createCropViewport } = require("../../.unit-test-dist/compiled/image-editor/crop-viewport.js");
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8);
 

@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { overlaps, placeScrollOverlay, placeSelectionOverlay } = require("../../.unit-test-dist/screenshot/overlay-layout.js");
+const { overlaps, placeScrollOverlay, placeSelectionOverlay } = require("../../.unit-test-dist/compiled/screenshot/overlay-layout.js");
 
 const viewport = { x: 0, y: 0, w: 500, h: 400 };
 

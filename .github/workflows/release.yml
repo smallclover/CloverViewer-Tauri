@@ -95,10 +95,9 @@ jobs:
       # 从 CHANGELOG.md 抽当前标签对应的版本段落（到下一个 `## ` 标题为止），
       # 并以多行 heredoc 形式交给后面的 tauri-action 当作 Release 正文。
       #
-      # ⚠ 这里刻意**不用** `Out-File -Encoding utf8NoBOM`：GitHub 的 Windows runner
-      # 上 `shell: pwsh` 默认仍是 **Windows PowerShell 5.1**（不存在 utf8NoBOM 这个
-      # 取值，会直接报 ValidateSet 错），而 `-Encoding utf8` 又会写出 BOM，把
-      # `$GITHUB_OUTPUT` 的第一行键名污染成 `\ufeffbody`。所以统一走 .NET 显式编码。
+      # shell: pwsh 使用 PowerShell 7；这里仍用 .NET 显式指定无 BOM 的 UTF-8，
+      # 避免输出文件编码依赖 shell 默认值，确保 `$GITHUB_OUTPUT` 的首个键名没有 BOM。
+      # Windows PowerShell 5.1 的兼容要求另见 publish-release.ps1，不适用于此 shell。
       #
       # 抽不到版本段落不报错，回退成一句提示，避免因为文档没跟上而卡住发布。
       - name: Extract release notes

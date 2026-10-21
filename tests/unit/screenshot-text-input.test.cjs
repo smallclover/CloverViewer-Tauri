@@ -34,7 +34,7 @@ function setup() {
     } },
     window: { addEventListener: () => {} },
     setTimeout: callback => timers.push(callback),
-    require: () => require("../../.unit-test-dist/image-editor/annotation-style.js"),
+    require: () => require("../../.unit-test-dist/compiled/image-editor/annotation-style.js"),
   });
   const input = exports.createTextInputController({
     uiLayer: { appendChild: () => {} }, root: { getBoundingClientRect: () => ({ width: rootWidth, height: rootHeight }) },

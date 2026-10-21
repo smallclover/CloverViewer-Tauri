@@ -219,7 +219,8 @@ export const ja = {
   "settings.selectionBorderStyle": "枠線のスタイル",
   "settings.selectionBorderSolid": "実線",
   "settings.selectionBorderDashed": "破線",
-  "settings.magnifier.desc": "範囲選択中にカーソル横のピクセルを拡大します。",
+  "settings.magnifier.desc":
+    "範囲選択前と選択中にピクセルを拡大し、選択確定後は非表示になります。Alt を押している間は一時表示します。",
   "settings.experimentalAutoScroll": "自動スクロールを有効化（試験的）",
   "settings.experimentalAutoScrollHint": "単一の本文領域向けです。既定ではオフです",
   "settings.lanShareDuration": "既定の有効期限",
@@ -482,6 +483,7 @@ export const ja = {
   "shot.hint.undo": "元に戻す",
   "shot.hint.redo": "やり直す",
   "shot.hint.copyColor": "色をコピー",
+  "shot.hint.magnifier": "押している間は拡大鏡を表示",
   "shot.ocrTitle": "認識したテキスト",
   "shot.copyAll": "すべてのテキストをコピー",
   "shot.close": "閉じる",

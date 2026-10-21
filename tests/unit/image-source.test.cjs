@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createImageSourceResolver } = require("../../.unit-test-dist/viewer/image-source.js");
+const { createImageSourceResolver } = require("../../.unit-test-dist/compiled/viewer/image-source.js");
 
 const webImage = { path: "C:/images/photo.png", web_supported: true };
 const fallbackImage = { path: "C:/images/photo.tiff", web_supported: false };

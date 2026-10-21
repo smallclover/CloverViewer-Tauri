@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { ShapeHistory } = require("../../.unit-test-dist/screenshot/history.js");
-const { SnapshotHistory } = require("../../.unit-test-dist/image-editor/history.js");
+const { ShapeHistory } = require("../../.unit-test-dist/compiled/screenshot/history.js");
+const { SnapshotHistory } = require("../../.unit-test-dist/compiled/image-editor/history.js");
 
 const shape = (x) => ({ tool: "rect", start: { x, y: 0 }, end: { x: x + 10, y: 10 }, color: "#cc0000", strokeWidth: 2 });
 

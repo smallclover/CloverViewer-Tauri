@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createSingleImageController } = require("../../.unit-test-dist/viewer/single-image-controller.js");
+const { createSingleImageController } = require("../../.unit-test-dist/compiled/viewer/single-image-controller.js");
 
 function createSurface() {
   const listeners = new Map();

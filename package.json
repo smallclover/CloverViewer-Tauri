@@ -1,7 +1,7 @@
 {
   "name": "cloverviewer-tauri",
   "private": true,
-  "version": "0.1.25",
+  "version": "0.1.26",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -25,7 +25,6 @@
     "@tauri-apps/api": "^2.12.0",
     "@tauri-apps/plugin-dialog": "^2.8.0",
     "@tauri-apps/plugin-global-shortcut": "^2.4.0",
-    "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.13.0"
   },
   "devDependencies": {

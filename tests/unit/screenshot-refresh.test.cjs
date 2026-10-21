@@ -4,7 +4,44 @@ const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { runInNewContext } = require("node:vm");
 const ts = require("typescript");
-const { createScreenshotRefreshController } = require("../../.unit-test-dist/screenshot/refresh-controller.js");
+const { createScreenshotRefreshController } = require("../../.unit-test-dist/compiled/screenshot/refresh-controller.js");
+
+test("screenshot lifecycle awaits every API subscription before loading and routes subsequent events", async () => {
+  const loadTs = require("./helpers/load-ts.cjs");
+  const handlers = {}, calls = [];
+  const subscribing = deferred();
+  const subscribed = deferred();
+  const subscribe = name => async handler => {
+    handlers[name] = handler;
+    if (name === "done") { subscribed.resolve(); await subscribing.promise; }
+    calls.push(`listen:${name}`);
+    return () => {};
+  };
+  const { startScreenshotLifecycle } = loadTs("screenshot/lifecycle.ts", {
+    "../api": {
+      listenScreenshotRefresh: subscribe("refresh"), listenScreenshotClear: subscribe("clear"),
+      listenScrollCaptureProgress: subscribe("progress"), listenScrollCaptureHud: subscribe("hud"),
+      listenScrollCaptureDone: subscribe("done"), screenshotUiReady: async id => { calls.push(`show:${id}`); return true; },
+    },
+  });
+  const received = [];
+  const started = startScreenshotLifecycle({
+    refreshConfig: async () => { calls.push("config"); },
+    loadScreenshot: async () => { calls.push("load"); return 7; },
+    clearScreenshot: () => calls.push("clear"), applyScrollStartMode: async () => calls.push("mode"),
+    onScrollProgress: value => received.push(value), onScrollHud: value => received.push(value),
+    onScrollDone: value => received.push(value),
+  });
+  await subscribed.promise;
+  assert.equal(calls.includes("load"), false);
+  subscribing.resolve(); await started;
+  assert.deepEqual(calls, ["listen:refresh", "listen:clear", "listen:progress", "listen:hud", "listen:done", "config", "load", "show:7", "mode"]);
+  const progress = { stage: "capturing" }, hud = { hidden: true, glow: true }, done = { ok: true };
+  handlers.progress(progress); handlers.hud(hud); handlers.done(done);
+  assert.deepEqual(received, [progress, hud, done]);
+  handlers.clear(); await handlers.refresh();
+  assert.deepEqual(calls.slice(-5), ["clear", "config", "load", "show:7", "mode"]);
+});
 
 function deferred() {
   let resolve;
@@ -155,7 +192,7 @@ test("cancelled image decoding cannot overwrite the cleared session", async () =
 test("valid screenshot renders before the page is marked ready", async () => {
   const { controller, calls, classes } = setupLoader(screenshotData);
   assert.equal(await controller.load(), 1);
-  assert.deepEqual(calls, ["reset", "bounds", "screens", "cursor", "render", "restore"]);
+  assert.deepEqual(calls, ["reset", "bounds", "screens", "cursor", "restore", "render"]);
   assert.equal(classes.has("ready"), true);
 });
 
@@ -247,4 +284,54 @@ test("a permanently squeezed viewport closes its capture instead of showing a di
   assert.equal(await controller.load(), null);
   assert.deepEqual(calls, ["close"]);
   assert.equal(classes.has("ready"), false);
+});
+
+test("viewport is checked again after asynchronous initialization before marking the screenshot ready", async () => {
+  let validations = 0;
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async () => ++validations === 1);
+  assert.equal(await controller.load(), null);
+  assert.equal(validations, 2);
+  assert.equal(classes.has("ready"), false);
+  assert.equal(calls.at(-1), "close");
+});
+
+test("late resize hides the screenshot while repairing and coalesces repeated notifications without losing edits", async () => {
+  const sized = deferred(); let validations = 0;
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async () => {
+    if (++validations <= 2) return true;
+    return sized.promise;
+  });
+  await controller.load();
+  assert.equal(classes.has("ready"), true);
+  const first = controller.revalidate(), second = controller.revalidate();
+  assert.equal(first, second);
+  assert.equal(classes.has("ready"), false);
+  sized.resolve(true); assert.equal(await first, true);
+  assert.equal(classes.has("ready"), true);
+  assert.equal(calls.filter(call => call === "reset").length, 1);
+  assert.equal(calls.filter(call => call === "render").length, 2);
+});
+
+test("a display layout invalidated after showing closes only that screenshot", async () => {
+  let validations = 0;
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async () => ++validations <= 2);
+  await controller.load();
+  assert.equal(await controller.revalidate(), false);
+  assert.equal(classes.has("ready"), false);
+  assert.equal(calls.at(-1), "close");
+});
+
+test("cancelling a resize repair cannot restore an obsolete ready state or close another capture", async () => {
+  const sized = deferred(); let validations = 0;
+  const { controller, calls, classes } = setupLoader(screenshotData, async () => [], {}, async () => {
+    if (++validations <= 2) return true;
+    return sized.promise;
+  });
+  await controller.load();
+  const repairing = controller.revalidate();
+  controller.cancel(); sized.resolve(true);
+  assert.equal(await repairing, false);
+  assert.equal(classes.has("ready"), false);
+  assert.equal(calls.includes("close"), false);
+  assert.equal(await controller.revalidate(), false);
 });

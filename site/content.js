@@ -38,7 +38,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "留住画面，也留下重点。",
     editBody:
-      "多屏截图与标注，图形和文字可移动、旋转，支持重置与撤销。裁剪可先预览再应用或取消；PNG、JPEG、WebP 保存失败保留原图。",
+      "多屏截图与标注，增减显示器后重新准备覆盖窗；选区确定后放大镜隐藏，按住 Alt 临时显示。图形和文字可移动、旋转，裁剪可预览后应用或取消，支持撤销与安全保存。",
     editTag: "截图 · 裁切 · 标注 · 导出",
     scrollTitle: "一屏装不下，就继续滚动。",
     scrollBody:
@@ -157,7 +157,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "Keep the picture. Make the point.",
     editBody:
-      "Capture and annotate across monitors. Move or rotate shapes and text, undo a reset, and apply or cancel crop drafts. Failed PNG, JPEG and WebP saves preserve the original.",
+      "Capture across monitors, rebuilding the overlay after displays change. The magnifier hides after selection; hold Alt to show it temporarily. Move or rotate shapes and text, apply or cancel crop drafts, undo edits and save safely.",
     editTag: "CAPTURE · CROP · ANNOTATE · EXPORT",
     scrollTitle: "When one screen isn't enough.",
     scrollBody:
@@ -281,7 +281,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "画面を残して、要点を伝える。",
     editBody:
-      "複数画面を撮影して注釈を追加。図形や文字の移動・回転、リセットの取り消し、トリミング下書きの適用・キャンセルに対応。PNG・JPEG・WebPの保存失敗時は元画像を保持します。",
+      "複数画面を撮影し、画面の増減後は撮影ウィンドウを再作成。拡大鏡は範囲確定後に隠れ、Alt の長押しで一時表示します。図形や文字の移動・回転、トリミングの適用・キャンセル、取り消しと安全な保存に対応。",
     editTag: "キャプチャ · 切り抜き · 注釈 · 出力",
     scrollTitle: "一画面で足りなければ、スクロール。",
     scrollBody:

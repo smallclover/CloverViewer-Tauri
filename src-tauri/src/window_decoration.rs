@@ -168,7 +168,7 @@ pub fn record_bounds(app: &AppHandle) {
     );
 }
 
-/// 截图工作线程等待前端隐藏角色并完成一帧；超时则临时隐藏整个主窗口，避免漏拍角色。
+/// 截图工作线程等待前端隐藏角色并完成两帧绘制回执；超时则临时隐藏整个主窗口，避免漏拍角色。
 pub fn suspend(app: &AppHandle, suspended: bool) {
     let state = app.state::<DecorationState>();
     state.suspended.store(suspended, Ordering::SeqCst);

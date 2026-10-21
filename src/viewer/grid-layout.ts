@@ -46,19 +46,29 @@ export function createGridLayout(
   };
 }
 
-export function visibleItemRange(
+/** 与分组几何共用的虚拟滚动范围；每个分组独立起行，保留上下两行缓冲。 */
+export function visibleSectionItems(
   scrollTop: number,
   viewportHeight: number,
-  itemCount: number,
+  sections: readonly GridSection[],
   layout: GridLayout,
-): [number, number] {
+): Set<number> {
+  const needed = new Set<number>();
   const rowHeight = layout.cellHeight + GAP;
-  const firstRow = Math.floor(scrollTop / rowHeight);
-  const lastRow = Math.ceil((scrollTop + viewportHeight) / rowHeight);
-  return [
-    Math.min(itemCount, Math.max(0, (firstRow - BUFFER_ROWS) * layout.columns)),
-    Math.min(itemCount, (lastRow + BUFFER_ROWS) * layout.columns),
-  ];
+  const visibleTop = Math.max(0, scrollTop - rowHeight * BUFFER_ROWS);
+  const visibleBottom = scrollTop + viewportHeight + rowHeight * BUFFER_ROWS;
+  for (const section of sections) {
+    if (section.itemsBottom <= visibleTop || section.itemsTop >= visibleBottom) continue;
+    const firstRow = Math.max(0, Math.floor((visibleTop - section.itemsTop) / rowHeight));
+    const lastRow = Math.ceil((visibleBottom - section.itemsTop) / rowHeight);
+    const from = section.startIndex + firstRow * layout.columns;
+    const to = Math.min(
+      section.startIndex + section.itemCount,
+      section.startIndex + lastRow * layout.columns,
+    );
+    for (let index = from; index < to; index += 1) needed.add(index);
+  }
+  return needed;
 }
 
 /** 按连续的日期分组排版，同时保留可虚拟化的图片行。 */

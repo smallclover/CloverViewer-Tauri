@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { cloneShape, isShapeHit, normRect, shapeBBox, shapeHandles } = require("../../.unit-test-dist/screenshot/geometry.js");
+const { cloneShape, isShapeHit, normRect, shapeBBox, shapeHandles } = require("../../.unit-test-dist/compiled/screenshot/geometry.js");
 
 const baseShape = {
   tool: "rect",

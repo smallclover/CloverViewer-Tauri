@@ -1,6 +1,6 @@
 //! 滚动截图（长截图）。
 //!
-//! 此门面保留原有公开 API；实现按平台、图像匹配、会话和 Tauri 适配拆入子模块。
+//! 此门面统一导出宿主与探针使用的接口；实现按平台、图像匹配、会话和 Tauri 适配拆入子模块。
 #![allow(dead_code)]
 
 #[path = "scroll_capture/frame_metrics.rs"]
@@ -37,9 +37,8 @@ pub use session::{
 pub use session_auto::{run_session, run_session_ext};
 pub use session_manual::run_manual_session_ext;
 pub use tauri::{
-    discard_scroll_capture, finish_scroll_capture, has_scroll_capture_result,
-    scroll_capture_progress, scroll_capture_running, set_scroll_hud_safe, start_scroll_capture,
-    stop_scroll_capture, ScrollCaptureSession,
+    discard_scroll_capture, finish_scroll_capture, scroll_capture_progress, scroll_capture_running,
+    start_scroll_capture, stop_scroll_capture, ScrollCaptureSession,
 };
 pub use types::{RectPx, ScrollMethod, ScrollState, SettleResult, WinInfo};
 

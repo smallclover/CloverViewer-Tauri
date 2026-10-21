@@ -11,9 +11,15 @@ export function bindEditorViewportInput(options: {
   let space = false;
   let pan: { id: number; x: number; y: number } | null = null;
   const reset = () => {
+    const previous = pan;
     pan = null;
     space = false;
     surface.classList.remove("panning");
+    if (previous && surface.hasPointerCapture(previous.id))
+      surface.releasePointerCapture(previous.id);
+  };
+  const cancel = (event: PointerEvent) => {
+    if (pan?.id === event.pointerId) reset();
   };
   window.addEventListener("keydown", (event) => {
     if (
@@ -65,6 +71,7 @@ export function bindEditorViewportInput(options: {
       if (
         !options.isActive() ||
         options.isBusy() ||
+        pan ||
         !(event.button === 1 || (event.button === 0 && space))
       )
         return;
@@ -94,12 +101,10 @@ export function bindEditorViewportInput(options: {
       viewport.panBy(event.clientX - pan.x, event.clientY - pan.y);
       event.stopImmediatePropagation();
       reset();
-      if (surface.hasPointerCapture(event.pointerId))
-        surface.releasePointerCapture(event.pointerId);
     },
     true,
   );
-  surface.addEventListener("pointercancel", reset);
-  surface.addEventListener("lostpointercapture", reset);
+  surface.addEventListener("pointercancel", cancel);
+  surface.addEventListener("lostpointercapture", cancel);
   return { reset };
 }

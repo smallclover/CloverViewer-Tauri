@@ -1,8 +1,13 @@
-import { listen } from "@tauri-apps/api/event";
 import {
   getConfig,
+  listenScreenshotRefresh,
+  listenScreenshotClear,
+  listenScrollCaptureProgress,
+  listenScrollCaptureHud,
+  listenScrollCaptureDone,
   screenshotUiReady,
   type ScrollCaptureDone,
+  type ScrollCaptureHud,
   type ScrollCaptureProgress,
 } from "../api";
 import { createScreenshotRefreshController } from "./refresh-controller";
@@ -42,7 +47,7 @@ interface ScreenshotLifecycleOptions {
   clearScreenshot: () => void;
   applyScrollStartMode: () => Promise<void>;
   onScrollProgress: (progress: ScrollCaptureProgress) => void;
-  onScrollHud: (state: { hidden: boolean; hud?: boolean; glow?: boolean }) => void;
+  onScrollHud: (state: ScrollCaptureHud) => void;
   onScrollDone: (done: ScrollCaptureDone) => void;
 }
 
@@ -52,16 +57,10 @@ export async function startScreenshotLifecycle(options: ScreenshotLifecycleOptio
     ...options,
     showScreenshot: screenshotUiReady,
   });
-  await listen("screenshot-refresh", controller.refresh);
-  await listen("screenshot-clear", controller.clear);
-  await listen<ScrollCaptureProgress>("scroll-capture-progress", (event) =>
-    options.onScrollProgress(event.payload),
-  );
-  await listen<{ hidden: boolean; hud?: boolean; glow?: boolean }>("scroll-capture-hud", (event) =>
-    options.onScrollHud(event.payload),
-  );
-  await listen<ScrollCaptureDone>("scroll-capture-done", (event) =>
-    options.onScrollDone(event.payload),
-  );
+  await listenScreenshotRefresh(controller.refresh);
+  await listenScreenshotClear(controller.clear);
+  await listenScrollCaptureProgress(options.onScrollProgress);
+  await listenScrollCaptureHud(options.onScrollHud);
+  await listenScrollCaptureDone(options.onScrollDone);
   await controller.refresh();
 }

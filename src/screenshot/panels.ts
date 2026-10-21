@@ -31,14 +31,16 @@ export function createHelpPanel(uiLayer: HTMLElement): HelpPanel {
   };
   for (const row of rows) element.appendChild(makeRow(row.kbd ?? "", row.labelI18n, row.kbdI18n));
   const colorRow = makeRow("Alt+C", "shot.hint.copyColor");
+  const magnifierRow = makeRow("Alt", "shot.hint.magnifier");
   const colorKey = colorRow.querySelector("kbd") as HTMLElement;
-  element.appendChild(colorRow);
+  element.append(magnifierRow, colorRow);
   uiLayer.appendChild(element);
   return {
     element,
     sync(copyColorHotkey, magnifierActive) {
       colorKey.textContent = copyColorHotkey;
       colorRow.style.display = magnifierActive ? "" : "none";
+      magnifierRow.style.display = magnifierActive ? "" : "none";
     },
   };
 }

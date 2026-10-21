@@ -183,8 +183,12 @@ export function createCropOverlay(options: CropOverlayOptions) {
     frames.push(point(event, layout));
     finish(false);
   });
-  overlay.addEventListener("pointercancel", () => finish(true));
-  overlay.addEventListener("lostpointercapture", () => finish(true));
+  const cancelPointer = (event: PointerEvent) => {
+    if (drag?.id === event.pointerId) finish(true);
+  };
+  overlay.addEventListener("pointercancel", cancelPointer);
+  overlay.addEventListener("lostpointercapture", cancelPointer);
+  window.addEventListener("blur", () => finish(true));
   const observer = new ResizeObserver(refreshLayout);
   observer.observe(workspace);
   observer.observe(canvas);

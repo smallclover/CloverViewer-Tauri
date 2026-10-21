@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { resizeShape } = require("../../.unit-test-dist/screenshot/resize.js");
+const { resizeShape } = require("../../.unit-test-dist/compiled/screenshot/resize.js");
 
 const rect = {
   tool: "rect",

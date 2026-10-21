@@ -22,18 +22,12 @@ import { createEditorCanvasRenderer } from "./screenshot/editor-renderer";
 import { createEditorSession } from "./screenshot/editor-session";
 import { bindEditorShortcuts } from "./screenshot/editor-shortcuts";
 import { createEditorUiController } from "./screenshot/editor-ui-controller";
-import {
-  isShapeHit,
-  normRect,
-  type Pt,
-  type Rect,
-  shapeHandles,
-  type Tool,
-} from "./screenshot/geometry";
+import { isShapeHit, normRect, type Pt, shapeHandles, type Tool } from "./screenshot/geometry";
 import { createLanSharePanel } from "./screenshot/lan-share-panel";
 import { refreshScreenshotConfig, startScreenshotLifecycle } from "./screenshot/lifecycle";
 import { createMagnifierRenderer } from "./screenshot/magnifier";
 import { createMagnifierOverlay } from "./screenshot/magnifier-overlay";
+import { createMagnifierVisibility } from "./screenshot/magnifier-visibility";
 import { placeScrollOverlay } from "./screenshot/overlay-layout";
 import { createHelpPanel } from "./screenshot/panels";
 import { createScreenshotActionController } from "./screenshot/screenshot-action-controller";
@@ -54,6 +48,7 @@ import { createTextInputController } from "./screenshot/text-input";
 import { createToolbar } from "./screenshot/toolbar";
 import { createSelectionOverlay } from "./screenshot/selection-overlay";
 import { createViewportBounds } from "./screenshot/viewport";
+import { createScreenshotCoordinates } from "./screenshot/coordinates";
 
 // 截图标注器：交互绘制、放大镜、滚动截图与导出的组合根
 //
@@ -72,13 +67,6 @@ let screenshotLoadController: ReturnType<typeof createScreenshotLoadController>;
 let editorUi: ReturnType<typeof createEditorUiController>;
 let screenshotActions: ReturnType<typeof createScreenshotActionController>;
 
-// 物理像素 / CSS 像素 —— 实时计算（不再用 devicePixelRatio 单值，
-// multi-monitor mixed-DPI 时单值不可靠，会让 outer frame 与 inner viewport 比例同步错位）。
-function physScale(): number {
-  if (totalW <= 0) return 1;
-  const w = viewportBounds.get().width;
-  return w > 0 ? totalW / w : 1;
-}
 // ---------- 状态 ----------
 let totalW = 0;
 let totalH = 0;
@@ -108,6 +96,12 @@ function requiredContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
 }
 const root = requiredElement("screenshot-root");
 const viewportBounds = createViewportBounds(root);
+const coordinates = createScreenshotCoordinates({
+  getViewport: viewportBounds.get,
+  getBounds: () => ({ totalW, totalH }),
+  getScreens: () => screens,
+});
+const { scale: physScale, toCssBox, rootBox: rootBoxCss, monitorBox: monitorBoxCss } = coordinates;
 const canvas = requiredElement<HTMLCanvasElement>("overlay-canvas");
 const ctx = requiredContext(canvas);
 const uiLayer = requiredElement("ui-layer");
@@ -243,8 +237,26 @@ const magnifier = createMagnifierRenderer({
   translate: t,
   getCopyColorHotkey: () => copyColorHotkey,
   getCopiedAt: () => copiedAt,
+  getTheme: () => (document.documentElement.dataset.theme === "light" ? "light" : "dark"),
 });
 const magnifierOverlay = createMagnifierOverlay({ root, renderer: magnifier, getScale: physScale });
+const magnifierVisibility = createMagnifierVisibility({
+  getState: () => {
+    const input = editorInput?.getFrameState();
+    return {
+      enabled: magnifierActive,
+      scrollIdle: scroll.phase === "idle",
+      textEditing: textInput.classList.contains("editing"),
+      overUI: input?.overUI ?? false,
+      point: input?.lastMousePos ?? null,
+      selection: editorSession.selection,
+      tool: editorSession.tool,
+      dragMode: input?.dragMode ?? "none",
+    };
+  },
+  onChange: render,
+});
+window.addEventListener("beforeunload", magnifierVisibility.dispose);
 const selectionOverlay = createSelectionOverlay({ root, canvas, getViewport: viewportBounds.get });
 const editorRenderer = createEditorCanvasRenderer({
   context: ctx,
@@ -309,16 +321,7 @@ function render() {
       ? input.hoverWin
       : null,
   );
-  // 滚动截图（包括待框选阶段）不需要取色；普通截图则允许放大镜跨过工具栏、
-  // 提示框等浮层继续跟随鼠标。画布在 UI 层下方，因此不会遮挡这些控件。
-  magnifierOverlay.update(
-    magnifierActive &&
-      editorSession.tool !== "mosaic" &&
-      scroll.phase === "idle" &&
-      input?.lastMousePos
-      ? input.lastMousePos
-      : null,
-  );
+  magnifierOverlay.update(magnifierVisibility.getPoint());
 
   editorUi.sync();
 
@@ -415,7 +418,7 @@ bindEditorShortcuts({
   getCopyColorHotkey: () => copyColorHotkey,
   getColorPoint: () => {
     const input = editorInput.getFrameState();
-    return magnifierActive && scroll.phase === "idle" ? input.lastMousePos : null;
+    return magnifierActive && scroll.phase === "idle" && !input.overUI ? input.lastMousePos : null;
   },
   onCopyColor: (point) => {
     const hex = magnifier.colorAt(point.x, point.y);
@@ -423,6 +426,7 @@ bindEditorShortcuts({
     void copyText(hex);
     copiedAt = performance.now();
     render();
+    if (!magnifierVisibility.getPoint()) showScreenshotNotice(t("shot.copied"), "success");
     if (copyColorNoticeTimer !== undefined) window.clearTimeout(copyColorNoticeTimer);
     copyColorNoticeTimer = window.setTimeout(() => {
       copyColorNoticeTimer = undefined;
@@ -543,7 +547,10 @@ screenshotLoadController = createScreenshotLoadController({
   setScreens: (next) => {
     screens = next;
   },
-  render,
+  render: () => {
+    viewportBounds.invalidate();
+    render();
+  },
   restoreRunningScrollSession,
   logLoaded: logScreenshotLoaded,
 });
@@ -631,58 +638,6 @@ function syncScrollUi() {
   scrollController.syncUi();
 }
 
-// ---------- 滚动截图面板 / HUD 的落位 ----------
-//
-// 坐标系统一：`selection` / `scrollCaptureRect` 都是**截图窗内物理像素**，而
-// `element.style.left/top` 要的是 **CSS 像素**。两者差一个 `physScale()`，
-// 混用会把面板算到别的显示器上去（用户实测：「提示框跑到第二个屏幕」）。
-// 本节的规矩：**几何计算一律在 CSS 像素里做，入口处一次性换算**。
-//
-// 另一条约束：覆盖窗铺满整个虚拟桌面，捕获区是画布上**挖空的透明洞**。
-// 落在洞里的 UI 会被后端按屏幕像素截进长图（必须避免），落在洞外的会被自己的
-// 压暗遮罩盖住（更难看）——所以浮层位置**只在「选区所在那块显示器」内挑**，
-// 且优先挑洞外；实在没地方才落回洞内角落，并且由后端在采帧时让开（见
-// `scroll-capture-hud` 事件）。
-
-interface CssBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** 物理像素矩形 → 截图窗内 CSS 矩形 */
-function toCssBox(r: Rect): CssBox {
-  const b = viewportBounds.get();
-  const kx = b.width / Math.max(totalW, 1);
-  const ky = b.height / Math.max(totalH, 1);
-  return { x: r.x * kx, y: r.y * ky, w: r.w * kx, h: r.h * ky };
-}
-
-/** 覆盖窗整体（CSS） */
-function rootBoxCss(): CssBox {
-  const b = viewportBounds.get();
-  return { x: 0, y: 0, w: b.width, h: b.height };
-}
-
-/** 选区 / 捕获区**所在那块显示器**在截图窗内的 CSS 矩形。
- *
- *  浮层只在这块屏里摆：多屏时若按整个虚拟桌面（= 覆盖窗）夹取，
- *  面板会被算到另一块屏幕上（用户实测：「跑到第二块屏幕」）。
- *  注意 `screens[].x/y/w/h` 是 root-local **物理**像素，比尺寸时不能用 CSS 的 root 宽度。 */
-function monitorBoxCss(anchor: Rect | null): CssBox {
-  const all = rootBoxCss();
-  if (!anchor || screens.length === 0) return all;
-  const cx = anchor.x + anchor.w / 2;
-  const cy = anchor.y + anchor.h / 2;
-  const hit = screens.find((s) => cx >= s.x && cx < s.x + s.w && cy >= s.y && cy < s.y + s.h);
-  if (!hit) return all;
-  const b = viewportBounds.get();
-  const kx = b.width / Math.max(totalW, 1);
-  const ky = b.height / Math.max(totalH, 1);
-  return { x: hit.x * kx, y: hit.y * ky, w: hit.w * kx, h: hit.h * ky };
-}
-
 /**
  * 捕获/完成态的画布：整屏压暗 → **挖空选区**（透明，透出真实窗口）→ 选区外框。
  * 采集进行中绝不绘制边框：即使它理论上压在捕获区外，混合 DPI/整屏选区的边界
@@ -718,7 +673,7 @@ window.addEventListener("mouseup", (event) => {
 });
 window.addEventListener("resize", () => {
   viewportBounds.invalidate();
-  if (document.body.classList.contains("ready")) render();
+  void screenshotLoadController.revalidate();
 });
 
 function resetScreenshotSession() {
@@ -727,6 +682,7 @@ function resetScreenshotSession() {
   editorRenderer.reset();
   selectionOverlay.hide();
   magnifierOverlay.reset();
+  magnifierVisibility.reset();
   if (copyColorNoticeTimer !== undefined) window.clearTimeout(copyColorNoticeTimer);
   copyColorNoticeTimer = undefined;
   copiedAt = -Infinity;

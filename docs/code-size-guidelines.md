@@ -42,27 +42,33 @@
 - CSS：按页面或组件分组，统一保留设计 token/全局变量，避免按单条属性机械分文件。
 - 先提取低耦合、已有测试覆盖的部分；每次拆分后保持行为不变，并补充模块级测试。
 
-## 当前基线（2026-10-20）
+## 当前基线（2026-10-21）
 
 按物理行数盘点，以下项目自有源码文件超过 500 行。它们目前都未达到 1,000 有效代码行，不需要仅因行数安排拆分：
 
 | 文件 | 物理行 | 建议关注点 |
 | --- | ---: | --- |
-| `src/screenshot.ts` | 911 | 截图窗口组合入口；新增交互优先放入 `src/screenshot/` 中对应模块。 |
-| `src/main.ts` | 946 | 主窗口组合入口；目录请求、导航守卫与窗口装饰已提取为独立模块，页面只做协调。 |
-| `src-tauri/src/screenshot.rs` | 622 | 截图原生实现；屏幕像素、窗口创建和后台图像任务已提取为独立模块。 |
+| `src/screenshot.ts` | 867 | 截图窗口组合入口；物理/CSS 坐标环境已提取，新增交互优先放入 `src/screenshot/` 中对应模块。 |
+| `src/main.ts` | 886 | 主窗口组合入口；目录请求、导航守卫、窗口装饰和侧栏互斥已提取，继续关注页面状态与呈现的边界。 |
+| `src-tauri/src/screenshot.rs` | 636 | 截图原生实现；屏幕像素、窗口创建和后台图像任务已提取为独立模块。 |
 | `src-tauri/src/scroll_capture/platform.rs` | 692 | 滚动截图平台交互；保持平台调用与算法边界。 |
-| `src-tauri/src/scroll_capture/tauri.rs` | 800 | 滚动截图命令桥接；共享结果与后台导出归宿主协调，算法放入领域模块。 |
-| `src/viewer/image-editor-controller.ts` | 870 | 图片编辑会话；保存、裁剪事务与视图、标注选择和旋转、缩放输入及工具栏已拆为独立模块。 |
+| `src-tauri/src/scroll_capture/tauri.rs` | 764 | 滚动截图命令桥接；共享结果与后台导出归宿主协调，算法放入领域模块，旧动态 HUD 接口已移除。 |
+| `src/viewer/image-editor-controller.ts` | 699 | 图片编辑会话；保存、裁剪事务与视图、标注选择和旋转、缩放输入、文字草稿与事件、绘图指针会话、导出合成及工具栏已拆为独立模块。 |
 | `src-tauri/src/mcp/mod.rs` | 567 | MCP 入口与组装；图片响应和文件 IO 通过受控后台任务执行。 |
+| `src-tauri/src/lan_share.rs` | 551 | 临时分享服务、路由与生命周期；接收页资源已独立，避免继续混入页面布局。 |
+| `src-tauri/src/config.rs` | 550 | 配置结构、持久化与事务；保留同一配置契约，变化较大的子职责再单独提取。 |
 
 `src/live2d-framework/` 是引入的框架源码，不按项目自有业务文件的行数目标拆分。多语言静态数据同样属于上文的例外。
+
+物理行按文本实际行数统计，文件末尾的单个换行不额外计一行；`src/pet/live2d-renderer.ts` 为 500 行，因此不在超 500 行表中。
 
 OCR 已拆分为 `ocr.rs`（命令路由与系统引擎）及 `ocr/processing.rs`（输入与文字处理）、`assets.rs`（资产版本与哈希）、`models.rs`（下载与删除）、`paddle.rs`（模型推理）、`worker.rs`（独立进程）。各模块均低于 500 有效代码行；前端组件设置由 `ui/ocr-settings-controller.ts` 管理，分类搜索由 `ui/settings-navigation.ts` 管理，均不回填到页面入口。
 
 页面骨架文件（`index.html`、`screenshot.html`）不计入本规范的统计口径。主窗口样式已由 `src/styles.css` 入口按职责拆分到 `src/styles/`；截图覆盖窗样式同样由 `src/styles/screenshot.css` 入口按基础、工具栏、编辑 UI、分享、滚动截图与提示拆分到 `src/styles/screenshot/`。
 
-裁剪预览布局独立放在 `src/image-editor/crop-viewport.ts`；截图选区、放大镜和显示前尺寸校验分别放在 `src/screenshot/selection-overlay.ts`、`magnifier-overlay.ts` 与 `viewport-ready.ts`，避免把新的显示职责继续塞进入口文件。
+裁剪预览布局独立放在 `src/image-editor/crop-viewport.ts`，裁剪区域、标注与输出缩放的合成独立放在 `export-image.ts`；截图选区、放大镜和显示前尺寸校验分别放在 `src/screenshot/selection-overlay.ts`、`magnifier-overlay.ts` 与 `viewport-ready.ts`，避免把新的显示职责继续塞进入口文件。
+
+`viewer/viewer-panels.ts` 统一属性、分享和 OCR 的互斥及布局通知，异步任务仍由各面板控制器管理。`screenshot/coordinates.ts` 统一截图输入与 DOM 几何的物理/CSS 换算，实时读取当前捕获尺寸和视口；`image-editor/drawing-session.ts` 拥有单指针笔画、捕获释放、最终坐标提交与取消，历史和工具切换由编辑控制器协调。
 
 单图预览条样式已独立到 `src/styles/image-preview-strip.css`，不再放在工作区样式中；查看器面板、图片编辑与截图共用图标集中在 `src/ui/icons.ts`。
 

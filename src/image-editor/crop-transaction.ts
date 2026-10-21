@@ -5,7 +5,7 @@ interface CropState {
   rotation: number;
 }
 
-/** 裁剪取景与旋转先作为草稿；显式应用后才进入编辑历史。 */
+/** 裁剪取景先作为草稿；快照保留旋转状态用于恢复，显式应用后才进入编辑历史。 */
 export function createCropTransaction<T extends CropState>(options: {
   capture: () => T;
   clone: (state: T) => T;

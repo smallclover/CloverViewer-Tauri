@@ -224,7 +224,8 @@ export const en = {
   "settings.selectionBorderStyle": "Border style",
   "settings.selectionBorderSolid": "Solid",
   "settings.selectionBorderDashed": "Dashed",
-  "settings.magnifier.desc": "Magnifies pixels next to the cursor while selecting.",
+  "settings.magnifier.desc":
+    "Magnifies pixels before and during selection, then hides when confirmed. Hold Alt to show temporarily.",
   "settings.experimentalAutoScroll": "Enable automatic scrolling (experimental)",
   "settings.experimentalAutoScrollHint": "For one moving content column only; off by default",
   "settings.lanShareDuration": "Default expiry",
@@ -485,6 +486,7 @@ export const en = {
   "shot.hint.undo": "Undo",
   "shot.hint.redo": "Redo",
   "shot.hint.copyColor": "Copy color",
+  "shot.hint.magnifier": "Hold to show magnifier",
   "shot.ocrTitle": "Recognized text",
   "shot.copyAll": "Copy All Text",
   "shot.close": "Close",

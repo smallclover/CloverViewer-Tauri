@@ -4,8 +4,8 @@ const {
   createGridLayout,
   createGridSections,
   thumbnailPixelSize,
-  visibleItemRange,
-} = require("../../.unit-test-dist/viewer/grid-layout.js");
+  visibleSectionItems,
+} = require("../../.unit-test-dist/compiled/viewer/grid-layout.js");
 
 test("grid layout fills the available width and never creates a negative empty-grid height", () => {
   const layout = createGridLayout(1000, 10, 4);
@@ -32,12 +32,32 @@ test("date sections reserve a heading and keep each month on its own image rows"
   assert.equal(grouped.totalHeight, 392);
 });
 
-test("virtualization retains a buffer around the viewport without crossing item boundaries", () => {
-  const layout = createGridLayout(1000, 100, 4);
+test("grouped virtualization buffers rows across month boundaries without inventing items", () => {
+  const layout = { ...createGridLayout(1000, 17, 4), cellHeight: 100 };
+  const keys = [...Array(5).fill("April"), ...Array(3).fill("March"), ...Array(9).fill("February")];
+  const { sections } = createGridSections(keys, layout);
+  const visible = (top, height) => [...visibleSectionItems(top, height, sections, layout)];
 
-  assert.deepEqual(visibleItemRange(0, 196, 100, layout), [0, 16]);
-  assert.deepEqual(visibleItemRange(980, 196, 100, layout), [16, 40]);
-  assert.deepEqual(visibleItemRange(99_999, 196, 100, layout), [100, 100]);
+  assert.deepEqual(visible(0, 80), [0, 1, 2, 3, 4]);
+  assert.deepEqual(visible(140, 80), [0, 1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(visible(500, 40), [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+  assert.deepEqual(visible(99_999, 80), []);
+  assert.deepEqual([...visibleSectionItems(0, 80, [], layout)], []);
+});
+
+test("month heading gaps do not manufacture visible rows and scrolling back restores them", () => {
+  const layout = { ...createGridLayout(1000, 2, 4), cellHeight: 1 };
+  const { sections } = createGridSections(["April", "March"], layout);
+  assert.deepEqual([...visibleSectionItems(90, 1, sections, layout)], []);
+  assert.deepEqual([...visibleSectionItems(125, 1, sections, layout)], [1]);
+  assert.deepEqual([...visibleSectionItems(48, 1, sections, layout)], [0]);
+});
+
+test("grouped virtualization respects changed column counts and the final partial row", () => {
+  const layout = { ...createGridLayout(50, 5, 4), cellHeight: 100 };
+  const { sections } = createGridSections(["April", "April", "March", "March", "March"], layout);
+  assert.equal(layout.columns, 1);
+  assert.deepEqual([...visibleSectionItems(450, 50, sections, layout)], [1, 2, 3, 4]);
 });
 
 test("thumbnail requests account for high-DPI displays and respect the request cap", () => {

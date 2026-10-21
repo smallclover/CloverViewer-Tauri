@@ -155,6 +155,9 @@ export const requestDesktopPetLoadStatus = () =>
 export const listenDesktopPetStatusRequest = (handler: () => void): Promise<UnlistenFn> =>
   listen("desktop-pet-status-request", handler);
 
+export const listenDesktopPetCelebrate = (handler: () => void): Promise<UnlistenFn> =>
+  listen("desktop-pet-celebrate", handler);
+
 export interface CacheSummary {
   files: number;
   bytes: number;
@@ -235,6 +238,11 @@ export interface MonitorInfo {
 }
 
 export const getScreenshotData = () => invoke<ScreenshotData | null>("get_screenshot_data");
+
+export const listenScreenshotRefresh = (handler: () => void): Promise<UnlistenFn> =>
+  listen("screenshot-refresh", handler);
+export const listenScreenshotClear = (handler: () => void): Promise<UnlistenFn> =>
+  listen("screenshot-clear", handler);
 
 /** 直接取原始 RGBA 字节（自上而下，每像素 4 字节），不走 JSON/Base64。 */
 export const getScreenshotFrame = (captureId: number, screenIndex: number) =>
@@ -432,6 +440,25 @@ export interface ScrollCaptureDone {
   message?: string;
 }
 
+export interface ScrollCaptureHud {
+  hidden: boolean;
+  hud?: boolean;
+  glow?: boolean;
+}
+
+export const listenScrollCaptureProgress = (
+  handler: (progress: ScrollCaptureProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<ScrollCaptureProgress>("scroll-capture-progress", (event) => handler(event.payload));
+export const listenScrollCaptureHud = (
+  handler: (state: ScrollCaptureHud) => void,
+): Promise<UnlistenFn> =>
+  listen<ScrollCaptureHud>("scroll-capture-hud", (event) => handler(event.payload));
+export const listenScrollCaptureDone = (
+  handler: (done: ScrollCaptureDone) => void,
+): Promise<UnlistenFn> =>
+  listen<ScrollCaptureDone>("scroll-capture-done", (event) => handler(event.payload));
+
 export const startScrollCapture = (req: ScrollCaptureRequest) =>
   invoke<void>("start_scroll_capture", { req });
 
@@ -450,13 +477,6 @@ export const scrollCaptureProgress = () =>
 
 /** 会话是否在跑：窗口复用打开时用它恢复「后端仍在捕获」的界面状态 */
 export const scrollCaptureRunning = () => invoke<boolean>("scroll_capture_running");
-
-/** 汇报「HUD 是否压在捕获区上」：重叠时后端会让 HUD 在整个采集会话中保持隐藏，
- *  整屏 / 整窗选区没有安全空地时用作最后一道保险。 */
-export const setScrollHudSafe = (overlap: boolean) =>
-  invoke<void>("set_scroll_hud_safe", { overlap });
-
-export const hasScrollCaptureResult = () => invoke<boolean>("has_scroll_capture_result");
 
 /** 本地文件 → asset protocol URL */
 export const fileSrc = convertFileSrc;

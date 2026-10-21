@@ -24,6 +24,23 @@ const shape=tool=>({tool,start:{x:500,y:300},end:{x:900,y:600},color:"#f00",stro
   ...(tool==="pen"||tool==="mosaic"?{points:[{x:500,y:300},{x:900,y:600}],blockSize:32}:{}),
 });
 
+test("cancellation from another pointer cannot interrupt an annotation drag or rotation", () => {
+  for (const rotating of [false, true]) {
+    const f = setup([shape("rect")]);
+    f.selection.focus(0);
+    const start = rotating ? cornerStart(f, 0) : f.event(500, 300);
+    if (rotating) f.nodes[0].children[0].fire("pointerdown", start);
+    else f.selection.down(start);
+    const end = rotating ? turn(f, start, 45) : f.event(600, 400);
+    f.selection.move(end);
+    f.selection.cancel(f.event(0, 0, 2));
+    assert.equal(f.selection.isDragging(), true);
+    f.selection.up(end); f.frame();
+    assert.equal(f.commits.length, 1);
+    assert.equal(f.selection.isDragging(), false);
+  }
+});
+
 test("selection translates adjustable annotations from the final release as one edit",()=>{
   for(const tool of ["rect","circle","arrow","text"]) {
     const original=shape(tool),before=JSON.stringify(original),f=setup([original]);

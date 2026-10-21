@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {rotateShapeClockwise,shapeBBox,isShapeHit} = require("../../.unit-test-dist/image-editor/geometry.js");
-const {drawAnnotation} = require("../../.unit-test-dist/image-editor/annotation-renderer.js");
+const {rotateShapeClockwise,shapeBBox,isShapeHit} = require("../../.unit-test-dist/compiled/image-editor/geometry.js");
+const {drawAnnotation} = require("../../.unit-test-dist/compiled/image-editor/annotation-renderer.js");
 const original = {tool:"text",start:{x:10,y:20},end:{x:110,y:68},text:"first\nsecond",fontSize:20,strokeWidth:2,color:"red"};
 test("text rotates with its bounding box and returns exactly after four quarter turns", () => {
   let shape = original, width = 300, height = 200;

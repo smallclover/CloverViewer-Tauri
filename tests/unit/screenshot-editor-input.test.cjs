@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createEditorInputController } = require("../../.unit-test-dist/screenshot/editor-input.js");
-const { ShapeHistory } = require("../../.unit-test-dist/screenshot/history.js");
+const { createEditorInputController } = require("../../.unit-test-dist/compiled/screenshot/editor-input.js");
+const { ShapeHistory } = require("../../.unit-test-dist/compiled/screenshot/history.js");
 const { readFileSync } = require("node:fs");
 const { resolve } = require("node:path");
 const { runInNewContext } = require("node:vm");
@@ -147,7 +147,7 @@ function hoverSetup(pick = async () => ({ x: -750, y: 40, width: 100, height: 12
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText, {
     exports,
-    require: (name) => require(`../../.unit-test-dist/screenshot/${name.slice(2)}.js`),
+    require: (name) => require(`../../.unit-test-dist/compiled/screenshot/${name.slice(2)}.js`),
     performance: { now: () => now },
     setTimeout: (callback, delay) => {
       const id = ++timerId;

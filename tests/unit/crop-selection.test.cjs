@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { cropTarget, dragCrop } = require("../../.unit-test-dist/image-editor/crop-selection.js");
+const { cropTarget, dragCrop } = require("../../.unit-test-dist/compiled/image-editor/crop-selection.js");
 const rect = { x: 100, y: 80, w: 300, h: 200 };
 const bounds = { w: 640, h: 400 }, minimum = { w: 24, h: 24 };
 

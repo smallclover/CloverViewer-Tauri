@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createFrameUpdate } = require("../../.unit-test-dist/image-editor/frame-update.js");
+const { createFrameUpdate } = require("../../.unit-test-dist/compiled/image-editor/frame-update.js");
 
 function clock() {
   let id=0;

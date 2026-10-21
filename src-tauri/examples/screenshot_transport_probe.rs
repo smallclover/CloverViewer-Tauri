@@ -1,4 +1,5 @@
-//! 在隐藏的真实 WebView2 窗口中对比新旧两条截图链路。
+//! 历史传输对照探针：在隐藏的真实 WebView2 窗口中对比旧 PNG 与早期 RGBA 链路。
+//! 不作为当前截图就绪/视口对齐的回归检查；重新测量前须适配当前前端命令契约。
 //! 需要先构建 dist；旧模式还要求 .unit-test-dist/screenshot-baseline-dist 下有一份副本。
 //! 用 `png` 或 `raw` 运行。截图只留在内存里，不写文件、不写剪贴板。
 //! Windows 上的 cargo 示例缺少主程序的资源。运行前先用 Windows SDK 的 mt.exe 嵌入

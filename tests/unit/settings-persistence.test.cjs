@@ -20,5 +20,11 @@ test("failed settings and startup writes restore the actual controls and never r
   assert.equal(config.language,"Zh");assert.equal(element("set-language").value,"Zh");assert.deepEqual(languages,["En","Zh"]);
   element("set-autostart").checked=true;element("set-autostart").fire("change");await flush();
   assert.equal(element("set-autostart").checked,false);assert.equal(config.launch_on_startup,false);assert.equal(writes,1);
+  controller.setImagePreviewStripEnabled(false);
+  assert.equal(config.image_preview_strip_enabled,false);
+  await flush();
+  assert.equal(config.image_preview_strip_enabled,true);
+  assert.equal(element("set-image-preview-strip").checked,true);
+  assert.equal(writes,2);
   assert.equal(notices.includes("success"),false);
 });

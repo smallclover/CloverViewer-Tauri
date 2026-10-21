@@ -3,7 +3,6 @@ const loadTs=require("./helpers/load-ts.cjs");
 const {rotateAnnotation}=loadTs("image-editor/annotation-rotation.ts");
 const {shapeBBox,rotateVector,isShapeHit,rotateShapeClockwise}=loadTs("image-editor/geometry.ts");
 const {drawAnnotation}=loadTs("image-editor/annotation-renderer.ts");
-const {resizeAnnotation}=loadTs("image-editor/annotation-resize.ts");
 const rect={tool:"rect",start:{x:200,y:200},end:{x:400,y:300},strokeWidth:4,color:"red"};
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 test("rotation preserves every annotation's center, dimensions and source data",()=>{
@@ -29,7 +28,7 @@ test("asymmetric strokes keep one origin across repeated rotations instead of fo
   second.points.forEach((p,i)=>{near(p.x,direct.points[i].x);near(p.y,direct.points[i].y);});
 });
 
-test("an explicit point is the invariant anchor and follows moving, resizing and whole-image rotation",()=>{
+test("an explicit point is the invariant anchor and follows moving and whole-image rotation",()=>{
   const {cloneShape,translateShape}=loadTs("image-editor/geometry.ts");
   const original={...rect,rotationOrigin:{...rect.start}},next=rotateAnnotation(original,73);
   near(next.start.x,rect.start.x);near(next.start.y,rect.start.y);
@@ -37,8 +36,6 @@ test("an explicit point is the invariant anchor and follows moving, resizing and
   const copy=cloneShape(next);translateShape(copy,20,30);
   near(copy.rotationOrigin.x,220);near(copy.rotationOrigin.y,230);near(next.rotationOrigin.x,200);
   const turned=rotateShapeClockwise(copy,800);near(turned.rotationOrigin.x,570);near(turned.rotationOrigin.y,220);
-  const scaled=resizeAnnotation(original,2,{x:200,y:100},{x:0,y:0,w:1000,h:800},10);
-  near(scaled.rotationOrigin.x,200);near(scaled.rotationOrigin.y,200);
 });
 test("arbitrary rectangle and text rotation shares exact bounds and local hit testing",()=>{
   for(const tool of ["rect","text"]) {
@@ -74,14 +71,5 @@ test("rotated rectangle and ellipse draw in local coordinates and restore the co
     if(tool==="rect"){near(draw[1],0);near(draw[2],0);near(draw[3],200);near(draw[4],100);}
     else {near(draw[1],100);near(draw[2],50);near(draw[3],100);near(draw[4],50);}
     assert.equal(calls.at(-1)[0],"restore");
-  }
-});
-test("resizing rotated local shapes remains uniform and preserves their rotation",()=>{
-  for(const tool of ["rect","circle","text"]) {
-    const before=rotateAnnotation({...rect,tool,text:"keep",fontSize:40},37);
-    const a=shapeBBox(before),next=resizeAnnotation(before,2,{x:100,y:50},{x:0,y:0,w:1000,h:800},10),b=shapeBBox(next);
-    near(b.w/a.w,b.h/a.h);near(next.rotation,37);
-    const offset=tool==="circle"?rotateVector({x:100*b.w/a.w,y:0},37):{x:0,y:0};
-    assert.equal(isShapeHit(next,{x:b.x+b.w/2+offset.x,y:b.y+b.h/2+offset.y},.001),true);
   }
 });

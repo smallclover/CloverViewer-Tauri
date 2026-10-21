@@ -9,6 +9,7 @@ import {
   translateShape,
 } from "./geometry";
 import { type ResizeOrigin, resizeShape } from "./resize";
+import { screenshotPoint } from "./coordinates";
 
 export type DragMode = "none" | "select" | "move" | "resize" | "move-selection" | "pending-win";
 
@@ -124,11 +125,7 @@ export function createEditorInputController(options: EditorInputOptions) {
 
   const physPos = (event: MouseEvent): Pt => {
     const rect = options.getRootBounds?.() ?? options.root.getBoundingClientRect();
-    const { totalW, totalH } = options.getBounds();
-    return {
-      x: (event.clientX - rect.left) * (totalW / rect.width),
-      y: (event.clientY - rect.top) * (totalH / rect.height),
-    };
+    return screenshotPoint(event, rect, options.getBounds());
   };
   const clampToSelection = (point: Pt): Pt => {
     const selection = options.getSelection();
@@ -232,6 +229,66 @@ export function createEditorInputController(options: EditorInputOptions) {
     options.render();
   }
 
+  /** 移动与松开共用几何更新；松开时无需经过浮层命中或悬停查询。 */
+  function updateManipulation(point: Pt): boolean {
+    const selectedIndex = options.getSelectedIndex();
+    if (dragMode === "move" && moveStart && moveOrigShape && selectedIndex !== null) {
+      const selection = options.getSelection();
+      const shape = options.getShapes()[selectedIndex];
+      const dx = point.x - moveStart.x,
+        dy = point.y - moveStart.y;
+      let ddx = dx,
+        ddy = dy;
+      if (selection) {
+        const minX = Math.min(moveOrigShape.start.x, moveOrigShape.end.x),
+          maxX = Math.max(moveOrigShape.start.x, moveOrigShape.end.x);
+        const minY = Math.min(moveOrigShape.start.y, moveOrigShape.end.y),
+          maxY = Math.max(moveOrigShape.start.y, moveOrigShape.end.y);
+        if (minX + dx < selection.x) ddx = selection.x - minX;
+        if (maxX + dx > selection.x + selection.w) ddx = selection.x + selection.w - maxX;
+        if (minY + dy < selection.y) ddy = selection.y - minY;
+        if (maxY + dy > selection.y + selection.h) ddy = selection.y + selection.h - maxY;
+      }
+      shape.start = { x: moveOrigShape.start.x + ddx, y: moveOrigShape.start.y + ddy };
+      shape.end = { x: moveOrigShape.end.x + ddx, y: moveOrigShape.end.y + ddy };
+      if (shape.points && moveOrigShape.points)
+        shape.points = moveOrigShape.points.map((p) => ({ x: p.x + ddx, y: p.y + ddy }));
+      options.render();
+      return true;
+    }
+    if (dragMode === "resize" && resizeOrig && selectedIndex !== null) {
+      const resized = resizeShape(
+        options.getShapes()[selectedIndex],
+        resizeOrig,
+        resizeHandle,
+        clampToSelection(point),
+        options.minShapeSize,
+      );
+      if (resized) options.getShapes()[selectedIndex] = resized;
+      options.render();
+      return true;
+    }
+    if (dragMode === "move-selection" && moveSelectionStart && moveSelectionOrig) {
+      const { totalW, totalH } = options.getBounds();
+      const x = Math.min(
+        Math.max(moveSelectionOrig.x + point.x - moveSelectionStart.x, 0),
+        Math.max(0, totalW - moveSelectionOrig.w),
+      );
+      const y = Math.min(
+        Math.max(moveSelectionOrig.y + point.y - moveSelectionStart.y, 0),
+        Math.max(0, totalH - moveSelectionOrig.h),
+      );
+      const previous = options.getSelection() ?? moveSelectionOrig;
+      const dx = x - previous.x,
+        dy = y - previous.y;
+      options.setSelection({ x, y, w: moveSelectionOrig.w, h: moveSelectionOrig.h });
+      for (const shape of options.getShapes()) translateShape(shape, dx, dy);
+      options.render();
+      return true;
+    }
+    return false;
+  }
+
   function onMouseMove(event: MouseEvent) {
     if (options.isScrollActive()) {
       cancelWindowQuery();
@@ -248,8 +305,7 @@ export function createEditorInputController(options: EditorInputOptions) {
       if (hoverWin && dragMode !== "pending-win") {
         hoverWin = null;
       }
-      // UI 浮层会接管鼠标事件，但放大镜仍应使用刚记录的坐标重绘；否则光标进入
-      // 工具栏或面板后，放大镜会停在上一帧的位置。
+      // UI 浮层接管鼠标时仍需刷新，让放大镜及时隐藏。
       options.render();
       return;
     }
@@ -274,60 +330,7 @@ export function createEditorInputController(options: EditorInputOptions) {
       options.render();
       return;
     }
-    const selectedIndex = options.getSelectedIndex();
-    if (dragMode === "move" && moveStart && moveOrigShape && selectedIndex !== null) {
-      const selection = options.getSelection();
-      const shape = options.getShapes()[selectedIndex];
-      const dx = point.x - moveStart.x,
-        dy = point.y - moveStart.y;
-      let ddx = dx,
-        ddy = dy;
-      if (selection) {
-        const minX = Math.min(moveOrigShape.start.x, moveOrigShape.end.x),
-          maxX = Math.max(moveOrigShape.start.x, moveOrigShape.end.x);
-        const minY = Math.min(moveOrigShape.start.y, moveOrigShape.end.y),
-          maxY = Math.max(moveOrigShape.start.y, moveOrigShape.end.y);
-        if (minX + dx < selection.x) ddx = selection.x - minX;
-        if (maxX + dx > selection.x + selection.w) ddx = selection.x + selection.w - maxX;
-        if (minY + dy < selection.y) ddy = selection.y - minY;
-        if (maxY + dy > selection.y + selection.h) ddy = selection.y + selection.h - maxY;
-      }
-      shape.start = { x: moveOrigShape.start.x + ddx, y: moveOrigShape.start.y + ddy };
-      shape.end = { x: moveOrigShape.end.x + ddx, y: moveOrigShape.end.y + ddy };
-      if (shape.points && moveOrigShape.points)
-        shape.points = moveOrigShape.points.map((p) => ({ x: p.x + ddx, y: p.y + ddy }));
-      options.render();
-      return;
-    }
-    if (dragMode === "resize" && resizeOrig && selectedIndex !== null) {
-      const resized = resizeShape(
-        options.getShapes()[selectedIndex],
-        resizeOrig,
-        resizeHandle,
-        clampToSelection(point),
-        options.minShapeSize,
-      );
-      if (resized) options.getShapes()[selectedIndex] = resized;
-      options.render();
-      return;
-    }
-    if (dragMode === "move-selection" && moveSelectionStart && moveSelectionOrig) {
-      const { totalW, totalH } = options.getBounds();
-      const x = Math.min(
-        Math.max(moveSelectionOrig.x + point.x - moveSelectionStart.x, 0),
-        Math.max(0, totalW - moveSelectionOrig.w),
-      );
-      const y = Math.min(
-        Math.max(moveSelectionOrig.y + point.y - moveSelectionStart.y, 0),
-        Math.max(0, totalH - moveSelectionOrig.h),
-      );
-      const dx = x - moveSelectionOrig.x,
-        dy = y - moveSelectionOrig.y;
-      options.setSelection({ x, y, w: moveSelectionOrig.w, h: moveSelectionOrig.h });
-      for (const shape of options.getShapes()) translateShape(shape, dx, dy);
-      options.render();
-      return;
-    }
+    if (updateManipulation(point)) return;
     const currentShape = options.getCurrentShape();
     if (currentShape) {
       const end = clampToSelection(point);
@@ -359,6 +362,7 @@ export function createEditorInputController(options: EditorInputOptions) {
     if (event.button !== 0) return;
     const finalPoint = physPos(event);
     lastMousePos = finalPoint;
+    updateManipulation(finalPoint);
     if (
       dragMode === "pending-win" &&
       dragStart &&

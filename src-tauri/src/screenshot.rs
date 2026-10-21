@@ -10,6 +10,7 @@
 //!   builder 上 `position`/`inner_size` 是 logical，wry 内部按窗口所在 monitor 的 scale
 //!   自动换算成 raw pixel 调 SetWindowPos，定位最稳。
 //! - 主界面首帧后按完整桌面尺寸预建隐藏 WebView，并提前应用倍率；关闭时隐藏复用。
+//!   显示器组合、排列或 DPI 改变后重建覆盖窗，避免沿用旧 controller 的尺寸与 DPI 状态。
 //!   内容坐标补偿集中在 screenshot_window，尺寸和落点未变时不重复调整。
 //! - 截屏完成 → 写 store → `emit("screenshot-refresh")`，前端监听后清状态 + 重载截图。
 //! - `capturing` 互斥锁避免重叠 Alt+S。
@@ -36,7 +37,7 @@ pub struct ScreenshotStore {
     data: Mutex<Option<CapturedScreenshot>>,
     next_capture_id: AtomicU64,
     capturing: Mutex<bool>,
-    pub(crate) window_creation: Mutex<()>,
+    pub(crate) window_creation: Mutex<crate::screenshot_window::WindowState>,
     capture_started: Mutex<Option<std::time::Instant>>,
     /// 本次进入覆盖窗时的启动模式：true = 直接进「滚动截图待框选」态。
     /// 独立热键（Alt+Shift+S）置位，前端 loadScreenshot 时取走并清掉。
@@ -49,7 +50,7 @@ impl ScreenshotStore {
             data: Mutex::new(None),
             next_capture_id: AtomicU64::new(1),
             capturing: Mutex::new(false),
-            window_creation: Mutex::new(()),
+            window_creation: Mutex::new(crate::screenshot_window::WindowState::default()),
             capture_started: Mutex::new(None),
             scroll_start: Mutex::new(None),
         }
@@ -105,6 +106,15 @@ impl ScreenshotStore {
             data.total_width,
             data.total_height,
         ))
+    }
+
+    pub(crate) fn capture_metadata(&self, capture_id: u64) -> Option<ScreenshotData> {
+        self.data
+            .lock()
+            .unwrap()
+            .as_ref()
+            .filter(|capture| capture.data.capture_id == capture_id)
+            .map(|capture| capture.data.clone())
     }
 }
 
@@ -533,10 +543,7 @@ fn start_screenshot_mode(app: &AppHandle, scroll: bool) {
             "截图捕获（原始像素）: {}ms",
             triggered.elapsed().as_millis()
         );
-        let win = match crate::screenshot_window::ensure_window(
-            &app,
-            Some((data.min_x, data.min_y, data.total_width, data.total_height)),
-        ) {
+        let win = match crate::screenshot_window::ensure_window(&app, Some(data)) {
             Ok(window) => window,
             Err(error) => {
                 tracing::error!("准备截图窗口失败: {error}");
@@ -594,6 +601,13 @@ pub fn screenshot_ui_ready(app: AppHandle, capture_id: u64) -> bool {
     let Some(bounds) = store.capture_bounds(capture_id) else {
         return false;
     };
+    let Some(data) = store.capture_metadata(capture_id) else {
+        return false;
+    };
+    if !crate::screenshot_window::capture_layout_matches(&app, &data).unwrap_or(false) {
+        tracing::warn!("截图期间显示器布局已变化，拒绝显示 capture_id={capture_id}");
+        return false;
+    }
     if let Some(w) = app.get_webview_window(WINDOW_LABEL) {
         if !crate::screenshot_window::content_matches(&w, bounds).unwrap_or(false) {
             tracing::warn!("截图窗口尚未覆盖完整桌面，拒绝显示 capture_id={capture_id}");

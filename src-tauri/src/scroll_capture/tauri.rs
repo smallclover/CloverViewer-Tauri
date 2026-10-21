@@ -19,10 +19,6 @@ struct SessionInner {
     discarded: bool,
     progress: Option<ScrollCaptureProgress>,
     result: Option<Arc<ScrollCaptureResult>>,
-    /// 前端上报的「HUD 是否与捕获区重叠」（兜底缓存）。
-    /// 重叠时整个会话隐藏 HUD，由 `hide_hud_during_capture` / `hide_glow_during_capture`
-    /// 经 FrameHideGate 逐帧执行，避免提示框被 BitBlt 烤进长图。
-    hud_overlap: Arc<AtomicBool>,
 }
 
 impl ScrollCaptureSession {
@@ -34,13 +30,12 @@ impl ScrollCaptureSession {
                 discarded: false,
                 progress: None,
                 result: None,
-                hud_overlap: Arc::new(AtomicBool::new(false)),
             }),
         }
     }
 
-    /// 开始一次会话：已在跑则拒绝（返回 false）
-    fn begin(&self) -> Option<(Arc<AtomicBool>, Arc<AtomicBool>)> {
+    /// 开始一次会话：已在跑则拒绝，否则返回该会话的完成/取消信号。
+    fn begin(&self) -> Option<Arc<AtomicBool>> {
         let mut g = self.inner.lock().unwrap();
         if g.running {
             return None;
@@ -50,17 +45,7 @@ impl ScrollCaptureSession {
         g.result = None;
         g.progress = None;
         g.cancel = Arc::new(AtomicBool::new(false));
-        g.hud_overlap = Arc::new(AtomicBool::new(false));
-        Some((g.cancel.clone(), g.hud_overlap.clone()))
-    }
-
-    /// 前端汇报「HUD 是否压在捕获区上」（每次落位后调用）
-    fn set_hud_overlap(&self, on: bool) {
-        self.inner
-            .lock()
-            .unwrap()
-            .hud_overlap
-            .store(on, Ordering::Relaxed);
+        Some(g.cancel.clone())
     }
 
     fn finish_ok(&self, result: ScrollCaptureResult) -> bool {
@@ -137,6 +122,7 @@ impl ScrollCaptureSession {
             .is_some_and(|current| Arc::ptr_eq(current, result))
     }
 
+    #[cfg(test)]
     fn peek_result(&self) -> bool {
         self.inner.lock().unwrap().result.is_some()
     }
@@ -434,11 +420,6 @@ pub fn start_scroll_capture(
             return Err("滚动截图已在进行中".to_string());
         }
     };
-    let (cancel, hud_overlap) = cancel;
-    // `begin()` 会为新会话重置 AtomicBool，因此不能依赖此前独立命令上报的状态。
-    // 将最终判定随启动请求携带，确保第一帧也采用正确的 HUD 策略。
-    state.set_hud_overlap(req.hide_hud_during_capture);
-
     let app2 = app.clone();
     tracing::info!(
         "滚动截图: 开始 {} {}x{} @ ({},{}) 方式={:?}",
@@ -506,7 +487,6 @@ pub fn start_scroll_capture(
                     &options,
                     &host,
                     &cancel,
-                    Some(&hud_overlap),
                     Some(Box::new(on_frame)),
                     &mut emit,
                 )
@@ -585,16 +565,6 @@ pub fn scroll_capture_progress(
     state: tauri::State<'_, ScrollCaptureSession>,
 ) -> Option<ScrollCaptureProgress> {
     state.progress()
-}
-
-/// 前端落位后汇报「HUD 是否压在捕获区上」。
-///
-/// 压在捕获区上时（整屏 / 整窗选区：本屏内没有「选区之外」的空地），
-/// HUD 与捕获区重叠时，后端会在会话起止发送 `scroll-capture-hud` 事件。
-/// 覆盖窗是透明 WebView、实测不会被 BitBlt 截进去，这是最后一道保险。
-#[tauri::command]
-pub fn set_scroll_hud_safe(state: tauri::State<'_, ScrollCaptureSession>, overlap: bool) {
-    state.set_hud_overlap(overlap);
 }
 
 /// 结果落地：action = save / clipboard / open
@@ -681,12 +651,6 @@ pub fn discard_scroll_capture(state: tauri::State<'_, ScrollCaptureSession>) {
     state.discard();
 }
 
-/// 是否已有可用结果（前端恢复界面状态用）
-#[tauri::command]
-pub fn has_scroll_capture_result(state: tauri::State<'_, ScrollCaptureSession>) -> bool {
-    state.peek_result()
-}
-
 /// 会话是否在跑
 #[tauri::command]
 pub fn scroll_capture_running(state: tauri::State<'_, ScrollCaptureSession>) -> bool {
@@ -711,7 +675,7 @@ mod tests {
     #[test]
     fn completing_keeps_result_but_cancelling_drops_late_progress_and_result() {
         let session = ScrollCaptureSession::new();
-        let (finish, _) = session.begin().unwrap();
+        let finish = session.begin().unwrap();
         let rect = super::super::RectPx {
             x: 0,
             y: 0,
@@ -726,7 +690,7 @@ mod tests {
         assert!(session.finish_ok(test_result()));
         assert!(session.peek_result());
 
-        let (cancel, _) = session.begin().unwrap();
+        let cancel = session.begin().unwrap();
         assert!(session.discard());
         assert!(!session.discard(), "取消是幂等操作");
         assert!(cancel.load(Ordering::Relaxed));
@@ -738,7 +702,7 @@ mod tests {
         assert!(!session.peek_result());
         assert!(!session.is_running());
 
-        let (next, _) = session.begin().unwrap();
+        let next = session.begin().unwrap();
         assert!(!next.load(Ordering::Relaxed));
         assert!(session.finish_ok(test_result()), "下一次会话可正常完成");
         session.discard();
@@ -782,7 +746,7 @@ mod tests {
     #[test]
     fn session_state_rejects_parallel_runs_and_resets_for_next_run() {
         let session = ScrollCaptureSession::new();
-        let (cancel, _) = session.begin().expect("首次启动应成功");
+        let cancel = session.begin().expect("首次启动应成功");
         assert!(session.is_running());
         assert!(session.begin().is_none(), "并行会话必须被拒绝");
 
@@ -791,7 +755,7 @@ mod tests {
         session.finish_err("expected test failure".to_string());
         assert!(!session.is_running());
 
-        let (next_cancel, _) = session.begin().expect("结束后可开始下一次会话");
+        let next_cancel = session.begin().expect("结束后可开始下一次会话");
         assert!(
             !next_cancel.load(Ordering::Relaxed),
             "新会话必须重置取消状态"

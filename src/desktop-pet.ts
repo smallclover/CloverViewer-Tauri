@@ -1,10 +1,10 @@
 import "./desktop-pet.css";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   getConfig,
   getDesktopPetCursorPosition,
   listenDesktopPetStatusRequest,
+  listenDesktopPetCelebrate,
   reportDesktopPetLoadStatus,
   showDesktopPetMenu,
 } from "./api";
@@ -105,7 +105,7 @@ if (desktopWindow) {
       applyI18n();
     })
     .catch(() => undefined);
-  void listen("desktop-pet-celebrate", celebrate).catch(() => undefined);
+  void listenDesktopPetCelebrate(celebrate).catch(() => undefined);
 
   let cursorRequestInFlight = false;
   const updateGaze = async () => {

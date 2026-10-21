@@ -27,6 +27,7 @@ import { createImageEditorController } from "./viewer/image-editor-controller";
 import { createSingleImageController } from "./viewer/single-image-controller";
 import { createSingleImagePresenter } from "./viewer/single-image-presenter";
 import { createViewerSession } from "./viewer/viewer-session";
+import { createViewerPanels } from "./viewer/viewer-panels";
 import {
   type AppConfig,
   type ImageEntry,
@@ -147,8 +148,7 @@ const singleImagePresenter = createSingleImagePresenter({
       viewerSession.activeIndex = displayedIndex;
       gridController.updateActive();
       updateNavButtons();
-      if (viewerSession.propsVisible)
-        imagePropertiesController.render(viewerSession.images[displayedIndex]);
+      imagePanels.refreshProperties();
       applyImagePreviewStripState();
       pageNavigation.replaceCurrentImage(displayedIndex);
       refreshStatus();
@@ -172,14 +172,14 @@ const imageShareController = createImageShareController({
   copyText,
   stopLanShare,
   translate: t,
-  onClose: closeImageShare,
+  onClose: () => closeImageShare(),
 });
 const imageOcrController = createImageOcrController({
   panel: imageOcrPanel,
   copyText,
   translate: t,
   toast,
-  onClose: closeImageOcr,
+  onClose: () => closeImageOcr(),
 });
 const imageEditor = createImageEditorController({
   root: imageEditorView,
@@ -340,8 +340,7 @@ function applyImagePreviewStripState() {
 function showGrid() {
   imageEditor.cancelPendingOpen();
   singleImagePresenter.cancel();
-  closeImageShare();
-  closeImageOcr();
+  imagePanels.closeTransient();
   viewerSession.viewMode = "grid";
   const hasImages = viewerSession.images.length > 0;
   const hasDirectory = !!viewerSession.currentDir;
@@ -362,67 +361,29 @@ function showGrid() {
   refreshStatus();
 }
 
-function applyPropsState() {
-  propsPanel.classList.toggle("collapsed", !viewerSession.propsVisible);
-  if (viewerSession.viewMode === "single") {
-    const entry = viewerSession.images[viewerSession.activeIndex];
-    if (viewerSession.propsVisible && entry) imagePropertiesController.render(entry);
-    singleImageController.applyTransform(); // 面板显隐改变可视区域，重算适应/平移
-    refreshStatus();
-  }
-}
-
-function closeProps() {
-  viewerSession.propsVisible = false;
-  applyPropsState();
-}
-
-function closeImageShare() {
-  imageShareController.close();
-  imageSharePanel.classList.add("collapsed");
-  if (viewerSession.viewMode === "single") {
+const imagePanels = createViewerPanels({
+  session: viewerSession,
+  properties: { panel: propsPanel, render: imagePropertiesController.render },
+  share: {
+    panel: imageSharePanel,
+    open: imageShareController.open,
+    close: imageShareController.close,
+  },
+  ocr: imageOcrController,
+  showImage: openImageDetails,
+  onLayout: () => {
     singleImageController.applyTransform();
     refreshStatus();
-  }
-}
-
-function closeImageOcr() {
-  if (!imageOcrController.isOpen()) return;
-  imageOcrController.close();
-  if (viewerSession.viewMode === "single") {
-    singleImageController.applyTransform();
-    refreshStatus();
-  }
-}
-
-function openImageShare(entry: ImageEntry) {
-  const index = viewerSession.images.findIndex((image) => image.path === entry.path);
-  if (index >= 0 && (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)) {
-    openImageDetails(index);
-  }
-  closeImageOcr();
-  viewerSession.propsVisible = false;
-  applyPropsState();
-  imageSharePanel.classList.remove("collapsed");
-  imageShareController.open(entry);
-  singleImageController.applyTransform();
-  refreshStatus();
-}
-
-function openImageOcr(entry: ImageEntry) {
-  if (!imageOcrController.hasResult(entry.path)) return;
-  const index = viewerSession.images.findIndex((image) => image.path === entry.path);
-  if (index < 0) return;
-  if (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index) {
-    openImageDetails(index);
-  }
-  closeImageShare();
-  viewerSession.propsVisible = false;
-  applyPropsState();
-  imageOcrController.open(entry);
-  singleImageController.applyTransform();
-  refreshStatus();
-}
+  },
+});
+const {
+  applyProperties: applyPropsState,
+  closeProperties: closeProps,
+  closeShare: closeImageShare,
+  closeOcr: closeImageOcr,
+  openShare: openImageShare,
+  openOcr: openImageOcr,
+} = imagePanels;
 
 // ---------- 单图视图 ----------
 function showSingle(index: number) {
@@ -431,8 +392,7 @@ function showSingle(index: number) {
   const entering = viewerSession.viewMode !== "single" || singleView.classList.contains("hidden");
   gridController.pauseThumbnails();
   viewerSession.activeIndex = index;
-  closeImageShare();
-  closeImageOcr();
+  imagePanels.closeTransient();
   viewerSession.viewMode = "single";
   contentHeader.classList.add("hidden");
   emptyState.classList.add("hidden");
@@ -472,9 +432,7 @@ async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]
       gridController.pauseThumbnails();
       const index = viewerSession.images.findIndex((image) => image.path === entry.path);
       if (index >= 0) viewerSession.activeIndex = index;
-      closeImageShare();
-      closeImageOcr();
-      viewerSession.propsVisible = false;
+      imagePanels.closeAll();
       viewerSession.viewMode = "edit";
       for (const element of [
         contentHeader,
@@ -732,19 +690,7 @@ createContextMenuController({
   hasOcrResult: imageOcrController.hasResult,
   onOcrResult: openImageOcr,
   onEdit: (entry) => void enterEdit(entry),
-  onProperties: (entry) => {
-    const index = viewerSession.images.findIndex((image) => image.path === entry.path);
-    if (
-      index >= 0 &&
-      (viewerSession.viewMode !== "single" || viewerSession.activeIndex !== index)
-    ) {
-      openImageDetails(index);
-    }
-    closeImageShare();
-    closeImageOcr();
-    viewerSession.propsVisible = true;
-    applyPropsState();
-  },
+  onProperties: imagePanels.openProperties,
   translate: t,
 });
 
@@ -756,13 +702,7 @@ function refreshViewerTranslations() {
   appMenu?.refresh();
   gridController.refreshMenu();
   refreshStatus();
-  if (
-    viewerSession.viewMode === "single" &&
-    viewerSession.propsVisible &&
-    viewerSession.activeIndex >= 0
-  ) {
-    imagePropertiesController.render(viewerSession.images[viewerSession.activeIndex]);
-  }
+  imagePanels.refreshProperties();
   imageEditor.refreshTranslations();
   imageOcrController.refreshTranslations();
 }

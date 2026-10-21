@@ -1,9 +1,13 @@
 //! 启动预热与实际截图共用的隐藏截图 WebView 创建逻辑。
+mod topology;
 use crate::screenshot::{ScreenshotStore, WINDOW_LABEL};
+use crate::screenshot_capture::ScreenshotData;
 use tauri::{
     AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
+use topology::Topology;
+pub(crate) use topology::WindowState;
 
 type DesktopBounds = (i32, i32, u32, u32);
 
@@ -28,15 +32,6 @@ fn desktop_bounds(screens: impl IntoIterator<Item = DesktopBounds>) -> Option<De
         (right - left).try_into().ok()?,
         (bottom - top).try_into().ok()?,
     ))
-}
-
-fn warmup_bounds(app: &AppHandle) -> Option<DesktopBounds> {
-    let monitors = app.available_monitors().ok()?;
-    desktop_bounds(monitors.iter().map(|monitor| {
-        let position = monitor.position();
-        let size = monitor.size();
-        (position.x, position.y, size.width, size.height)
-    }))
 }
 
 /// set_position 使用外框坐标；根据实际内外框偏移一次性定位内容区域。
@@ -102,12 +97,31 @@ pub(crate) fn content_matches(
         && actual.position.to_physical::<i32>(scale) == PhysicalPosition::new(0, 0))
 }
 
+pub(crate) fn capture_layout_matches(
+    app: &AppHandle,
+    data: &ScreenshotData,
+) -> tauri::Result<bool> {
+    Ok(Topology::read(app)?.matches_capture(data))
+}
+
 #[tauri::command]
-pub fn sync_screenshot_window(app: AppHandle, capture_id: u64) -> Result<Option<bool>, String> {
+pub async fn sync_screenshot_window(
+    app: AppHandle,
+    capture_id: u64,
+) -> Result<Option<bool>, String> {
+    // 在 Tokio 上等待，让 UI 线程处理迟到的 DPI/resize；隐藏 WebView 的 JS
+    // 定时器可能被节流，不用它作为两次稳定观测之间的时钟。
+    tokio::time::sleep(std::time::Duration::from_millis(16)).await;
     let store = app.state::<ScreenshotStore>();
     let Some(bounds) = store.capture_bounds(capture_id) else {
         return Ok(None);
     };
+    let Some(data) = store.capture_metadata(capture_id) else {
+        return Ok(None);
+    };
+    if !capture_layout_matches(&app, &data).map_err(|error| error.to_string())? {
+        return Ok(None);
+    }
     let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
         return Ok(None);
     };
@@ -118,21 +132,56 @@ pub fn sync_screenshot_window(app: AppHandle, capture_id: u64) -> Result<Option<
 
 pub fn ensure_window(
     app: &AppHandle,
-    bounds: Option<DesktopBounds>,
+    capture: Option<&ScreenshotData>,
 ) -> tauri::Result<WebviewWindow> {
     // 预热与热键可能同时到达，只允许一个 worker 创建窗口。
     let store = app.state::<ScreenshotStore>();
-    let _creation = store.window_creation.lock().unwrap();
+    let mut state = store.window_creation.lock().unwrap();
+    let topology = Topology::read(app)?;
+    if capture.is_some_and(|data| !topology.matches_capture(data)) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Interrupted,
+            "Display layout changed during screenshot capture; retry the capture",
+        )
+        .into());
+    }
+    let bounds = capture.map(|data| (data.min_x, data.min_y, data.total_width, data.total_height));
     if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
-        if let Some(bounds) = bounds {
-            align_content(&window, bounds)?;
+        // 后台预热不得打断已经可见的截图会话。
+        if bounds.is_none() && window.is_visible()? {
+            return Ok(window);
         }
-        return Ok(window);
+        if state.topology.as_ref() == Some(&topology) {
+            if let Some(bounds) = bounds {
+                align_content(&window, bounds)?;
+            }
+            return Ok(window);
+        }
+        // 热插拔后旧 HWND/WebView2 可能保留旧 DPI 和自动缩放范围。
+        // 不在旧 controller 上继续修尺寸；仅布局变化时重建隐藏窗口。
+        tracing::info!("显示器布局已变化，重建截图窗口");
+        window.hide()?;
+        window.destroy()?;
+        state.topology = None;
+        // destroy 投递到 UI 线程；等待标签从 manager 移除后才能创建同名窗口。
+        // ensure_window 只由捕获线程和 spawn_blocking 预热线程调用，不阻塞 UI。
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while app.get_webview_window(WINDOW_LABEL).is_some() {
+            if std::time::Instant::now() >= deadline {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Timed out replacing screenshot window after display change",
+                )
+                .into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        crate::ui_scale::forget(WINDOW_LABEL);
     }
     // 预热就使用完整桌面尺寸，避免第一次截图才从 64×64 扩展 WebView。
-    // 显示器查询失败时保留小窗回退，实际截图仍以捕获元数据校正。
+    // 没有可用的非零屏幕范围时保留小窗回退，实际截图仍以捕获元数据校正。
     let (x, y, width, height) = bounds
-        .or_else(|| warmup_bounds(app))
+        .or_else(|| topology.bounds())
         .unwrap_or((0, 0, 64, 64));
     let scale = app
         .monitor_from_point(f64::from(x), f64::from(y))
@@ -160,6 +209,7 @@ pub fn ensure_window(
     align_content(&window, (x, y, width, height))?;
     // 保存的倍率也在隐藏阶段应用；第一次按热键不再触发额外排版。
     crate::ui_scale::apply(&window);
+    state.topology = Some(topology);
     Ok(window)
 }
 

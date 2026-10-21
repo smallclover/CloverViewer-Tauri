@@ -1,10 +1,13 @@
 import { canvasPng } from "../image-editor/canvas-export";
+import { composeEditedImage } from "../image-editor/export-image";
+import { createEditorTextInput } from "../image-editor/editor-text-input";
+import { createDrawingSession } from "../image-editor/drawing-session";
 import { save } from "@tauri-apps/plugin-dialog";
 import type { EditedImageFormat, ImageEntry } from "../api";
 import { createAnnotationLayers } from "../image-editor/annotation-layers";
 import { createAnnotationSelection } from "../image-editor/annotation-selection";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
-import { annotationFont, imageAnnotationSizes } from "../image-editor/annotation-style";
+import { imageAnnotationSizes } from "../image-editor/annotation-style";
 import {
   createCanvasMosaicRenderer,
   mosaicBlockSize,
@@ -122,14 +125,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let image: HTMLImageElement | null = null;
   let tool: EditorTool = "select";
   let shapes: Shape[] = [];
-  let current: Shape | null = null;
   let crop: Rect | null = null;
   let cropSnapshot: EditSnapshot | null = null;
-  let textStart: Pt | null = null;
-  let textStyle = { color: color.value, fontSize: sizes.fontSize, strokeWidth: sizes.strokeWidth };
   let rotation = 0;
   let repaint = true;
-  let dragging = false;
   let session = 0;
   let revision = 0;
   let savedRevision = 0;
@@ -141,7 +140,9 @@ export function createImageEditorController(options: ImageEditorControllerOption
     surface: canvas,
     layer: workspace,
     getSize: () =>
-      current?.tool === "mosaic" ? mosaicBlockSize(current) : drawingSizes().blockSize,
+      drawing.current?.tool === "mosaic"
+        ? mosaicBlockSize(drawing.current)
+        : drawingSizes().blockSize,
     isEnabled: () => !!image && tool === "mosaic" && !options.root.classList.contains("hidden"),
   });
   toolbar.width.addEventListener("change", mosaicCursor.refresh);
@@ -237,7 +238,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
   };
 
   const render = () => {
-    const damage = layers.update(shapes, current);
+    const damage = layers.update(shapes, drawing.current);
     const full = repaint || tool === "crop" || damage === "full";
     repaint = false;
     if (!full && !damage) return;
@@ -296,14 +297,27 @@ export function createImageEditorController(options: ImageEditorControllerOption
     markDirty();
     render();
   };
-  const cancelDrawing = () => {
-    if (!dragging && !current) return;
-    dragging = false;
-    paint.discard();
-    current = null;
-    resetActiveMosaic();
-    render();
-  };
+  const drawing = createDrawingSession({
+    canvas,
+    host: window,
+    isEnabled: () => !!image,
+    getTool: () => tool,
+    getPoint: displayPoint,
+    getStyle: () => ({ color: color.value, ...drawingSizes() }),
+    requestPaint: () => paint.push(undefined),
+    discardPaint: paint.discard,
+    invalidate: resetActiveMosaic,
+    render,
+    commit: (shape) => {
+      checkpoint();
+      shapes.push(shape);
+      rasterizeAnnotations();
+      markDirty();
+      return shapes.length - 1;
+    },
+    adjust: (index) => adjustAnnotation(index),
+  });
+  const cancelDrawing = drawing.cancel;
 
   const cropViewport = createCropViewport({
     canvas,
@@ -330,7 +344,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       else cropOverlay.refreshImage();
       mosaicCursor.reset();
       selection.refresh();
-      layoutTextInput();
+      textEditor.layout();
     },
   });
   const cropOverlay = createCropOverlay({
@@ -356,122 +370,36 @@ export function createImageEditorController(options: ImageEditorControllerOption
     },
   });
 
-  const hideTextInput = () => {
-    textStart = null;
-    textInput.value = "";
-    textInput.classList.add("hidden");
-    textInput.classList.remove("editing");
-    textFrame.classList.add("hidden");
-  };
+  const textEditor = createEditorTextInput({
+    input: textInput,
+    frame: textFrame,
+    workspace,
+    canvas,
+    context,
+    host: window,
+    getStyle: () => ({ color: color.value, ...drawingSizes() }),
+    onCommit: (shape) => {
+      checkpoint();
+      shapes.push(shape);
+      const added = shapes.length - 1;
+      rasterizeAnnotations();
+      markDirty();
+      render();
+      return added;
+    },
+    onAdjust: (index) => adjustAnnotation(index),
+  });
   const viewportInput = bindEditorViewportInput({
     surface,
     viewport: cropViewport,
     isActive: () => !options.root.classList.contains("hidden"),
     isBusy: () =>
-      dragging || selection.isDragging() || !!cropSnapshot || !!textStart || confirmDialog.isOpen(),
+      drawing.isDrawing() ||
+      selection.isDragging() ||
+      !!cropSnapshot ||
+      textEditor.isEditing() ||
+      confirmDialog.isOpen(),
     isCropping: () => tool === "crop",
-  });
-  const commitTextInput = (adjustAfter = false) => {
-    const text = textInput.value.trim();
-    let added: number | null = null;
-    if (textStart && text) {
-      checkpoint();
-      context.font = annotationFont(textStyle.fontSize);
-      const lines = text.split("\n");
-      const textWidth = Math.max(...lines.map((line) => context.measureText(line).width));
-      shapes.push({
-        tool: "text",
-        start: textStart,
-        end: {
-          x: textStart.x + textWidth,
-          y: textStart.y + lines.length * textStyle.fontSize * 1.2,
-        },
-        color: textStyle.color,
-        strokeWidth: textStyle.strokeWidth,
-        fontSize: textStyle.fontSize,
-        text,
-      });
-      added = shapes.length - 1;
-      rasterizeAnnotations();
-      markDirty();
-      render();
-    }
-    hideTextInput();
-    if (adjustAfter && added !== null) adjustAnnotation(added);
-  };
-  const layoutTextInput = () => {
-    if (!textStart) return;
-    const canvasBox = canvas.getBoundingClientRect();
-    const workspaceBox = workspace.getBoundingClientRect();
-    const scale = canvasBox.width / canvas.width;
-    if (scale <= 0) return;
-    const fontSize = textStyle.fontSize * scale;
-    const lineHeight = fontSize * 1.2;
-    // 1px 边框 + 8px/6px 内边距；输入文字与 Canvas 的起点保持一致。
-    const insetX = 9;
-    const insetY = 7;
-    const defaultWidth = 180;
-    const defaultHeight = Math.max(44, lineHeight + insetY * 2);
-    const x = canvasBox.left - workspaceBox.left + textStart.x * scale;
-    const y = canvasBox.top - workspaceBox.top + textStart.y * scale;
-    const left = Math.max(4, Math.min(x - insetX, workspaceBox.width - defaultWidth - 8));
-    const top = Math.max(4, Math.min(y - insetY, workspaceBox.height - defaultHeight - 8));
-    textStart.x = (workspaceBox.left + left + insetX - canvasBox.left) / scale;
-    textStart.y = (workspaceBox.top + top + insetY - canvasBox.top) / scale;
-    const lines = textInput.value.split("\n");
-    context.font = annotationFont(textStyle.fontSize);
-    const textWidth = Math.max(...lines.map((line) => context.measureText(line).width)) * scale;
-    const maxWidth = Math.max(1, workspaceBox.width - left - 8);
-    const maxHeight = Math.max(1, workspaceBox.height - top - 8);
-    const width = Math.min(Math.max(defaultWidth, textWidth + insetX * 2), maxWidth);
-    textInput.style.font = annotationFont(fontSize);
-    textInput.style.lineHeight = "1.2";
-    textInput.style.color = textStyle.color;
-    textInput.style.left = `${workspace.scrollLeft + left}px`;
-    textInput.style.top = `${workspace.scrollTop + top}px`;
-    textInput.style.width = `${width}px`;
-    // 横向溢出时也给滚动条留出高度，不让它遮住当前行。
-    textInput.style.height = "auto";
-    const height = Math.max(
-      defaultHeight,
-      lines.length * lineHeight + insetY * 2,
-      textInput.scrollHeight + 2,
-    );
-    textInput.style.height = `${Math.min(height, maxHeight)}px`;
-    for (const property of ["left", "top", "width", "height"] as const)
-      textFrame.style[property] = textInput.style[property];
-  };
-  const beginTextInput = (point: Pt) => {
-    commitTextInput();
-    textStart = point;
-    textStyle = { color: color.value, ...drawingSizes() };
-    textInput.value = "";
-    textInput.classList.remove("hidden");
-    textInput.classList.add("editing");
-    textFrame.classList.remove("hidden");
-    layoutTextInput();
-    // pointerdown 的默认动作要先走完，之后 textarea 才能拿到焦点，故延到下一个任务。
-    window.setTimeout(() => {
-      if (textStart === point) textInput.focus({ preventScroll: true });
-    }, 0);
-  };
-  textInput.addEventListener("input", layoutTextInput);
-  window.addEventListener("resize", layoutTextInput);
-  textInput.addEventListener("blur", () => commitTextInput(true));
-  const finishTextInput = () => {
-    commitTextInput(true);
-    textInput.blur();
-  };
-  textInput.addEventListener("keydown", (event) => {
-    event.stopPropagation();
-    if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      hideTextInput();
-    } else if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      finishTextInput();
-    }
   });
 
   const setTool = (next: EditorTool) => {
@@ -482,13 +410,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cancelDrawing();
     selection.clear();
     paint.discard();
-    commitTextInput();
+    textEditor.commit();
     cropOverlay.cancel();
     if (next !== "crop" && cropTransaction.active) cropTransaction.finish(false);
     if (next === "crop") cropTransaction.begin();
     tool = next;
     canvas.style.cursor = next === "select" ? "default" : "crosshair";
-    current = null;
+    drawing.reset();
     resetActiveMosaic();
     toolbar.setActiveTool(next);
     cropViewport.refresh();
@@ -523,7 +451,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     if (requireCropResolution()) return;
     cancelDrawing();
     selection.clear();
-    commitTextInput();
+    textEditor.commit();
     cropOverlay.cancel();
     checkpoint();
     transformAnnotations();
@@ -562,7 +490,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     selection.clear();
     cropOverlay.cancel();
     if (cropTransaction.active) cropTransaction.finish(false);
-    commitTextInput();
+    textEditor.commit();
     if (shapes.length || crop || rotation !== 0) {
       checkpoint();
       shapes = [];
@@ -579,42 +507,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
   const exportCanvas = () => {
     selection.cancel();
     if (cropTransaction.active) throw new Error(options.translate("editor.finishCropFirst"));
-    const bounds =
-      crop && crop.w > 1 && crop.h > 1
-        ? crop
-        : { x: 0, y: 0, w: sourceCanvas.width, h: sourceCanvas.height };
-    const output = document.createElement("canvas");
-    output.width = Math.round(bounds.w);
-    output.height = Math.round(bounds.h);
-    const target = output.getContext("2d");
-    if (!target) throw new Error("Canvas 2D is unavailable");
-    target.drawImage(
-      sourceCanvas,
-      bounds.x,
-      bounds.y,
-      bounds.w,
-      bounds.h,
-      0,
-      0,
-      output.width,
-      output.height,
-    );
-    target.save();
-    target.translate(-bounds.x, -bounds.y);
-    shapes.forEach((shape) => {
-      drawShape(target, shape);
+    return composeEditedImage({
+      source: sourceCanvas,
+      crop,
+      shapes,
+      scale: Number(outputScale.value) / 100,
+      drawShape,
     });
-    target.restore();
-    const ratio = Number(outputScale.value) / 100;
-    if (ratio === 1) return output;
-    const scaled = document.createElement("canvas");
-    scaled.width = Math.max(1, Math.round(output.width * ratio));
-    scaled.height = Math.max(1, Math.round(output.height * ratio));
-    const scaledContext = scaled.getContext("2d");
-    if (!scaledContext) throw new Error("Canvas 2D is unavailable");
-    scaledContext.imageSmoothingEnabled = true;
-    scaledContext.drawImage(output, 0, 0, scaled.width, scaled.height);
-    return scaled;
   };
 
   const saves = createEditorSaveController({
@@ -622,7 +521,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     getFormat: () => format.value as EditedImageFormat,
     getSession: () => session,
     getRevision: () => revision,
-    prepare: commitTextInput,
+    prepare: textEditor.commit,
     exportPng: () => canvasPng(exportCanvas()),
     choosePath: (source, outputFormat) => {
       const suffix = outputFormat === "jpeg" ? "jpg" : outputFormat;
@@ -654,7 +553,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       if (saves.isBusy()) await saves.whenIdle();
       selection.cancel();
       cropOverlay.cancel();
-      commitTextInput();
+      textEditor.commit();
       if (
         (revision !== savedRevision || cropTransaction.changed()) &&
         !(await confirmDialog.ask({
@@ -679,7 +578,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       image = null;
       entry = null;
       shapes = [];
-      current = null;
+      drawing.reset();
       crop = null;
       cropTransaction.clear();
       history.clear();
@@ -693,100 +592,31 @@ export function createImageEditorController(options: ImageEditorControllerOption
 
   canvas.addEventListener("pointerdown", (event) => {
     if (!image || event.button !== 0 || tool === "crop") return;
+    if (tool !== "text" && tool !== "select") return;
     const point = displayPoint(event);
     if (tool === "text") {
       event.preventDefault();
-      if (textStart && textInput.value.trim()) finishTextInput();
-      else beginTextInput(point);
+      textEditor.click(point);
       return;
     }
     if (tool === "select") {
       selection.down(event);
       return;
     }
-    canvas.setPointerCapture(event.pointerId);
-    const style = drawingSizes();
-    current = {
-      tool,
-      start: point,
-      end: point,
-      color: color.value,
-      strokeWidth: style.strokeWidth,
-      blockSize: tool === "mosaic" ? style.blockSize : undefined,
-      arrowHeadSize: tool === "arrow" ? style.arrowHeadSize : undefined,
-      points: tool === "pen" || tool === "mosaic" ? [point] : undefined,
-    };
-    dragging = true;
-    if (tool === "mosaic") {
-      resetActiveMosaic();
-      render();
-    }
   });
   canvas.addEventListener("pointermove", (event) => {
-    if (tool === "select") {
-      selection.move(event);
-      return;
-    }
-    if (!dragging) return;
-    const point = displayPoint(event);
-    if (current) {
-      current.end = point;
-      if (current.points) {
-        const previous = current.points[current.points.length - 1];
-        const minDistance = current.tool === "mosaic" ? 0 : 1;
-        if (Math.hypot(point.x - previous.x, point.y - previous.y) >= minDistance) {
-          current.points.push(point);
-        }
-      }
-    }
-    paint.push(undefined);
+    if (tool === "select") selection.move(event);
   });
   canvas.addEventListener("pointerup", (event) => {
-    if (tool === "select") {
-      selection.up(event);
-      return;
-    }
-    if (!dragging) return;
-    paint.discard();
-    dragging = false;
-    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    let added: number | null = null;
-    if (current) {
-      const point = displayPoint(event);
-      current.end = point;
-      if (current.points) {
-        const previous = current.points[current.points.length - 1];
-        if (Math.hypot(point.x - previous.x, point.y - previous.y) > 0) current.points.push(point);
-      }
-      if (
-        Math.abs(current.end.x - current.start.x) > 1 ||
-        Math.abs(current.end.y - current.start.y) > 1 ||
-        ((current.tool === "mosaic" || current.tool === "pen") &&
-          (current.points?.length ?? 0) > 1) ||
-        current.tool === "mosaic"
-      ) {
-        checkpoint();
-        shapes.push(current);
-        if (current.tool !== "pen" && current.tool !== "mosaic") added = shapes.length - 1;
-        rasterizeAnnotations();
-        markDirty();
-      }
-      current = null;
-      resetActiveMosaic();
-    }
-    render();
-    if (added !== null) adjustAnnotation(added);
+    if (tool === "select") selection.up(event);
   });
-  canvas.addEventListener("pointercancel", cancelDrawing);
   canvas.addEventListener("pointercancel", selection.cancel);
   canvas.addEventListener("lostpointercapture", selection.cancel);
   canvas.addEventListener("pointerleave", selection.leave);
   surface.addEventListener("pointerdown", (event) => {
     if (event.target === surface && tool === "select" && event.button === 0) selection.clear();
   });
-  canvas.addEventListener("lostpointercapture", cancelDrawing);
-  window.addEventListener("blur", cancelDrawing);
-  window.addEventListener("blur", selection.cancel);
+  window.addEventListener("blur", () => selection.cancel());
   window.addEventListener("keydown", (event) => {
     if (options.root.classList.contains("hidden") || confirmDialog.isOpen()) return;
     if (event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
@@ -836,11 +666,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
     translate();
     image = nextImage;
     shapes = [];
-    current = null;
+    drawing.reset();
     crop = null;
     cropSnapshot = null;
-    dragging = false;
-    hideTextInput();
+    textEditor.reset();
     rotation = 0;
     session++;
     revision = savedRevision = 0;

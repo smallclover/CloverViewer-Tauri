@@ -39,7 +39,10 @@ async function setup() {
         ? { left: 120, top: 80, width: 2000 * previewScale, height: 1000 * previewScale }
         : { left: 100, top: 50, width: 700, height: 500 },
       addEventListener: (name, handler) => listeners.set(name, [...(listeners.get(name) ?? []),handler]),
-      fire: (name, event = {}) => { for(const handler of listeners.get(name) ?? []) handler(event); },
+      fire: (name, event = {}) => {
+        if (name.startsWith("pointer") || name === "lostpointercapture") event.pointerId ??= 1;
+        for(const handler of listeners.get(name) ?? []) handler(event);
+      },
       focus: () => { if (active && active !== el) active.blur(); active = el; },
       blur: () => { if (active !== el) return; active = null; el.fire("blur"); },
       setPointerCapture: () => { el.captured = true; },
@@ -74,7 +77,7 @@ async function setup() {
       } };
       if (name === "../image-editor/crop-transaction") return require("./helpers/load-ts.cjs")("image-editor/crop-transaction.ts");
       if (name === "../image-editor/annotation-selection") return require("./helpers/load-ts.cjs")("image-editor/annotation-selection.ts", {
-        "./frame-update": {createFrameUpdate: apply => require("../../.unit-test-dist/image-editor/frame-update.js").createFrameUpdate(apply, {
+        "./frame-update": {createFrameUpdate: apply => require("../../.unit-test-dist/compiled/image-editor/frame-update.js").createFrameUpdate(apply, {
           request: callback => {frames.set(++frameId,callback);return frameId;},cancel: id => frames.delete(id),
         })},
       },{document:{createElement:element}});
@@ -90,7 +93,7 @@ async function setup() {
         toolbar = { color: { value: "#ff0000" }, width: { addEventListener: () => {} }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
           refreshTranslations: () => {}, refreshHistory: () => {}, setSelection: selected => {toolbar.selected=selected;}, setActiveTool: tool => {activeTool=tool;}, closePanels: () => {}, updateLayout: () => {},
           resetSizes: () => {
-            Object.assign(toolbar.sizes, require("../../.unit-test-dist/image-editor/annotation-style.js").createAnnotationSizes());
+            Object.assign(toolbar.sizes, require("../../.unit-test-dist/compiled/image-editor/annotation-style.js").createAnnotationSizes());
           } };
         return toolbar;
       } };
@@ -108,13 +111,13 @@ async function setup() {
       if (name === "../image-editor/annotation-renderer") return { drawAnnotation: (_target, shape) => drawn.push(shape) };
       if (name === "../image-editor/annotation-layers") {
         const layerExports = {};
-        runInNewContext(readFileSync(resolve(__dirname, "../../.unit-test-dist/image-editor/annotation-layers.js"), "utf8"), {
+        runInNewContext(readFileSync(resolve(__dirname, "../../.unit-test-dist/compiled/image-editor/annotation-layers.js"), "utf8"), {
           exports: layerExports, document: { createElement: element },
         });
         return layerExports;
       }
       if (name === "../image-editor/frame-update") return { createFrameUpdate: apply =>
-        require("../../.unit-test-dist/image-editor/frame-update.js").createFrameUpdate(apply, {
+        require("../../.unit-test-dist/compiled/image-editor/frame-update.js").createFrameUpdate(apply, {
           request: callback => { frames.set(++frameId, callback); return frameId; },
           cancel: id => frames.delete(id),
         }) };
@@ -125,7 +128,7 @@ async function setup() {
           drawShape: (_target, shape) => drawn.push(shape),
         }),
       };
-      return require(`../../.unit-test-dist/image-editor/${name.split("/").pop()}.js`);
+      return require(`../../.unit-test-dist/compiled/image-editor/${name.split("/").pop()}.js`);
     },
   });
   const controller = exports.createImageEditorController({

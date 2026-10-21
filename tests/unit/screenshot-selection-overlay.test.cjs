@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createSelectionOverlay } = require("../../.unit-test-dist/screenshot/selection-overlay.js");
+const { createSelectionOverlay } = require("../../.unit-test-dist/compiled/screenshot/selection-overlay.js");
 
 function setup(scale = 2) {
   let writes = 0;

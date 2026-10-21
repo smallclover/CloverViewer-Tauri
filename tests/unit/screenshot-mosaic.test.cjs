@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { forEachMosaicStamp } = require("../../.unit-test-dist/screenshot/mosaic.js");
+const { forEachMosaicStamp } = require("../../.unit-test-dist/compiled/image-editor/mosaic.js");
 
 test("mosaic stamping preserves short paths without interpolation", () => {
   const stamps = [];

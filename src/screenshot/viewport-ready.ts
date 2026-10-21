@@ -15,7 +15,8 @@ export async function waitForScreenshotViewport({
   data,
   isCurrent,
   sync = syncScreenshotWindow,
-  pause = () => new Promise<void>((resolve) => window.setTimeout(resolve, 16)),
+  // 原生 sync 在后台等待一轮窗口消息，避免隐藏页面定时器节流放大首帧等待。
+  pause = () => Promise.resolve(),
   getPixelRatio = () => window.devicePixelRatio,
 }: ViewportReadyOptions): Promise<boolean> {
   let previous = "";
@@ -40,8 +41,8 @@ export async function waitForScreenshotViewport({
     const current = valid ? `${width},${height},${pixelRatio}` : "";
     if (current && current === previous) return true;
     previous = current;
-    // 已对齐时以第二次 IPC 确认稳定，不等待隐藏 WebView 中可能被节流的定时器。
-    if (!valid) await pause();
+    // 生产由原生 sync 让出 UI 线程；pause 是测试模拟迟到尺寸变化的调度边界。
+    await pause();
   }
   throw new Error(
     `Screenshot viewport did not match the captured desktop: expected ${data.total_width}x${data.total_height}, CSS ${observed}`,

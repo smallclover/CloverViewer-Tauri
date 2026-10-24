@@ -270,15 +270,17 @@ export const finishScreenshot = (
   png: string,
   ocrText?: string,
   deferClose = false,
+  ocrDocument?: OcrDocument,
 ) =>
   invoke<void>("finish_screenshot", {
-    req: { action, png, ocr_text: ocrText, defer_close: deferClose },
+    req: { action, png, ocr_text: ocrText, ocr_document: ocrDocument, defer_close: deferClose },
   });
 
 export interface OpenImagePayload {
   path: string;
   /** Rust 把缺失的 OCR 文本序列化为 null；滚动截图则完全不传该字段。 */
   ocr_text?: string | null;
+  ocr_document?: OcrDocument | null;
 }
 
 export const listenOpenImage = (
@@ -345,6 +347,25 @@ export const openContainingFolder = (path: string) =>
   invoke<void>("open_containing_folder", { path });
 
 export const ocrImage = (png: string) => invoke<string>("ocr_image", { png });
+
+export interface OcrPoint {
+  x: number;
+  y: number;
+}
+export interface OcrLine {
+  id: string;
+  text: string;
+  quad: [OcrPoint, OcrPoint, OcrPoint, OcrPoint];
+  confidence?: number;
+}
+export interface OcrDocument {
+  version: 1;
+  imageWidth: number;
+  imageHeight: number;
+  text: string;
+  lines: OcrLine[];
+}
+export const ocrImageDocument = (png: string) => invoke<OcrDocument>("ocr_image_document", { png });
 
 export interface OcrModelStatus {
   supported: boolean;

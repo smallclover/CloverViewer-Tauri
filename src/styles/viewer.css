@@ -260,58 +260,9 @@
   pointer-events: none;
   transform: translateX(16px);
 }
-#image-ocr-panel {
-  box-sizing: border-box;
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  gap: 12px;
-  width: 280px;
-  overflow: hidden;
-  padding: 14px;
-  border-left: 1px solid var(--border);
-  background: var(--bg-panel);
-  transition: width var(--motion-normal) var(--motion-ease), padding var(--motion-normal) var(--motion-ease),
-    opacity var(--motion-fast) ease, transform var(--motion-normal) var(--motion-ease);
-}
-#image-ocr-panel.collapsed {
-  width: 0;
-  padding: 0;
-  border-left-color: transparent;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(16px);
-}
-.image-ocr-header { display: flex; align-items: center; justify-content: space-between; min-width: 250px; }
-.image-ocr-header h3 { margin: 0; color: var(--fg); font-size: 13px; font-weight: 600; }
-.image-ocr-close,
-.image-share-close { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); cursor: pointer; }
-.image-ocr-close:hover,
+ .image-share-close { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--fg-dim); cursor: pointer; }
 .image-share-close:hover { background: var(--bg-hover); color: var(--fg); }
-.image-ocr-close:active,
-.image-share-close:active { transform: scale(.94); }
-.image-ocr-close:focus-visible,
-.image-share-close:focus-visible,
-#props-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.image-ocr-hint { min-width: 250px; margin: 0; color: var(--fg-dim); font-size: 11px; line-height: 1.5; }
-.image-ocr-text {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 250px;
-  min-height: 140px;
-  flex: 1;
-  padding: 10px;
-  resize: none;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  outline: none;
-  background: var(--bg);
-  color: var(--fg);
-  font: 12px/1.6 "Segoe UI", system-ui, sans-serif;
-}
-.image-ocr-text:focus { border-color: var(--accent); }
-.image-ocr-copy { min-width: 250px; min-height: 34px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent-soft); color: var(--accent); cursor: pointer; font: inherit; font-weight: 600; }
-.image-ocr-copy:disabled { opacity: .5; cursor: default; }
+.image-share-close:focus-visible, #props-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .image-share-header { margin-bottom: 12px; }
 .image-share-file { width: 100%; overflow: hidden; color: var(--fg); font-size: 12px; font-weight: 500; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .floating-share-stack .image-share-hint { width: 100%; margin: 7px 0 0; line-height: 1.65; }

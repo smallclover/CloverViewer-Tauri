@@ -32,7 +32,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Anyone replacing the built-in viewer**: free, open source, no ads, no bundled extras, no account or sign-in.
 *   **Anyone documenting bugs or writing guides**: multi-monitor capture plus rectangle, ellipse, arrow, pen, mosaic and text annotations; press Enter to copy.
 *   **Anyone who needs long screenshots**: stitch chat logs, full web pages, long lists, logs or code diffs into one tall image.
-*   **Anyone extracting text from the screen**: native Windows OCR for Chinese, English and Japanese — nothing is uploaded.
+*   **Anyone extracting text from the screen**: use Windows OCR or the optional local high-accuracy engine for Chinese, English and Japanese; select blocks, edit and copy text without uploading images.
 *   **Anyone letting AI see the screen**: the built-in MCP Server lets Claude Desktop and other MCP clients list monitors, take screenshots and read text.
 
 ## ✨ Features
@@ -55,7 +55,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 ### 📸 Screenshot & Annotation
 
 *   **Selection appearance**: classic black-and-white dashes by default; Settings → Screenshot offers custom colors with dashed or solid lines, and a darker exterior mask makes the selection clearer
-*   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background, transfers raw pixels directly, and aligns the window and content area before showing the capture to reduce delay and occasional image compression. The background stays static while dragging the selection; masks, borders and the magnifier update independently to reduce full-image redraws. Exports retain the original pixels When displays, their arrangement or DPI change, the overlay is rebuilt and checked before showing; frames from an obsolete layout are discarded.
+*   **Multi-monitor support**: stitches a virtual-desktop screenshot across screens; prepares the capture window in the background, transfers raw pixels directly, and aligns the window and content area before showing the capture to reduce delay and occasional image compression. The background stays static while dragging the selection; masks, borders and the magnifier update independently to reduce full-image redraws. Exports retain the original pixels. When displays, their arrangement or DPI change, the overlay is rebuilt and checked before showing; frames from an obsolete layout are discarded. The toolbar and color/size popups stay on the selection’s monitor, wrapping on narrow screens; moving the pointer across monitors does not move the toolbar. Capture accepts input immediately after opening, including when the main window was active before the Alt shortcut.
 *   **Scrolling capture (long screenshot)**: select a scrollable region and scroll at your own pace; each frame is registered by overlapping pixels and only verified new content is appended. Detected fixed headers are kept from the first frame and footers from the last accepted frame. Fixed sidebar texture is ignored during registration, but sidebars are not automatically cropped out; selecting just the article body is recommended. The result can be copied, saved to Desktop, or opened in the viewer. Experimental auto-scroll can be enabled in settings, where the app probes which scroll method the target accepts (wheel message / synthetic wheel / PageDown / scrollbar) and scrolls for you. Enter finishes capture and opens the preview; Esc cancels and discards the capture, including while mouse input passes through to the target
 *   **Annotation tools**: rectangle, ellipse, arrow, pen, mosaic, text; stroke, font and block sizes are set independently in original image pixels (px), retaining each size when switching tools during a session. Image editing adapts initial sizes and presets to the preview scale so annotations stay clear on large images shown smaller; resizing the window preserves chosen sizes and existing annotations. Screenshots and image editing share a transparent text box with visible circular corner markers that resizes to fit its content. Mosaic uses a brush-size ring and continuous strokes over fixed blocks sampled from the original image, keeping the preview consistent after releasing the mouse. Mosaic blocks on transparent images use an opaque backing to cover original details; unpainted areas retain transparency
 *   **Color & size**: click the toolbar color swatch to open the palette; click the size button to choose stroke width, font size or mosaic block size for the current tool
@@ -64,6 +64,7 @@ CloverViewer-Tauri is a **free, open-source Windows image viewer and screenshot 
 *   **Export**: Enter to copy to clipboard / save to Desktop; the toolbar can open a regular screenshot directly in the viewer
 *   **LAN sharing**: after annotating, create a temporary link and QR code for devices on the same network to preview or download the screenshot
 *   **OCR text recognition**: Windows OCR by default, with automatic or explicit Chinese/English/Japanese selection, original detail preservation and gentle enhancement for empty results. Settings → Text recognition offers an optional PP-OCRv5 download and manual engine switching or removal (about 154 MiB to download, 98 MiB installed; models and runtime are not bundled). Both engines run locally; copy or temporarily edit results in the viewer. After downloading, a Downloaded indicator distinguishes ready components from the active engine.
+*   **Block selection linked to the image**: read OCR by paragraph or line; click, Ctrl+click or drag a rectangle on the image to select recognized lines. Select individual characters in the sidebar, edit one paragraph, and copy selected blocks or all text with joined paragraphs or original line breaks. Blocks and full text share edits; highlights follow zoom, rotation and flips, and narrow windows use a stacked layout. Edits and selection stay in the current session; line mode provides a fallback for complex layouts.
 
 ### 🤖 MCP Server (New)
 
@@ -164,13 +165,26 @@ npm run tauri build
 | Ctrl+Shift+O | Open image |
 | Ctrl+E | Edit current image |
 | F5 / Ctrl+R | Refresh the current folder and preserve position; prevent page reload while editing |
-| Space + Drag / Middle Drag | Pan the editing preview |
+| Space + Drag / Middle Drag | Pan the editing preview or OCR image |
 | F1 | Open shortcut guide |
 | Tab | Switch grid / single-image view; move focus inside preview controls |
 | Esc | Return to grid; cancel a crop draft; otherwise leave editing, asking first if changes are unsaved |
 | Enter | Apply a crop draft; commit text and adjust it |
 | 0 / 1 | Fit to window / actual size |
 | R / H / V | Rotate / flip horizontally / flip vertically |
+
+### OCR result panel
+
+| Action | Function |
+|--------|----------|
+| Click image text / Ctrl+click | Select a block / add or remove blocks |
+| Drag a rectangle on the image | Select intersecting recognized lines |
+| Check sidebar blocks / drag across text | Select entire blocks / individual characters |
+| Ctrl+C | Copy highlighted characters first; otherwise copy selected blocks |
+| Space+drag / middle-button drag | Pan the image in OCR text-selection mode |
+| Esc | Cancel dragging or editing → clear selection → close the result panel |
+
+Image selection uses recognized lines or blocks; sidebar text supports character selection. Edited paragraphs copy as complete blocks so old lines cannot leak into the output. Switch to Lines when paragraph grouping is unsuitable.
 
 ### Screenshot Tool
 

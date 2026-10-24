@@ -80,3 +80,9 @@ OCR 已拆分为 `ocr.rs`（命令路由与系统引擎）及 `ocr/processing.rs
 - 修改 501–1,000 行的既有文件时，是否维持单一职责并避免混入新职责？
 - 超过 1,000 行时，是否已拆分或记录了合理的例外与后续计划？
 - 提取后的模块是否拥有清晰命名、单向依赖和相应测试？
+
+## 2026-10-24 OCR 交互补充
+
+OCR 行/块排序、选择和复制放在 `src/ocr/`；侧栏行编辑、原图覆盖层和宽度调整放在 `src/viewer/ocr/`，由 `image-ocr-controller.ts` 统一编排。Rust 结果模型放在 `ocr/result.rs`，不把几何交互或文本编辑塞回页面入口。各新增业务文件均控制在 500 有效代码行以内。
+
+Windows 无边框窗口的 Alt 空菜单保护独立在 `window_keyboard.rs`；截图工具栏与弹层定位沿用 `editor-ui-controller.ts`、`coordinates.ts` 和共用 `overlay-layout.ts`。

@@ -2,7 +2,7 @@ import { ocrErrorMessage } from "../ui/ocr-error";
 import {
   closeScreenshot,
   finishScreenshot,
-  ocrImage,
+  ocrImageDocument,
   startLanShare,
   stopLanShare,
   type LanShareInfo,
@@ -100,14 +100,15 @@ export function createScreenshotActionController(options: ScreenshotActionContro
       // OCR 使用未叠加标注的选区，同样的像素会在查看器中打开。
       const png = await selectionToPngBase64({ selection, screens: options.getScreens() });
       if (current !== generation) return;
-      const text = (await ocrImage(png)).trim();
+      const result = await ocrImageDocument(png);
+      const text = result.text.trim();
       if (current !== generation) return;
       if (!text) {
         options.showNotice(options.translate("shot.ocrEmpty"), "error");
         return;
       }
       options.showNotice(options.translate("shot.ocrOpeningViewer"), "progress");
-      await finishScreenshot("open", png, text);
+      await finishScreenshot("open", png, text, false, result);
     } catch (error) {
       if (current !== generation) return;
       options.showNotice(

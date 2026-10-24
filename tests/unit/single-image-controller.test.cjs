@@ -65,6 +65,17 @@ function withAnimation(run, reducedMotion = false) {
 }
 const wheel = (stage, deltaY = -120, clientX = 600, clientY = 400) => stage.dispatch("wheel", { preventDefault() {}, deltaY, clientX, clientY });
 
+test("revealing an OCR source preserves the visible zoom and interrupts an unfinished transition", () => {
+  withAnimation(({ image, controller, frames, tick }) => {
+    controller.reset(); controller.actualSize(); tick(0); tick(75);
+    const before = viewOf(image);
+    controller.panBy(50,-30);
+    const after = viewOf(image);
+    near(after.scale,before.scale); near(after.x,before.x+50); near(after.y,before.y-30);
+    assert.equal(frames.size,0);
+  });
+});
+
 test("zoom moves smoothly while keeping the image point under the cursor fixed", () => {
   withAnimation(({ stage, image, controller, frames, tick }) => {
     controller.reset();

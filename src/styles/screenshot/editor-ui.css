@@ -6,6 +6,7 @@
    与滚动截图面板共用视觉语言：面板底色、圆角、边框、阴影和间距保持一致。
    由 screenshot.ts 的 HELP_ITEMS 生成 DOM，文案走 i18n。 */
 #help-box {
+  box-sizing: border-box;
   position: absolute;
   left: 12px;
   bottom: auto;

@@ -38,7 +38,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "留住画面，也留下重点。",
     editBody:
-      "多屏截图与标注，增减显示器后重新准备覆盖窗；选区确定后放大镜隐藏，按住 Alt 临时显示。图形和文字可移动、旋转，裁剪可预览后应用或取消，支持撤销与安全保存。",
+      "多屏截图与标注，工具栏留在选区所在屏幕，窄屏自动换行；增减显示器后重新准备覆盖窗。选区确定后放大镜隐藏，按住 Alt 临时显示。图形和文字可移动、旋转，裁剪可应用或取消，支持撤销与安全保存。",
     editTag: "截图 · 裁切 · 标注 · 导出",
     scrollTitle: "一屏装不下，就继续滚动。",
     scrollBody:
@@ -49,7 +49,7 @@ export const translations = {
     scrollStep2: "滚动内容",
     scrollStep3: "保存长图",
     ocrTitle: "让文字走出图片。",
-    ocrBody: "默认使用 Windows OCR，支持自动或指定中、英、日语言；可按需下载 PP-OCRv5 高精度组件并手动切换。两种引擎都在本机识别，模型不捆绑进安装包。",
+    ocrBody: "默认 Windows OCR，可选下载 PP-OCRv5。结果按段落或行分块，支持原图联动、多选、逐段修改及复制所选；可整理段落或保留换行。中英日文字均在本机识别，模型不捆绑安装包。",
     ocrSample: "把灵感留在眼前。",
     ocrResult: "识别结果",
     ocrTag: "中文 / English / 日本語",
@@ -157,7 +157,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "Keep the picture. Make the point.",
     editBody:
-      "Capture across monitors, rebuilding the overlay after displays change. The magnifier hides after selection; hold Alt to show it temporarily. Move or rotate shapes and text, apply or cancel crop drafts, undo edits and save safely.",
+      "Capture and annotate across monitors. The toolbar stays on the selected monitor and wraps on narrow screens; the overlay is rebuilt after displays change. Hold Alt for the magnifier after selection. Move or rotate shapes and text, apply or cancel crop drafts, undo edits and save safely.",
     editTag: "CAPTURE · CROP · ANNOTATE · EXPORT",
     scrollTitle: "When one screen isn't enough.",
     scrollBody:
@@ -169,7 +169,7 @@ export const translations = {
     scrollStep3: "Save the capture",
     ocrTitle: "Free the words from the image.",
     ocrBody:
-      "Windows OCR by default, with automatic or explicit Chinese, English and Japanese selection. Download optional PP-OCRv5 components to switch to high-accuracy OCR. Both engines run locally; models are not bundled with the installer.",
+      "Use Windows OCR or download optional PP-OCRv5 components. Read results by paragraph or line, select blocks on the image, edit a paragraph, and copy selected text with joined paragraphs or original line breaks. Chinese, English and Japanese recognition runs locally; models are not bundled.",
     ocrSample: "Keep inspiration in sight.",
     ocrResult: "Recognized text",
     ocrTag: "中文 / English / 日本語",
@@ -281,7 +281,7 @@ export const translations = {
     viewTag: "PNG / JPEG / GIF / BMP / WebP / TIFF / AVIF",
     editTitle: "画面を残して、要点を伝える。",
     editBody:
-      "複数画面を撮影し、画面の増減後は撮影ウィンドウを再作成。拡大鏡は範囲確定後に隠れ、Alt の長押しで一時表示します。図形や文字の移動・回転、トリミングの適用・キャンセル、取り消しと安全な保存に対応。",
+      "複数画面の撮影と注釈に対応。ツールバーは選択範囲のある画面内に収まり、狭い画面では折り返します。画面変更後は撮影ウィンドウを再作成。範囲確定後は Alt 長押しで拡大鏡を表示し、図形や文字の移動・回転、トリミング、取り消しと安全な保存ができます。",
     editTag: "キャプチャ · 切り抜き · 注釈 · 出力",
     scrollTitle: "一画面で足りなければ、スクロール。",
     scrollBody:
@@ -293,7 +293,7 @@ export const translations = {
     scrollStep3: "長い画像を保存",
     ocrTitle: "画像の文字を、そのまま使う。",
     ocrBody:
-      "標準の Windows OCR で日本語・英語・中国語を自動または個別に指定。必要に応じて PP-OCRv5 を取得し、高精度 OCR に切り替えられます。両エンジンとも端末内で認識し、モデルはインストーラーに同梱しません。",
+      "標準の Windows OCR と任意取得の PP-OCRv5 に対応。結果を段落・行ごとに表示し、画像と連動する複数選択、段落編集、選択部分のコピーができます。段落整形と改行保持を切り替えられ、日本語・英語・中国語を端末内で認識。モデルは同梱しません。",
     ocrSample: "ひらめきを、いつも目の前に。",
     ocrResult: "認識結果",
     ocrTag: "中文 / English / 日本語",

@@ -1,6 +1,32 @@
 import type { TranslationDictionary } from "./zh-CN";
 
 export const en = {
+  "ocr.result.blocks": "Blocks",
+  "ocr.result.full": "Full text",
+  "ocr.result.paragraphs": "Paragraphs",
+  "ocr.result.lines": "Lines",
+  "ocr.result.grouping": "Text grouping",
+  "ocr.result.selectAll": "Select all",
+  "ocr.result.clear": "Clear",
+  "ocr.result.selectImage": "Select text",
+  "ocr.result.browseImage": "Browse image",
+  "ocr.result.hint":
+    "Click or drag to select text; Ctrl+click adds blocks. Hold Space or use the middle button to pan.",
+  "ocr.result.legacyHint":
+    "Select text or edit this block. Image positions are unavailable for this result.",
+  "ocr.result.normalize": "Join paragraph lines",
+  "ocr.result.keepLines": "Keep line breaks",
+  "ocr.result.copyFormat": "Copy format",
+  "ocr.result.copySelected": "Copy selected",
+  "ocr.result.selected": "{n} / {total} blocks selected",
+  "ocr.result.resize": "Resize text panel",
+  "ocr.result.selectBlock": "Select block {n}",
+  "ocr.result.edited": "Edited",
+  "ocr.result.edit": "Edit",
+  "ocr.result.editBlock": "Edit the paragraph containing block {n}",
+  "ocr.result.save": "Save changes",
+  "ocr.result.cancel": "Cancel",
+  "ocr.result.restore": "Restore OCR text",
   "settings.tab.ocr": "Text recognition",
   "settings.tab.ocr.desc":
     "Choose OCR languages and manage optional local high-accuracy components.",

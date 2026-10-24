@@ -204,6 +204,7 @@ pub fn ensure_window(
             .visible(false)
             .focused(false)
             .build()?;
+    crate::window_keyboard::prevent_empty_menu_loop(&window);
     #[cfg(target_os = "windows")]
     disable_window_transitions(&window);
     align_content(&window, (x, y, width, height))?;
@@ -237,6 +238,14 @@ fn disable_window_transitions(window: &WebviewWindow) {
     };
     if let Err(error) = result {
         tracing::warn!("禁用截图窗口过渡动画失败: {error}");
+    }
+}
+
+/// 原生窗口聚焦不等于 WebView 聚焦。
+pub(crate) fn activate_input(window: &WebviewWindow) {
+    let webview: &tauri::Webview = window.as_ref();
+    if let Err(error) = webview.set_focus() {
+        tracing::warn!("聚焦截图 WebView 失败: {error}");
     }
 }
 

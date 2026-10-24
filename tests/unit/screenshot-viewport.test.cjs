@@ -46,14 +46,16 @@ test("screenshot toolbar layout stays cached while the cursor moves on the same 
     helpPanel: { element: help, sync() {} },
     getSelection: () => selection, getAnchor: () => anchor, toCssBox: value => value,
     rootBox: () => ({ x: 0, y: 0, w: 1920, h: 1080 }),
-    monitorBox: () => ({ x: anchor.x >= 1920 ? 1920 : 0, y: 0, w: 1920, h: 1080 }),
+    monitorBox: region => ({ x: region.x + region.w/2 >= 1920 ? 1920 : 0, y: 0, w: 1920, h: 1080 }),
     getColor: () => "#f00", getCopyColorHotkey: () => "Alt+C", getMagnifierActive: () => true,
   });
   ui.sync(); const initialReads = layoutReads;
   for (let index = 0; index < 1000; index++) { anchor = { x: index, y: 100 }; ui.sync(); }
   assert.equal(layoutReads, initialReads); assert.equal(positions, 1);
-  anchor = { x: 2000, y: 100 }; ui.sync(); assert.equal(positions, 2);
-  selection = { ...selection, w: 350 }; ui.sync(); assert.equal(positions, 3);
+  anchor = { x: 2000, y: 100 }; ui.sync(); assert.equal(positions, 1);
+  assert.equal(layoutReads, initialReads, "moving onto the neighboring monitor must not move the selection's toolbar");
+  selection = { ...selection, w: 350 }; ui.sync(); assert.equal(positions, 2);
+  selection = { ...selection, x: 2000 }; ui.sync(); assert.equal(positions, 3);
   resize(); assert.equal(positions, 4);
   ui.updateHelp(); ui.sync(); assert.equal(positions, 5);
 });

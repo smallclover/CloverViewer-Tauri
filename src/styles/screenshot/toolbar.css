@@ -2,6 +2,11 @@
 .toolbar {
   position: absolute;
   display: flex;
+  box-sizing: border-box;
+  width: max-content;
+  flex-wrap: wrap;
+  overflow: auto;
+  overscroll-behavior: contain;
   align-items: center;
   gap: 4px;
   padding: 6px;
@@ -14,6 +19,7 @@
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 .toolbar button {
+  flex: 0 0 32px;
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -48,6 +54,7 @@
   height: 20px;
 }
 .toolbar .divider {
+  flex: none;
   width: 1px;
   height: 20px;
   margin: 0 4px;
@@ -62,7 +69,7 @@
 }
 .toolbar button.size-settings {
   width: 64px;
-  flex: none;
+  flex: 0 0 64px;
   gap: 4px;
   padding: 0 5px;
   white-space: nowrap;
@@ -91,6 +98,7 @@
 }
 /* ============ 弹出面板（玻璃拟态 · 暗色） ============ */
 .popup {
+  box-sizing: border-box;
   position: absolute;
   background: var(--s-popup-bg);
   backdrop-filter: blur(16px) saturate(160%);

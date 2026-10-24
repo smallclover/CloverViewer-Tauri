@@ -9,6 +9,9 @@
     "outDir": ".unit-test-dist/compiled"
   },
   "include": [
+    "src/ocr/layout.ts",
+    "src/ocr/selection.ts",
+    "src/ocr/geometry.ts",
     "src/viewer/grid-layout.ts",
     "src/viewer/image-sort.ts",
     "src/viewer/image-source.ts",

@@ -35,6 +35,7 @@ mod thumbnails;
 mod tray_menu;
 mod ui_scale;
 mod window_decoration;
+mod window_keyboard;
 mod window_shell_geometry;
 
 use config::ConfigStore;
@@ -185,6 +186,7 @@ pub fn run() {
             lan_share::stop_lan_share,
             lan_share::is_lan_share_active,
             ocr::ocr_image,
+            ocr::ocr_image_document,
             ocr::models::get_ocr_model_status,
             ocr::models::download_ocr_model,
             ocr::models::cancel_ocr_model_download,
@@ -225,6 +227,7 @@ pub fn run() {
             // 显式设置窗口/任务栏图标：Tauri 2 窗口默认不套用 default_window_icon，
             // 否则窗口内部/任务栏图标是系统默认而非真实图标。
             if let Some(win) = app.get_webview_window(MAIN_WINDOW) {
+                window_keyboard::prevent_empty_menu_loop(&win);
                 if let Some(icon) = app.default_window_icon() {
                     let _ = win.set_icon(icon.clone());
                 }

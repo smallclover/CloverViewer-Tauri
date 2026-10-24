@@ -34,7 +34,7 @@ async function harness(ready = true, opened = true) {
     viewerSession: { images: [entry] },
     imageOcrController: {
       setResult: (path, text) => {
-        assert.equal(typeof text, "string", "only OCR strings may enter the text controller");
+        assert.ok(typeof text === "string" || text.version === 1, "OCR text or document is required");
         events.push({ ocr: text, path });
       },
     },
@@ -88,4 +88,13 @@ test("cancelling an external image open does not report success or replace OCR c
   await receive({path: "C:/captures/image.png", ocr_text: "Text"});
   assert.equal(events.some(event => event.ocr || event.panel || event.kind === "success"), false);
   assert.equal(events.at(-1).hide, true);
+});
+
+test("structured OCR coordinates reach the viewer without being flattened", async () => {
+  const {receive, events} = await harness();
+  const document = {version:1,imageWidth:20,imageHeight:10,text:"Text",lines:[{id:"a",text:"Text",quad:[{x:0,y:0},{x:20,y:0},{x:20,y:10},{x:0,y:10}]}]};
+  await receive({path:"C:/captures/image.png",ocr_document:document});
+  assert.equal(events.find(event => event.ocr)?.ocr, document);
+  assert.equal(events.some(event=>event.kind === "success"),false);
+  assert.equal(events.at(-1).hide,true);
 });

@@ -4,6 +4,9 @@ interface SingleImageControllerOptions {
   isActive: () => boolean;
   getZoomSensitivity: () => number;
   onChange: () => void;
+  onTransform?: () => void;
+  canPan?: (event: MouseEvent) => boolean;
+  allowFitPan?: () => boolean;
 }
 
 interface ViewTransform {
@@ -54,6 +57,7 @@ export function createSingleImageController(options: SingleImageControllerOption
     const flip = `scale(${flipHorizontal ? -1 : 1}, ${flipVertical ? -1 : 1})`;
     const base = `translate(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px)) scale(${view.scale})`;
     image.style.transform = `${base} rotate(${rotation}deg) ${flip}`;
+    options.onTransform?.();
   };
 
   const applyTransform = (animate = false) => {
@@ -121,6 +125,18 @@ export function createSingleImageController(options: SingleImageControllerOption
     options.onChange();
   };
 
+  const panBy = (x: number, y: number) => {
+    stopPanning();
+    stopZoomAnimation();
+    const current = displayedImage === options.getImage() ? displayed : null;
+    scale = current?.scale ?? (fitMode ? fitScale() : scale);
+    pan.x = (current?.x ?? pan.x) + x;
+    pan.y = (current?.y ?? pan.y) + y;
+    fitMode = false;
+    applyTransform();
+    options.onChange();
+  };
+
   const zoomToFit = () => {
     stopPanning();
     fitMode = true;
@@ -176,7 +192,15 @@ export function createSingleImageController(options: SingleImageControllerOption
     options.onChange();
   });
   options.stage.addEventListener("mousedown", (event) => {
-    if (event.button !== 0 || !options.isActive() || (fitMode && animationFrame === null)) return;
+    if (
+      (event.button !== 0 && event.button !== 1) ||
+      !options.isActive() ||
+      options.canPan?.(event) === false
+    )
+      return;
+    if (fitMode && animationFrame === null && event.button !== 1 && !options.allowFitPan?.())
+      return;
+    event.preventDefault?.();
     if ((event.target as HTMLElement).closest("button")) return;
     stopZoomAnimation();
     if (displayed && displayedImage === options.getImage()) {
@@ -200,6 +224,7 @@ export function createSingleImageController(options: SingleImageControllerOption
   window.addEventListener("mouseup", stopPanning);
   window.addEventListener("blur", stopPanning);
   options.stage.addEventListener("dblclick", () => {
+    if (!options.isActive()) return;
     if (fitMode) actualSize();
     else zoomToFit();
   });
@@ -208,6 +233,7 @@ export function createSingleImageController(options: SingleImageControllerOption
     applyTransform: () => applyTransform(),
     reset,
     actualSize,
+    panBy,
     zoomToFit,
     rotate,
     flipHorizontal: () => flip("horizontal"),

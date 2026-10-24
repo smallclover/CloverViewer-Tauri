@@ -29,6 +29,13 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
   const { toolbarUi, helpPanel } = options;
   const { toolbar, colorBtn, widthBtn, colorPopup, widthPopup } = toolbarUi;
   const closePopups = () => toolbarUi.closePopups();
+  const currentMonitor = () => {
+    const selection = options.getSelection();
+    const anchor = options.getAnchor();
+    return options.monitorBox(
+      selection ?? (anchor ? { x: anchor.x, y: anchor.y, w: 1, h: 1 } : null),
+    );
+  };
   let lastLayout: unknown[] = [];
   const updateHelp = () => {
     lastLayout = [];
@@ -43,11 +50,13 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
     }
     const help = helpPanel.element;
     help.style.display = "grid";
+    const monitor = currentMonitor();
+    help.style.maxWidth = `${Math.max(1, monitor.w - 24)}px`;
+    help.style.maxHeight = `${Math.max(1, monitor.h - 24)}px`;
+    help.style.overflow = "auto";
     const width = help.offsetWidth;
     const height = help.offsetHeight;
     if (!width || !height) return;
-    const anchor = options.getAnchor();
-    const monitor = options.monitorBox(anchor ? { x: anchor.x, y: anchor.y, w: 1, h: 1 } : null);
     const left = monitor.x + 12;
     const top = monitor.y + monitor.h - height - 12;
     help.style.left = `${Math.round(left)}px`;
@@ -61,14 +70,13 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
       bounds.top - root.top < top + height &&
       bounds.bottom - root.top > top;
     help.style.transform = hit
-      ? `translateY(-${Math.ceil(top + height - (bounds.top - root.top) + 8)}px)`
+      ? `translateY(-${Math.min(Math.ceil(top + height - (bounds.top - root.top) + 8), Math.max(0, top - monitor.y - 12))}px)`
       : "";
   };
 
   const sync = () => {
     const selection = options.getSelection();
-    const anchor = options.getAnchor();
-    const monitor = options.monitorBox(anchor ? { x: anchor.x, y: anchor.y, w: 1, h: 1 } : null);
+    const monitor = currentMonitor();
     const rootBox = options.rootBox();
     const layout = [
       selection?.x,
@@ -90,11 +98,14 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
     )
       return;
     lastLayout = layout;
+    closePopups();
     if (selection) {
       toolbar.style.display = "flex";
+      toolbar.style.maxWidth = `${Math.max(1, monitor.w - 16)}px`;
+      toolbar.style.maxHeight = `${Math.max(1, monitor.h - 16)}px`;
       const point = placeSelectionOverlay(
         options.toCssBox(selection),
-        rootBox,
+        monitor,
         { w: toolbar.offsetWidth || 360, h: toolbar.offsetHeight || 44 },
         "end",
       );
@@ -115,21 +126,26 @@ export function createEditorUiController(options: EditorUiControllerOptions) {
     const open = popup.classList.contains("open");
     closePopups();
     if (open) return;
+    const monitor = currentMonitor();
+    popup.style.maxWidth = `${Math.max(1, monitor.w - 16)}px`;
+    popup.style.maxHeight = `${Math.max(1, monitor.h - 16)}px`;
+    popup.style.overflow = "auto";
+    popup.classList.add("open");
     const buttonRect = button.getBoundingClientRect();
     const rootRect = options.root.getBoundingClientRect();
-    popup.style.left = `${buttonRect.left - rootRect.left - offset}px`;
-    popup.style.top = `${buttonRect.bottom - rootRect.top + 6}px`;
-    popup.style.maxHeight = `${Math.max(32, rootRect.height - 16)}px`;
-    popup.style.overflowY = "auto";
-    popup.classList.add("open");
-    const popupRect = popup.getBoundingClientRect();
-    const below = buttonRect.bottom - rootRect.top + 6;
-    const top =
-      below + popupRect.height <= rootRect.height - 8
-        ? below
-        : buttonRect.top - rootRect.top - popupRect.height - 6;
-    popup.style.left = `${Math.max(8, Math.min(buttonRect.left - rootRect.left - offset, rootRect.width - popupRect.width - 8))}px`;
-    popup.style.top = `${Math.max(8, Math.min(top, rootRect.height - popupRect.height - 8))}px`;
+    const point = placeSelectionOverlay(
+      {
+        x: buttonRect.left - rootRect.left - offset,
+        y: buttonRect.top - rootRect.top,
+        w: buttonRect.width,
+        h: buttonRect.height,
+      },
+      monitor,
+      { w: popup.offsetWidth, h: popup.offsetHeight },
+      "start",
+    );
+    popup.style.left = `${point.x}px`;
+    popup.style.top = `${point.y}px`;
   };
   colorBtn.addEventListener("click", (event) => {
     event.stopPropagation();

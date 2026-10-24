@@ -1,4 +1,5 @@
 //! PP-OCRv5 DB detection + perspective rectification + CTC recognition, CPU only.
+use super::result::{self, OcrDocument};
 use image::{
     imageops::{self, FilterType},
     DynamicImage, GrayImage, Luma, Rgb, RgbImage,
@@ -36,7 +37,7 @@ fn session(path: &Path) -> Result<Session, String> {
         .map_err(|e| e.to_string())
 }
 
-pub fn recognize(img: DynamicImage, directory: &Path) -> Result<String, String> {
+pub fn recognize(img: DynamicImage, directory: &Path) -> Result<OcrDocument, String> {
     super::assets::verify(directory)?;
     ort::init_from(directory.join("onnxruntime.dll").to_string_lossy())
         .commit()
@@ -99,15 +100,18 @@ pub fn recognize(img: DynamicImage, directory: &Path) -> Result<String, String> 
         boxes[start..end].sort_by(|a, b| a.bounds()[0].total_cmp(&b.bounds()[0]));
         start = end;
     }
+    if boxes.len() > result::MAX_LINES {
+        return Err("OCR_RESULT_TOO_LARGE".into());
+    }
     let mut text = Vec::new();
-    for b in boxes.into_iter().take(4000) {
+    for b in boxes {
         let crop = rectify(&source, &b);
         let (line, confidence) = read_line(&mut recognizer, &crop, &characters)?;
         if confidence >= 0.5 && !line.trim().is_empty() {
-            text.push(line);
+            text.push(result::line(line, b.corners, Some(confidence)));
         }
     }
-    Ok(text.join("\n"))
+    OcrDocument::new(img.width(), img.height(), text)
 }
 
 fn overlap(a: [f32; 4], b: [f32; 4]) -> f32 {
@@ -326,7 +330,9 @@ mod tests {
             ("short.png", "确定"),
             ("dark.png", "DarkmodeOCR2026"),
         ] {
-            let text = recognize(image::open(images.join(file)).unwrap(), &directory).unwrap();
+            let text = recognize(image::open(images.join(file)).unwrap(), &directory)
+                .unwrap()
+                .text;
             println!("{file}: {text}");
             let normalized: String = text.chars().filter(|c| !c.is_whitespace()).collect();
             assert!(

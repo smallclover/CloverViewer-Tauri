@@ -1,4 +1,5 @@
 //! Run downloaded native code in a short-lived child: no DLL remains locked in the GUI process.
+use super::result::{OcrDocument, MAX_RESULT_BYTES};
 use image::DynamicImage;
 use std::{
     io::{Read, Write},
@@ -6,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub fn recognize(img: DynamicImage) -> Result<String, String> {
+pub fn recognize(img: DynamicImage) -> Result<OcrDocument, String> {
     if img.width() as u64 * img.height() as u64 > 60_000_000 {
         return Err("OCR_INPUT_TOO_LARGE".into());
     }
@@ -44,12 +45,13 @@ pub fn recognize(img: DynamicImage) -> Result<String, String> {
     let outcome = std::thread::scope(|scope| {
         // Drain stdout concurrently; a large text result must not fill the pipe and deadlock.
         let reader = scope.spawn(move || {
-            let mut output = String::new();
+            let mut output = Vec::new();
             stdout
                 .by_ref()
-                .take(4 * 1024 * 1024)
-                .read_to_string(&mut output)
-                .map(|_| output)
+                .take(MAX_RESULT_BYTES as u64 + 1)
+                .read_to_end(&mut output)?;
+            std::io::copy(&mut stdout, &mut std::io::sink())?;
+            Ok::<_, std::io::Error>(output)
         });
         let writer = scope.spawn(move || stdin.write_all(png.get_ref()));
         let deadline = Instant::now() + Duration::from_secs(120);
@@ -79,8 +81,13 @@ pub fn recognize(img: DynamicImage) -> Result<String, String> {
             .join()
             .map_err(|_| "OCR_WORKER_FAILED")?
             .map_err(|e| e.to_string())?;
-        serde_json::from_str::<Result<String, String>>(&output)
-            .map_err(|_| "OCR_WORKER_FAILED".to_string())?
+        if output.len() > MAX_RESULT_BYTES {
+            return Err("OCR_RESULT_TOO_LARGE".into());
+        }
+        let document = serde_json::from_slice::<Result<OcrDocument, String>>(&output)
+            .map_err(|_| "OCR_WORKER_FAILED".to_string())??;
+        document.validate()?;
+        Ok(document)
     });
     // Also reap on early pipe/parse failure.
     let _ = child.kill();
@@ -89,7 +96,7 @@ pub fn recognize(img: DynamicImage) -> Result<String, String> {
 }
 
 pub fn run() {
-    let result = (|| -> Result<String, String> {
+    let result = (|| -> Result<OcrDocument, String> {
         let directory = std::env::args_os()
             .nth(2)
             .map(std::path::PathBuf::from)
@@ -109,6 +116,10 @@ pub fn run() {
         }
         super::paddle::recognize(img, &directory)
     })();
+    let result = result.and_then(|document| {
+        document.validate()?;
+        Ok(document)
+    });
     if let Ok(json) = serde_json::to_string(&result) {
         let _ = std::io::stdout().write_all(json.as_bytes());
     }

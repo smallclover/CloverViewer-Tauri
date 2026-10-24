@@ -141,6 +141,7 @@ function hoverSetup(pick = async () => ({ x: -750, y: 40, width: 100, height: 12
   let element = null;
   const timers = new Map();
   const calls = [];
+  const canvas = { style: {} };
   const exports = {};
   const source = readFileSync(resolve(__dirname, "../../src/screenshot/editor-input.ts"), "utf8");
   runInNewContext(ts.transpileModule(source, {
@@ -159,7 +160,7 @@ function hoverSetup(pick = async () => ({ x: -750, y: 40, width: 100, height: 12
   });
   const controller = exports.createEditorInputController({
     root: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 400 / physicalScale, height: 400 / physicalScale }) },
-    canvas: { style: {} },
+    canvas,
     getBounds: () => ({ totalW: 400, totalH: 400, minX: -800, minY: 0 }),
     getScreens: () => [{ x: 0, y: 0, w: 400, h: 400 }],
     getSelection: () => selection,
@@ -178,7 +179,7 @@ function hoverSetup(pick = async () => ({ x: -750, y: 40, width: 100, height: 12
     render: () => {},
   });
   return {
-    controller, calls, timers,
+    controller, calls, timers, canvas,
     selection: () => selection,
     move: (x, y) => controller.onMouseMove({ clientX: x / physicalScale, clientY: y / physicalScale }),
     overUI: () => { element = { closest: () => ({}) }; },
@@ -237,6 +238,18 @@ test("opening and reopening at the same stationary cursor shows a selectable win
   fixture.controller.onMouseDown(event);
   fixture.controller.onMouseUp(event);
   assert.deepEqual(plain(fixture.selection()), windowHover);
+});
+
+test("opening with a stationary or unavailable cursor clears the previous session cursor", async () => {
+  const fixture = hoverSetup();
+  for (const previous of ["move", "not-allowed", "default"]) {
+    for (const point of [{ x: 80, y: 90 }, null]) {
+      fixture.canvas.style.cursor = previous;
+      fixture.controller.reset();
+      await fixture.controller.initializeCursor(point);
+      assert.equal(fixture.canvas.style.cursor, "crosshair");
+    }
+  }
 });
 
 test("rapid movement queries the final position even after movement stops", async () => {

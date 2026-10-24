@@ -32,7 +32,7 @@ export async function bindOpenImageBridge(
 ): Promise<void> {
   await listenOpenImage(async (payload) => {
     if (!payload?.path) return;
-    const isOcr = typeof payload.ocr_text === "string";
+    const isOcr = typeof payload.ocr_text === "string" || payload.ocr_document?.version === 1;
     if (isOcr) toast(translate("toast.openingOcr"), "progress", true);
     try {
       const opened = await openPath(payload);

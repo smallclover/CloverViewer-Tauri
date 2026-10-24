@@ -377,6 +377,7 @@ pub struct FinishRequest {
     pub png: String,
     /// OCR 成功时随临时图片交给查看器；普通导出不携带文字。
     pub ocr_text: Option<String>,
+    pub ocr_document: Option<crate::ocr::result::OcrDocument>,
     /// 复制或保存成功后，先让前端显示短提示，再由前端关闭截图窗口。
     pub defer_close: Option<bool>,
 }
@@ -410,6 +411,10 @@ fn finish_screenshot_inner(
     let png = base64::engine::general_purpose::STANDARD
         .decode(b64)
         .map_err(|e| e.to_string())?;
+
+    if let Some(document) = &req.ocr_document {
+        document.validate()?;
+    }
 
     match req.action.as_str() {
         "save" | "open" => {
@@ -445,7 +450,7 @@ fn finish_screenshot_inner(
                 }
                 let _ = app.emit(
                     "open-image",
-                    serde_json::json!({ "path": path, "ocr_text": req.ocr_text }),
+                    serde_json::json!({ "path": path, "ocr_text": req.ocr_text, "ocr_document": req.ocr_document }),
                 );
             }
         }
@@ -626,6 +631,7 @@ pub fn screenshot_ui_ready(app: AppHandle, capture_id: u64) -> bool {
             return false;
         }
         let _ = w.set_focus();
+        crate::screenshot_window::activate_input(&w);
         drop(capture);
         if let Some(started) = store.capture_started.lock().unwrap().take() {
             tracing::info!("截图快捷键到选区显示: {}ms", started.elapsed().as_millis());

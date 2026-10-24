@@ -467,6 +467,8 @@ export function createEditorInputController(options: EditorInputOptions) {
       cancelWindowQuery();
       lastMousePos = point;
       overUI = false;
+      // 隐藏窗口复用时，不能等下一次 mousemove 才清掉上次的移动/禁止光标。
+      options.canvas.style.cursor = options.isScrollActive() ? "default" : "crosshair";
       if (point && canHoverWindow()) await queryWindow(point);
     },
     getFrameState: () => ({ dragMode, dragStart, dragCur, hoverWin, lastMousePos, overUI }),

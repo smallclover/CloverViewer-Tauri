@@ -125,6 +125,9 @@ const singleImageController = createSingleImageController({
   isActive: () => viewerSession.viewMode === "single",
   getZoomSensitivity: () => config?.zoom_sensitivity ?? 1,
   onChange: refreshStatus,
+  onTransform: () => imageOcrController.updateOverlay(),
+  canPan: (event) => imageOcrController.canPan(event),
+  allowFitPan: () => imageOcrController.allowFitPan(),
 });
 const singleImagePresenter = createSingleImagePresenter({
   getImage: () => singleImg,
@@ -176,11 +179,24 @@ const imageShareController = createImageShareController({
 });
 const imageOcrController = createImageOcrController({
   panel: imageOcrPanel,
+  stage: imgStage,
+  getImage: () => singleImg,
+  getEntry: (path) => viewerSession.images.find((entry) => entry.path === path),
+  isActive: () =>
+    viewerSession.viewMode === "single" &&
+    !imageEditor.isOpen() &&
+    !settingsController.isOpen() &&
+    !aboutController.isOpen(),
+  onLayout: () => singleImageController.applyTransform(),
+  panImage: (x, y) => singleImageController.panBy(x, y),
   copyText,
   translate: t,
   toast,
   onClose: () => closeImageOcr(),
 });
+new ResizeObserver(() => {
+  if (viewerSession.viewMode === "single") singleImageController.applyTransform();
+}).observe(imgStage);
 const imageEditor = createImageEditorController({
   root: imageEditorView,
   getEditableSource: readEditableImageData,
@@ -864,13 +880,17 @@ appMenu = createAppMenuController({
   void bindOpenImageBridge(
     async (payload) => {
       if ((await openFileOrFolder(payload.path)) === false) return false;
-      if (typeof payload.ocr_text !== "string") return;
+      if (typeof payload.ocr_text !== "string" && !payload.ocr_document) return;
       const normalized = payload.path.replace(/\\/g, "/").toLowerCase();
       const entry = viewerSession.images.find(
         (image) => image.path.replace(/\\/g, "/").toLowerCase() === normalized,
       );
       if (!entry) throw new Error(t("toast.openFailed", { msg: payload.path }));
-      imageOcrController.setResult(entry.path, payload.ocr_text);
+      imageOcrController.setResult(
+        entry.path,
+        payload.ocr_document ?? payload.ocr_text ?? "",
+        entry,
+      );
       openImageOcr(entry);
       if (!(await singleImagePresenter.whenReady())) {
         throw new Error(t("toast.openFailed", { msg: payload.path }));

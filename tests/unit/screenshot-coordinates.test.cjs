@@ -24,9 +24,17 @@ test("staggered displays and cross-screen selections choose the monitor containi
   });
   assert.deepEqual(plain(coordinates.monitorBox({ x: 200, y: 400, w: 100, h: 100 })), { x: 0, y: 120, w: 1000, h: 600 });
   assert.deepEqual(plain(coordinates.monitorBox({ x: 1900, y: 400, w: 200, h: 100 })), { x: 1000, y: 0, w: 2000, h: 1200 });
-  for (const anchor of [null, { x: 10, y: 10, w: 20, h: 20 }]) {
-    assert.deepEqual(plain(coordinates.monitorBox(anchor)), { x: 0, y: 0, w: 3000, h: 1200 });
-  }
+  assert.deepEqual(plain(coordinates.monitorBox(null)), { x: 0, y: 0, w: 3000, h: 1200 });
+  assert.deepEqual(plain(coordinates.monitorBox({ x: 10, y: 10, w: 20, h: 20 })), { x: 0, y: 120, w: 1000, h: 600 });
+});
+
+test("a selection centered in a monitor gap uses a real screen with the largest selected area", () => {
+  const screens = [{ x:0,y:0,w:500,h:900 },{ x:700,y:200,w:1000,h:600 }];
+  const coordinates = createScreenshotCoordinates({
+    getViewport:()=>({left:0,top:0,width:1700,height:900}),getBounds:()=>({totalW:1700,totalH:900}),getScreens:()=>screens,
+  });
+  assert.deepEqual(plain(coordinates.monitorBox({x:400,y:250,w:350,h:400})),screens[0]);
+  assert.deepEqual(plain(coordinates.monitorBox({x:450,y:250,w:350,h:400})),screens[1]);
 });
 
 test("a reused screenshot uses new bounds and viewport values without caching obsolete scale", () => {

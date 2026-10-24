@@ -3,6 +3,8 @@ mod assets;
 pub(crate) mod models;
 mod paddle;
 mod processing;
+pub mod result;
+use result::OcrDocument;
 mod worker;
 
 use crate::config::{Language, OcrEngine, OcrLanguage};
@@ -26,7 +28,7 @@ pub fn recognize_text(img: DynamicImage, language: Option<Language>) -> Result<S
             Language::Ja => OcrLanguage::Ja,
         })
         .unwrap_or(config.ocr_language);
-    recognize(img, config.ocr_engine, language, config.language)
+    recognize(img, config.ocr_engine, language, config.language).map(|result| result.text)
 }
 
 fn recognize(
@@ -34,7 +36,7 @@ fn recognize(
     engine: OcrEngine,
     language: OcrLanguage,
     ui: Language,
-) -> Result<String, String> {
+) -> Result<OcrDocument, String> {
     if engine == OcrEngine::Paddle {
         return worker::recognize(img);
     }
@@ -57,6 +59,41 @@ pub fn run_worker() {
 mod real_tests {
     use super::*;
     #[test]
+    #[ignore = "requires CLOVER_OCR_TEST_IMAGE; optional installed Paddle assets"]
+    fn structured_input_sample() {
+        let image = image::open(std::env::var_os("CLOVER_OCR_TEST_IMAGE").unwrap()).unwrap();
+        let system = system::recognize(&image, OcrLanguage::Auto, Language::Zh).unwrap();
+        system.validate().unwrap();
+        assert_eq!(system.image_width, image.width());
+        assert_eq!(system.image_height, image.height());
+        assert!(!system.lines.is_empty());
+        assert!(system
+            .lines
+            .iter()
+            .all(|line| line.quad[2].x > line.quad[0].x && line.quad[2].y > line.quad[0].y));
+        if let Some(output) = std::env::var_os("CLOVER_OCR_TEST_OUTPUT") {
+            std::fs::write(output, serde_json::to_vec(&system).unwrap()).unwrap();
+        }
+        println!(
+            "System: {} lines, {} text bytes",
+            system.lines.len(),
+            system.text.len()
+        );
+        let directory = models::directory().unwrap();
+        if models::installed_at(&directory) {
+            let paddle = paddle::recognize(image, &directory).unwrap();
+            paddle.validate().unwrap();
+            assert!(!paddle.lines.is_empty());
+            assert_eq!(paddle.image_width, system.image_width);
+            assert_eq!(paddle.image_height, system.image_height);
+            println!(
+                "Paddle: {} lines, {} text bytes",
+                paddle.lines.len(),
+                paddle.text.len()
+            );
+        }
+    }
+    #[test]
     #[ignore = "requires CLOVER_OCR_TEST_IMAGES and installed Windows OCR language packs"]
     fn system_multilingual_samples() {
         let images = std::path::PathBuf::from(std::env::var_os("CLOVER_OCR_TEST_IMAGES").unwrap());
@@ -68,7 +105,8 @@ mod real_tests {
             ("dark.png", OcrLanguage::En, "DarkmodeOCR2026"),
         ] {
             let image = image::open(images.join(file)).unwrap();
-            let text = match system::recognize(&image, lang, Language::Zh) {
+            let text = match system::recognize(&image, lang, Language::Zh).map(|result| result.text)
+            {
                 Ok(text) => text,
                 Err(e) if e == "OCR_LANGUAGE_UNAVAILABLE" => {
                     println!("{file}: language pack unavailable");
@@ -100,6 +138,23 @@ pub async fn ocr_image(app: tauri::AppHandle, png: String) -> Result<String, Str
     })
     .await
     .map_err(|e| e.to_string())?
+    .map(|result| result.text)
+}
+
+#[tauri::command]
+pub async fn ocr_image_document(app: tauri::AppHandle, png: String) -> Result<OcrDocument, String> {
+    use tauri::Manager;
+    let config = app.state::<crate::config::ConfigStore>().snapshot();
+    tauri::async_runtime::spawn_blocking(move || {
+        recognize(
+            decode_png(&png)?,
+            config.ocr_engine,
+            config.ocr_language,
+            config.language,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(windows)]
@@ -118,7 +173,7 @@ mod system {
         img: &DynamicImage,
         language: OcrLanguage,
         ui: Language,
-    ) -> Result<String, String> {
+    ) -> Result<OcrDocument, String> {
         let preferred = language.preferred(ui);
         let mut engines = Vec::new();
         let mut add = |lang: Language| {
@@ -161,27 +216,51 @@ mod system {
                 rgba.height() as i32,
             )
             .map_err(|e| e.to_string())?;
-            let mut best: Option<(f64, String)> = None;
+            let mut best: Option<(f64, OcrDocument)> = None;
             for engine in &engines {
-                let result = (|| -> windows::core::Result<String> {
+                let result = (|| -> windows::core::Result<Vec<result::OcrLine>> {
                     let result = pollster::block_on(engine.RecognizeAsync(&bitmap)?.into_future())?;
                     let mut lines = Vec::new();
                     for line in result.Lines()? {
                         let mut words = Vec::new();
+                        let mut area = [f32::MAX, f32::MAX, f32::MIN, f32::MIN];
                         for word in line.Words()? {
                             let bounds = word.BoundingRect()?;
                             words.push((word.Text()?.to_string(), bounds.X, bounds.Width));
+                            area = [
+                                area[0].min(bounds.X),
+                                area[1].min(bounds.Y),
+                                area[2].max(bounds.X + bounds.Width),
+                                area[3].max(bounds.Y + bounds.Height),
+                            ];
                         }
-                        lines.push(processing::join_words(&words));
+                        if !words.is_empty() {
+                            let sx = img.width() as f32 / rgba.width() as f32;
+                            let sy = img.height() as f32 / rgba.height() as f32;
+                            let [x, y, right, bottom] = area;
+                            lines.push(result::line(
+                                processing::join_words(&words),
+                                [
+                                    (x * sx, y * sy),
+                                    (right * sx, y * sy),
+                                    (right * sx, bottom * sy),
+                                    (x * sx, bottom * sy),
+                                ],
+                                None,
+                            ));
+                        }
                     }
-                    Ok(lines.join("\n"))
+                    Ok(lines)
                 })();
+                let result = result
+                    .map_err(|e| e.to_string())
+                    .and_then(|lines| OcrDocument::new(img.width(), img.height(), lines));
                 match result {
-                    Ok(text) if !text.trim().is_empty() => {
-                        let score = processing::text_score(&text, preferred);
+                    Ok(document) if !document.text.trim().is_empty() => {
+                        let score = processing::text_score(&document.text, preferred);
                         if score > -1.0 && best.as_ref().is_none_or(|(old, _)| score > *old + 0.03)
                         {
-                            best = Some((score, text));
+                            best = Some((score, document));
                         }
                     }
                     Ok(_) => {}
@@ -195,7 +274,7 @@ mod system {
         if let Some(error) = last_error {
             Err(error)
         } else {
-            Ok(String::new())
+            OcrDocument::new(img.width(), img.height(), Vec::new())
         }
     }
 }

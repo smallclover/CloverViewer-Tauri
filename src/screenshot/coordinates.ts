@@ -54,12 +54,35 @@ export function createScreenshotCoordinates(options: {
       if (!anchor) return rootBox();
       const cx = anchor.x + anchor.w / 2;
       const cy = anchor.y + anchor.h / 2;
-      const screen = options
-        .getScreens()
-        .find(
-          (rect) => cx >= rect.x && cx < rect.x + rect.w && cy >= rect.y && cy < rect.y + rect.h,
-        );
-      // 显示器之间的空隙没有所属屏幕，此时才回退到整个截图窗口。
+      const screens = options.getScreens();
+      let screen = screens.find(
+        (rect) => cx >= rect.x && cx < rect.x + rect.w && cy >= rect.y && cy < rect.y + rect.h,
+      );
+      // A cross-screen selection can have its center in a desktop gap. Keep its UI
+      // on a real monitor: prefer the largest intersection, then the closest screen.
+      if (!screen) {
+        let bestArea = -1;
+        let bestDistance = Infinity;
+        for (const rect of screens) {
+          const area =
+            Math.max(
+              0,
+              Math.min(anchor.x + anchor.w, rect.x + rect.w) - Math.max(anchor.x, rect.x),
+            ) *
+            Math.max(
+              0,
+              Math.min(anchor.y + anchor.h, rect.y + rect.h) - Math.max(anchor.y, rect.y),
+            );
+          const dx = Math.max(rect.x - cx, 0, cx - rect.x - rect.w);
+          const dy = Math.max(rect.y - cy, 0, cy - rect.y - rect.h);
+          const distance = dx * dx + dy * dy;
+          if (area > bestArea || (area === bestArea && distance < bestDistance)) {
+            screen = rect;
+            bestArea = area;
+            bestDistance = distance;
+          }
+        }
+      }
       return screen ? toCssBox(screen) : rootBox();
     },
   };

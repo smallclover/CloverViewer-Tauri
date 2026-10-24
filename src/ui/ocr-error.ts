@@ -9,6 +9,8 @@ export function ocrErrorMessage(error: unknown, translate: (key: string) => stri
     OCR_WORKER_FAILED: "ocr.error.worker",
     OCR_UNSUPPORTED: "ocr.error.unsupported",
     OCR_INPUT_TOO_LARGE: "ocr.error.large",
+    OCR_RESULT_TOO_LARGE: "ocr.error.large",
+    OCR_RESULT_INVALID: "ocr.error.worker",
   };
   for (const [code, key] of Object.entries(codes)) {
     if (message.includes(code)) return translate(key);

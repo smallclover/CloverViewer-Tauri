@@ -41,8 +41,11 @@ export function createEditorSaveController(options: SaveOptions) {
       try {
         await action(entry, session);
       } catch (error) {
-        if (session === options.getSession())
-          options.toast(options.translate("editor.saveFailed", { msg: String(error) }), "error");
+        if (session === options.getSession()) {
+          const message = error instanceof Error ? error.message : String(error);
+          const msg = message.startsWith("beautify.") ? options.translate(message) : String(error);
+          options.toast(options.translate("editor.saveFailed", { msg }), "error");
+        }
       } finally {
         busy = false;
       }

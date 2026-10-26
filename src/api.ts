@@ -71,6 +71,104 @@ export const getConfig = () => invoke<AppConfig>("get_config");
 
 export const setConfig = (config: AppConfig) => invoke<AppConfig>("set_config", { config });
 
+export interface BeautifyFrame {
+  kind:
+    | "none"
+    | "border"
+    | "card"
+    | "solid"
+    | "gradient"
+    | "mac-light"
+    | "mac-dark"
+    | "browser"
+    | "gallery"
+    | "wood"
+    | "polaroid";
+  padding: [number, number, number, number];
+  borderWidth: number;
+  borderColor: string;
+  background: string;
+  backgroundEnd: string;
+  angle: number;
+  radius: number;
+  shadow: number;
+  style?: BeautifyFrameStyle;
+}
+
+export interface BeautifyFrameStyle {
+  title: string;
+  url: string;
+  compact: boolean;
+  titleBarHeight: number;
+  railWidth: number;
+  matWidth: number;
+  matColor: string;
+  innerWidth: number;
+  accentColor: string;
+  paperBottom: number;
+  caption: string;
+  captionDate: boolean;
+}
+
+export interface BeautifyBackground {
+  kind: "transparent" | "solid" | "gradient";
+  color: string;
+  endColor: string;
+  angle: number;
+}
+
+export interface BeautifyWatermark {
+  id: string;
+  kind: "text" | "image";
+  enabled: boolean;
+  text: string;
+  assetId: string;
+  font: "sans" | "serif" | "mono";
+  fontSize: number;
+  color: string;
+  opacity: number;
+  outline: number;
+  rotation: number;
+  placement: "single" | "tile";
+  region: "content" | "top" | "right" | "bottom" | "left";
+  anchor: number;
+  x: number;
+  y: number;
+  width: number;
+  gapX: number;
+  gapY: number;
+}
+
+export interface BeautifyDocument {
+  enabled: boolean;
+  referenceSize: number;
+  frame: BeautifyFrame;
+  watermarks: BeautifyWatermark[];
+  background?: BeautifyBackground;
+}
+
+export interface BeautifyPreset {
+  id: string;
+  name: string;
+  document: BeautifyDocument;
+}
+
+export interface BeautifyLibrary {
+  schema: number;
+  revision: number;
+  autoApply: boolean;
+  defaultPresetId: string;
+  lastPresetId: string;
+  presets: BeautifyPreset[];
+}
+
+export const getBeautifyLibrary = () => invoke<BeautifyLibrary>("get_beautify_library");
+export const saveBeautifyLibrary = (library: BeautifyLibrary, expectedRevision: number) =>
+  invoke<BeautifyLibrary>("save_beautify_library", { library, expectedRevision });
+export const importBeautifyAsset = (path: string) =>
+  invoke<string>("import_beautify_asset", { path });
+export const readBeautifyAsset = (id: string) => invoke<string>("read_beautify_asset", { id });
+
 export interface WindowShellLayout {
   /** 原生客户区中的物理像素留白；界面和角色共用此坐标系。 */
   insets: { left: number; top: number; right: number; bottom: number };
@@ -271,16 +369,30 @@ export const finishScreenshot = (
   ocrText?: string,
   deferClose = false,
   ocrDocument?: OcrDocument,
+  editContext?: ScreenshotEditContext,
 ) =>
   invoke<void>("finish_screenshot", {
-    req: { action, png, ocr_text: ocrText, ocr_document: ocrDocument, defer_close: deferClose },
+    req: {
+      action,
+      png,
+      ocr_text: ocrText,
+      ocr_document: ocrDocument,
+      defer_close: deferClose,
+      edit_context: editContext,
+    },
   });
+
+export interface ScreenshotEditContext {
+  document: BeautifyDocument;
+  capturedAt: number;
+}
 
 export interface OpenImagePayload {
   path: string;
   /** Rust 把缺失的 OCR 文本序列化为 null；滚动截图则完全不传该字段。 */
   ocr_text?: string | null;
   ocr_document?: OcrDocument | null;
+  edit_context?: ScreenshotEditContext | null;
 }
 
 export const listenOpenImage = (

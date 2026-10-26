@@ -1,8 +1,10 @@
 /* 图片保留自己的画布；编辑工具岛在它下方预留空间。 */
 #image-editor-view { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .image-editor-workspace {
-  --editor-checker-base: #383b42;
-  --editor-checker-cell: #50545d;
+  --editor-checker-base: #34363d;
+  --editor-checker-cell: #3d4048;
+  --editor-sheet-shadow-near: rgba(0, 0, 0, .16);
+  --editor-sheet-shadow-far: rgba(0, 0, 0, .24);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -13,9 +15,16 @@
   padding: 22px 24px var(--image-editor-bottom-space, 152px);
   background: color-mix(in srgb, var(--bg-hover) 60%, var(--bg));
 }
-:root[data-theme="light"] .image-editor-workspace { --editor-checker-base: #fff; --editor-checker-cell: #dcdce2; }
+:root[data-theme="light"] .image-editor-workspace {
+  --editor-checker-base: #f7f8fa;
+  --editor-checker-cell: #e8ebef;
+  --editor-sheet-shadow-near: rgba(25, 35, 52, .08);
+  --editor-sheet-shadow-far: rgba(25, 35, 52, .1);
+}
 .image-editor-canvas, .image-editor-workspace .image-crop-preview { background: repeating-conic-gradient(var(--editor-checker-cell) 0% 25%, var(--editor-checker-base) 0% 50%) 0 0 / 16px 16px; }
-.image-editor-boundary { position: absolute; pointer-events: none; z-index: 1; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85), 0 0 0 1px rgba(0, 0, 0, .7); }
+/* A soft elevation cue marks the sheet without drawing an extra frame around the image. */
+.image-editor-boundary { position: absolute; pointer-events: none; z-index: 1; box-shadow: 0 1px 6px var(--editor-sheet-shadow-near), 0 8px 24px var(--editor-sheet-shadow-far); }
+.image-editor-workspace:has(.image-crop-overlay.active) .image-editor-boundary { box-shadow: none; }
 .image-annotation-outline { position: absolute; pointer-events: none; z-index: 2; box-sizing: border-box; border: 2px solid var(--accent); box-shadow: 0 0 0 1px #fff, 0 0 0 2px rgba(0, 0, 0, .45); border-radius: 3px; }
 .image-annotation-outline.hovered { border: 1px dashed var(--accent); box-shadow: 0 0 0 1px rgba(255, 255, 255, .85); }
 .image-annotation-outline[hidden] { display: none; }
@@ -40,7 +49,6 @@
   position: absolute;
   max-width: none;
   max-height: none;
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 60%, transparent);
   touch-action: none;
   cursor: crosshair;
 }

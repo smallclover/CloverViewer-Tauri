@@ -1,6 +1,7 @@
 import { iconSvg, UI_ICON_PATHS } from "../ui/icons";
 
 const ICONS: Record<string, string> = {
+  "beautify.title": UI_ICON_PATHS.beautify,
   "editor.select": '<path d="m5 3 14 9-7 2-3 7Z"/>',
   "editor.crop": '<path d="M5 3v13a3 3 0 0 0 3 3h13"/><path d="M19 21V8a3 3 0 0 0-3-3H3"/>',
   "editor.rotate": '<path d="M21 4v6h-6"/><path d="M21 10a9 9 0 1 0-2.8 8"/>',

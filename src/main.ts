@@ -31,6 +31,7 @@ import { createViewerPanels } from "./viewer/viewer-panels";
 import {
   type AppConfig,
   type ImageEntry,
+  type ScreenshotEditContext,
   copyImageFile,
   copyText,
   fileSrc,
@@ -439,32 +440,41 @@ function openImageDetails(index: number) {
   pageNavigation.showImage(index);
 }
 
-async function enterEdit(entry = viewerSession.images[viewerSession.activeIndex]) {
-  if (!entry) return;
+async function enterEdit(
+  entry = viewerSession.images[viewerSession.activeIndex],
+  editContext?: ScreenshotEditContext,
+) {
+  if (!entry) return false;
   directoryLoader.cancel();
   try {
-    const opened = await imageEditor.open(entry, () => {
-      singleImagePresenter.cancel();
-      gridController.pauseThumbnails();
-      const index = viewerSession.images.findIndex((image) => image.path === entry.path);
-      if (index >= 0) viewerSession.activeIndex = index;
-      imagePanels.closeAll();
-      viewerSession.viewMode = "edit";
-      for (const element of [
-        contentHeader,
-        emptyState,
-        gridView,
-        singleView,
-        gridMenu,
-        gridDensityControl,
-        breadcrumb,
-        gridCount,
-      ])
-        element.classList.add("hidden");
-    });
+    const opened = await imageEditor.open(
+      entry,
+      () => {
+        singleImagePresenter.cancel();
+        gridController.pauseThumbnails();
+        const index = viewerSession.images.findIndex((image) => image.path === entry.path);
+        if (index >= 0) viewerSession.activeIndex = index;
+        imagePanels.closeAll();
+        viewerSession.viewMode = "edit";
+        for (const element of [
+          contentHeader,
+          emptyState,
+          gridView,
+          singleView,
+          gridMenu,
+          gridDensityControl,
+          breadcrumb,
+          gridCount,
+        ])
+          element.classList.add("hidden");
+      },
+      editContext,
+    );
     if (opened) refreshStatus();
+    return opened;
   } catch (error) {
     toast(t("toast.openFailed", { msg: String(error) }), "error");
+    return false;
   }
 }
 
@@ -880,6 +890,16 @@ appMenu = createAppMenuController({
   void bindOpenImageBridge(
     async (payload) => {
       if ((await openFileOrFolder(payload.path)) === false) return false;
+      if (payload.edit_context) {
+        const entry = viewerSession.images.find(
+          (item) =>
+            item.path.replace(/\\/g, "/").toLowerCase() ===
+            payload.path.replace(/\\/g, "/").toLowerCase(),
+        );
+        if (!entry) throw new Error(t("toast.openFailed", { msg: payload.path }));
+        if (!(await enterEdit(entry, payload.edit_context))) return false;
+        return;
+      }
       if (typeof payload.ocr_text !== "string" && !payload.ocr_document) return;
       const normalized = payload.path.replace(/\\/g, "/").toLowerCase();
       const entry = viewerSession.images.find(

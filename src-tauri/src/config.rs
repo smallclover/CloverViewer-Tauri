@@ -295,7 +295,7 @@ impl Default for Config {
     }
 }
 
-fn get_config_dir() -> PathBuf {
+pub(crate) fn get_config_dir() -> PathBuf {
     if let Some(config_dir) = dirs::config_dir() {
         let app_config_dir = config_dir.join("CloverViewer");
         if app_config_dir.exists() || fs::create_dir_all(&app_config_dir).is_ok() {

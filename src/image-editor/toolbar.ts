@@ -19,6 +19,7 @@ interface ToolbarOptions {
   saveAs: () => void;
   overwrite: () => void;
   close: () => void;
+  beautify?: () => void;
 }
 
 const TOOLS: [EditorTool, string][] = [
@@ -98,6 +99,10 @@ export function createEditorToolbar(options: ToolbarOptions) {
     );
   }
   const zoomSlot = document.createElement("div");
+  const beautify = button(tools, "beautify.title", () => options.beautify?.());
+  beautify.classList.add("image-editor-tool");
+  beautify.setAttribute("aria-controls", "image-beautify-inspector");
+  beautify.setAttribute("aria-expanded", "false");
   zoomSlot.className = "image-editor-zoom-slot";
   dock.append(zoomSlot);
 
@@ -235,6 +240,7 @@ export function createEditorToolbar(options: ToolbarOptions) {
         activeTool === "crop" ? "editor.finishCropFirst" : "editor.rotate",
       );
     }
+    beautify.disabled = activeTool === "crop";
     const key = TOOLS.find(([tool]) => tool === activeTool)?.[1] ?? "editor.select";
     contextName.innerHTML = editorIcon(key);
     const name = document.createElement("span");
@@ -327,6 +333,13 @@ export function createEditorToolbar(options: ToolbarOptions) {
     refreshHistory: (canUndo: boolean, canRedo: boolean) => {
       undo.disabled = activeTool === "crop" || !canUndo;
       redo.disabled = activeTool === "crop" || !canRedo;
+    },
+    syncBeauty: (enabled: boolean) => {
+      beautify.classList.toggle("has-beauty", enabled);
+    },
+    setBeautyOpen: (open: boolean) => {
+      beautify.classList.toggle("active", open);
+      beautify.setAttribute("aria-expanded", String(open));
     },
   };
 }

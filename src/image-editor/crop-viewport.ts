@@ -26,6 +26,7 @@ interface CropViewportOptions {
   canvas: HTMLCanvasElement;
   surface: HTMLElement;
   getCrop: () => Rect | null;
+  getDisplayBounds?: () => Rect | null;
   isCropping: () => boolean;
   onCropChange?: (crop: Rect) => void;
   onLayout: (animating: boolean) => void;
@@ -101,7 +102,8 @@ export function createCropViewport(options: CropViewportOptions) {
     manual = false;
     stopAnimation();
     const image = { w: canvas.width, h: canvas.height };
-    const selection = options.getCrop() ?? { x: 0, y: 0, ...image };
+    const selection = (!options.isCropping() && options.getDisplayBounds?.()) ||
+      options.getCrop() || { x: 0, y: 0, ...image };
     const layout = fitCropViewport(image, selection, {
       w: surface.clientWidth,
       h: surface.clientHeight,

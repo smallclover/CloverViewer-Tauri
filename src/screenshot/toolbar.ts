@@ -14,6 +14,7 @@ export interface ToolbarOptions {
   onCancel: () => void;
   onExport: (action: "clipboard" | "save" | "open") => void;
   onShare: () => void;
+  onBeautify?: () => void;
   onColorChange: (color: string) => void;
   onSizeChange: (size: number) => void;
 }
@@ -30,6 +31,7 @@ export interface ToolbarUi {
   setActionBusy(busy: boolean): void;
   syncColor(color: string): void;
   syncSize(): void;
+  syncBeauty(enabled: boolean): void;
 }
 
 const tools: { tool: Tool; icon: string; title: string }[] = [
@@ -80,6 +82,9 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
     options.onOcr();
   });
   toolbar.appendChild(ocr);
+  const beautify = makeBtn("beautify", "beautify.title");
+  beautify.addEventListener("click", () => options.onBeautify?.());
+  toolbar.appendChild(beautify);
   const addDivider = () => {
     const divider = document.createElement("div");
     divider.className = "divider";
@@ -179,7 +184,8 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
     widthPopup.classList.remove("open");
   }
   function setActionBusy(busy: boolean) {
-    for (const button of [ocr, copy, save, share, open]) button.disabled = busy;
+    for (const button of [ocr, copy, save, share, open, beautify, reselect, cancel])
+      button.disabled = busy;
   }
   function syncColor(color: string) {
     colorSwatch.style.background = color;
@@ -229,5 +235,12 @@ export function createToolbar(options: ToolbarOptions): ToolbarUi {
     setActionBusy,
     syncColor,
     syncSize,
+    syncBeauty(enabled) {
+      beautify.classList.toggle("active", enabled);
+      beautify.dataset.i18nTitle = enabled ? "beautify.active" : "beautify.title";
+      beautify.title = t(beautify.dataset.i18nTitle);
+      beautify.setAttribute("aria-pressed", String(enabled));
+      beautify.ariaLabel = beautify.title;
+    },
   };
 }

@@ -21,6 +21,7 @@ async function setup() {
   let viewportOptions, cropOptions, activeTool, saveDialogCount = 0;
   let pathResolver;
   const toasts = [], saved = [];
+  const beautyPanels = [];
   let previewScale = 0.2;
   const elements = [];
   const context = new Proxy({ measureText: text => ({ width: text.length * 24 }),
@@ -71,6 +72,13 @@ async function setup() {
       confirm: () => { throw new Error("editor exit must use an in-app confirmation"); },
     },
     require: name => {
+      if (name === "../image-editor/export-image") return require("./helpers/load-ts.cjs")("image-editor/export-image.ts", {}, {document:{createElement:element}});
+      if (name === "../image-beautify/workspace") return {createBeautyWorkspace: options => {
+        let open = false; const panel = {options, open: () => {open=true;}, close: () => {options.completeRound();open=false;}, reset:()=>{open=false;}, isOpen: () => open,
+          settle(){},refreshSession(){},refresh(){},sync(){},refreshTranslations(){},layout(){},bounds:()=>null,isDragging:()=>false};
+        beautyPanels.push(panel); return panel;
+      }};
+      if (name.startsWith("../image-beautify/")) return require(`../../.unit-test-dist/compiled/image-beautify/${name.split("/").pop()}.js`);
       if (name === "@tauri-apps/plugin-dialog") return { save: () => {
         saveDialogCount++;
         return new Promise(resolve => { pathResolver = resolve; });
@@ -91,7 +99,7 @@ async function setup() {
       if (name === "../image-editor/toolbar") return { createEditorToolbar: actions => {
         toolbarActions = actions;
         toolbar = { color: { value: "#ff0000" }, width: { addEventListener: () => {} }, sizes: { strokeWidth: 2, fontSize: 24, blockSize: 16 }, format: { value: "png" }, outputScale: { value: "100" },
-          refreshTranslations: () => {}, refreshHistory: () => {}, setSelection: selected => {toolbar.selected=selected;}, setActiveTool: tool => {activeTool=tool;}, closePanels: () => {}, updateLayout: () => {},
+          refreshTranslations: () => {}, refreshHistory: (undo,redo) => {toolbar.canUndo=undo;toolbar.canRedo=redo;}, setSelection: selected => {toolbar.selected=selected;}, setActiveTool: tool => {activeTool=tool;}, closePanels: () => {}, updateLayout: () => {},
           resetSizes: () => {
             Object.assign(toolbar.sizes, require("../../.unit-test-dist/compiled/image-editor/annotation-style.js").createAnnotationSizes());
           } };
@@ -154,7 +162,7 @@ async function setup() {
     return event;
   };
   return { controller, input, canvas, click, key, drawn, cleared, toolbarActions, toolbar, root, confirmations,
-    toasts, saved, activeTool: () => activeTool, saveDialogs: () => saveDialogCount,
+    toasts, saved, beautyPanels, activeTool: () => activeTool, saveDialogs: () => saveDialogCount,
     resolvePath: async path => {pathResolver(path); await new Promise(resolve => setImmediate(resolve));},
     changeCropView: value => viewportOptions.onCropChange(value),
     cropGesture: (value, cancelled=false) => {cropOptions.onBegin(); cropOptions.onChange(value); cropOptions.onEnd(cancelled);},
@@ -175,6 +183,32 @@ async function setup() {
     resizePreview: scale => { previewScale = scale; },
     flush: () => { while (timers.length) timers.shift()(); }, focused: () => active === input };
 }
+
+test("integrated beautification edits immediately share editor undo, redo, reset and exit protection", async () => {
+  const f = await setup(); f.toolbarActions.setTool("select");
+  const preview = async () => { f.toolbarActions.beautify(); await new Promise(resolve=>setImmediate(resolve)); return f.beautyPanels.at(-1); };
+  let panel = await preview();
+  assert.ok(panel, JSON.stringify(f.toasts));
+  panel.options.edit(d=>{d.enabled=true;d.frame.kind="solid";});
+  assert.equal(panel.options.getDocument().enabled,true);
+  panel.options.edit(d=>{d.frame.radius=20;},"radius");
+  panel.options.edit(d=>{d.frame.radius=30;},"radius");
+  f.toolbarActions.undo(); assert.equal(panel.options.getDocument().frame.radius,16);
+  assert.equal(panel.options.getDocument().enabled,false);
+  f.toolbarActions.redo(); assert.equal(panel.options.getDocument().enabled,true);
+  f.toolbarActions.reset(); assert.equal(panel.options.getDocument().enabled,false);
+  f.toolbarActions.undo(); assert.equal(panel.options.getDocument().enabled,true);
+  const leaving=f.controller.close(); assert.equal(f.confirmations.length,1);
+  await f.resolveConfirmation(false); assert.equal(await leaving,false);
+});
+
+test("a screenshot edit context opens the inspector with its original document and frozen time",async()=>{
+ const f=await setup();const document=require("../../.unit-test-dist/compiled/image-beautify/model.js").emptyBeauty();
+ document.enabled=true;document.frame.kind="gradient";
+ await f.controller.open({path:"capture.png",name:"capture.png"},()=>{},{document,capturedAt:1792886400000});
+ const pane=f.beautyPanels.at(-1);assert.ok(pane.isOpen());assert.equal(pane.options.getDocument().enabled,true);
+ assert.equal(pane.options.getTime().getTime(),1792886400000);
+});
 
 test("select moves an annotation as one undo step and toolbar deletion can be undone", async () => {
   const f=await setup();f.click();f.flush();f.input.value="move";f.key();
@@ -672,4 +706,41 @@ test("an edge-clamped input commits text at its visible origin and caps overflow
   const start = fixture.drawn[0].start;
   assert.equal(start.x, left + 9 - 20);
   assert.equal(start.y, top + 7 - 30);
+});
+
+
+test("a beauty round coalesces across fields and ends before annotations, while the panel stays open",async()=>{
+ const f=await setup();f.toolbarActions.beautify();await new Promise(r=>setImmediate(r));const p=f.beautyPanels.at(-1);
+ for(const kind of ["mac-light","mac-dark","wood"])p.options.edit(d=>{d.enabled=true;d.frame.kind=kind;});
+ p.options.edit(d=>{d.frame.radius=38;},"radius");
+ f.toolbarActions.setTool("text");f.click();f.input.value="after beauty";f.key();
+ f.toolbarActions.undo();assert.equal(p.options.getDocument().frame.kind,"wood");
+ f.toolbarActions.undo();assert.equal(p.options.getDocument().enabled,false);assert.equal(f.toolbar.canUndo,false);
+ f.toolbarActions.redo();assert.equal(p.options.getDocument().frame.kind,"wood");assert.equal(p.options.getDocument().frame.radius,38);
+});
+
+test("restoring this round and a net-zero round do not create an unsaved-change warning",async()=>{
+ for(const restore of [true,false]){
+  const f=await setup();f.toolbarActions.beautify();await new Promise(r=>setImmediate(r));const p=f.beautyPanels.at(-1);
+  const before=JSON.parse(JSON.stringify(p.options.getDocument()));
+  p.options.edit(d=>{d.enabled=true;d.frame.kind="wood";});
+  if(restore)p.options.revertRound();else{p.options.edit(d=>Object.assign(d,before));p.close();}
+  assert.equal(f.toolbar.canUndo,false);assert.equal(await f.controller.close(),true);assert.equal(f.confirmations.length,0);
+ }
+});
+
+test("closing and reopening the inspector makes independently undoable beauty rounds",async()=>{
+ const f=await setup();f.toolbarActions.beautify();await new Promise(r=>setImmediate(r));const p=f.beautyPanels.at(-1);
+ p.options.edit(d=>{d.enabled=true;d.frame.kind="gallery";});p.close();
+ f.toolbarActions.beautify();await new Promise(r=>setImmediate(r));p.options.edit(d=>{d.frame.kind="wood";});p.options.edit(d=>{d.frame.radius=33;});
+ f.toolbarActions.undo();assert.equal(p.options.getDocument().frame.kind,"gallery");
+ f.toolbarActions.undo();assert.equal(p.options.getDocument().enabled,false);assert.equal(f.toolbar.canUndo,false);
+});
+
+test("save starts a history boundary even when choosing a path is canceled",async()=>{
+ const f=await setup();f.toolbarActions.beautify();await new Promise(r=>setImmediate(r));const p=f.beautyPanels.at(-1);
+ p.options.edit(d=>{d.enabled=true;d.frame.kind="gallery";});f.toolbarActions.saveAs();
+ p.options.edit(d=>{d.frame.kind="wood";});await f.resolvePath(null);
+ f.toolbarActions.undo();assert.equal(p.options.getDocument().frame.kind,"gallery");
+ f.toolbarActions.undo();assert.equal(p.options.getDocument().enabled,false);
 });

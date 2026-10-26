@@ -380,6 +380,7 @@ pub struct FinishRequest {
     pub ocr_document: Option<crate::ocr::result::OcrDocument>,
     /// 复制或保存成功后，先让前端显示短提示，再由前端关闭截图窗口。
     pub defer_close: Option<bool>,
+    pub edit_context: Option<crate::beautify::EditContext>,
 }
 
 #[tauri::command]
@@ -414,6 +415,12 @@ fn finish_screenshot_inner(
 
     if let Some(document) = &req.ocr_document {
         document.validate()?;
+    }
+    if let Some(context) = &req.edit_context {
+        context.validate()?;
+        if req.action != "open" {
+            return Err("Invalid edit action".into());
+        }
     }
 
     match req.action.as_str() {
@@ -450,7 +457,7 @@ fn finish_screenshot_inner(
                 }
                 let _ = app.emit(
                     "open-image",
-                    serde_json::json!({ "path": path, "ocr_text": req.ocr_text, "ocr_document": req.ocr_document }),
+                    serde_json::json!({ "path": path, "ocr_text": req.ocr_text, "ocr_document": req.ocr_document, "edit_context": req.edit_context }),
                 );
             }
         }

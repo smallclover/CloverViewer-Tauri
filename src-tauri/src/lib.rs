@@ -8,6 +8,7 @@
 //! - minimize_on_close：关窗隐藏到托盘
 
 mod atomic_file;
+mod beautify;
 mod commands;
 mod config;
 mod desktop_pet;
@@ -145,6 +146,10 @@ pub fn run() {
         .manage(scroll_capture::ScrollCaptureSession::new())
         .manage(StartupNotices::default())
         .invoke_handler(tauri::generate_handler![
+            beautify::get_beautify_library,
+            beautify::save_beautify_library,
+            beautify::import_beautify_asset,
+            beautify::read_beautify_asset,
             commands::get_config,
             hotkeys::get_active_hotkeys,
             commands::quit_app,

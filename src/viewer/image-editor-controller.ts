@@ -3,7 +3,15 @@ import { composeEditedImage } from "../image-editor/export-image";
 import { createEditorTextInput } from "../image-editor/editor-text-input";
 import { createDrawingSession } from "../image-editor/drawing-session";
 import { save } from "@tauri-apps/plugin-dialog";
-import type { EditedImageFormat, ImageEntry } from "../api";
+import type {
+  BeautifyDocument,
+  EditedImageFormat,
+  ImageEntry,
+  ScreenshotEditContext,
+} from "../api";
+import { cloneBeauty, emptyBeauty, rebaseBeauty } from "../image-beautify/model";
+import { checkBeautySize } from "../image-beautify/layout";
+import { createBeautyTransaction } from "../image-beautify/transaction";
 import { createAnnotationLayers } from "../image-editor/annotation-layers";
 import { createAnnotationSelection } from "../image-editor/annotation-selection";
 import { drawAnnotation } from "../image-editor/annotation-renderer";
@@ -37,6 +45,7 @@ interface EditSnapshot {
   shapes: Shape[];
   crop: Rect | null;
   rotation: number;
+  beauty: BeautifyDocument;
 }
 
 interface ImageEditorControllerOptions {
@@ -90,12 +99,19 @@ export function createImageEditorController(options: ImageEditorControllerOption
     redo: () => redo(),
     reset: () => reset(),
     saveAs: () => {
-      if (!requireCropResolution()) void saves.saveAs();
+      if (!requireCropResolution() && !saves.isBusy()) {
+        finishBeauty();
+        void saves.saveAs();
+      }
     },
     overwrite: () => {
-      if (!requireCropResolution()) void saves.overwrite();
+      if (!requireCropResolution() && !saves.isBusy()) {
+        finishBeauty();
+        void saves.overwrite();
+      }
     },
     close: () => void close(),
+    beautify: () => void openBeautify(),
   });
   const confirmDialog = createEditorConfirmDialog({ workspace });
   const zoomToolbar = createEditorZoomToolbar({
@@ -106,6 +122,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     actualSize: () => cropViewport.actualSize(),
   });
   const { color, sizes, format, outputScale } = toolbar;
+  for (const control of [format, outputScale])
+    control.addEventListener?.("change", () => beautyWorkspace?.refresh());
   const drawingSizes = () =>
     imageAnnotationSizes(sizes, canvas.getBoundingClientRect().width / canvas.width);
 
@@ -128,6 +146,12 @@ export function createImageEditorController(options: ImageEditorControllerOption
   let crop: Rect | null = null;
   let cropSnapshot: EditSnapshot | null = null;
   let rotation = 0;
+  let beauty = emptyBeauty();
+  let beautyTime = new Date();
+  let beautyOpening = false;
+  let beautyWorkspace: ReturnType<
+    typeof import("../image-beautify/workspace").createBeautyWorkspace
+  > | null = null;
   let repaint = true;
   let session = 0;
   let revision = 0;
@@ -150,22 +174,54 @@ export function createImageEditorController(options: ImageEditorControllerOption
     shapes: value.shapes.map(cloneShape),
     crop: value.crop && { ...value.crop },
     rotation: value.rotation,
+    beauty: cloneBeauty(value.beauty),
   });
   const history = new SnapshotHistory<EditSnapshot>(
     cloneSnapshot,
-    (value) => shapeHistoryBytes(value.shapes) + 128,
+    (value) => shapeHistoryBytes(value.shapes) + JSON.stringify(value.beauty).length * 2 + 128,
   );
-  const snapshot = (): EditSnapshot => ({ shapes, crop, rotation });
-  const checkpoint = () => history.checkpoint(snapshot());
+  const snapshot = (): EditSnapshot => ({ shapes, crop, rotation, beauty });
+  const checkpoint = () => {
+    finishBeauty();
+    history.checkpoint(snapshot());
+  };
   const restore = (value: EditSnapshot) => {
     shapes = value.shapes;
     crop = value.crop;
     rotation = value.rotation;
+    beauty = value.beauty;
+    beautyTransaction.clear();
+    toolbar.syncBeauty?.(beauty.enabled);
+    beautyWorkspace?.sync();
     selection.clear();
     rebuildSource();
     rasterizeAnnotations();
     cropViewport.fit();
   };
+  const beautyTransaction = createBeautyTransaction({
+    capture: snapshot,
+    clone: cloneSnapshot,
+    getRevision: () => revision,
+    setRevision: (value) => {
+      revision = value;
+    },
+    restoreBeauty: (value) => {
+      beauty = value;
+    },
+    commit: (before) => history.checkpoint(before),
+  });
+  function refreshHistory() {
+    toolbar.refreshHistory(
+      beautyTransaction.changed() || history.canUndo,
+      !beautyTransaction.changed() && history.canRedo,
+    );
+  }
+  function finishBeauty() {
+    beautyWorkspace?.settle();
+    beautyTransaction.finish();
+    refreshHistory();
+    beautyWorkspace?.refreshSession();
+  }
   const cropTransaction = createCropTransaction({
     capture: snapshot,
     clone: cloneSnapshot,
@@ -196,6 +252,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     selection.refreshTranslations();
     textInput.ariaLabel = options.translate("editor.textPrompt");
     textInput.placeholder = textInput.ariaLabel;
+    beautyWorkspace?.refreshTranslations();
   };
 
   const displayPoint = (event: PointerEvent): Pt => {
@@ -256,9 +313,10 @@ export function createImageEditorController(options: ImageEditorControllerOption
     context.drawImage(sourceCanvas, x, y, w, h, x, y, w, h);
     layers.paint(context, { x, y, w, h });
     context.restore();
+    beautyWorkspace?.refresh(true);
     selection.refresh();
     if (tool === "crop") cropOverlay.refreshImage();
-    toolbar.refreshHistory(history.canUndo, history.canRedo);
+    refreshHistory();
   };
 
   const paint = createFrameUpdate(() => render());
@@ -270,10 +328,12 @@ export function createImageEditorController(options: ImageEditorControllerOption
     getShapes: () => shapes,
     getBounds: () => crop ?? { x: 0, y: 0, w: canvas.width, h: canvas.height },
     replace: (index, shape) => {
+      finishBeauty();
       shapes[index] = shape;
       repaint = true;
     },
     commit: (index, before) => {
+      finishBeauty();
       history.checkpoint({
         ...snapshot(),
         shapes: shapes.map((shape, i) => (i === index ? before : shape)),
@@ -323,12 +383,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
     canvas,
     surface,
     getCrop: () => crop,
+    getDisplayBounds: () => beautyWorkspace?.bounds() ?? null,
     isCropping: () => tool === "crop",
     onCropChange: (next) => {
       crop = next;
     },
     onLayout: (animating) => {
-      const bounds = tool === "crop" ? null : crop;
+      const bounds = tool === "crop" ? null : (beautyWorkspace?.bounds() ?? crop);
       const scale = cropViewport.scale();
       Object.assign(imageBoundary.style, {
         left: `${Number.parseFloat(canvas.style.left) + (bounds?.x ?? 0) * scale}px`,
@@ -345,6 +406,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       mosaicCursor.reset();
       selection.refresh();
       textEditor.layout();
+      beautyWorkspace?.layout();
     },
   });
   const cropOverlay = createCropOverlay({
@@ -366,7 +428,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       cropSnapshot = null;
       cropViewport.end(cancelled);
       cropOverlay.update();
-      toolbar.refreshHistory(history.canUndo, history.canRedo);
+      refreshHistory();
     },
   });
 
@@ -398,6 +460,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       selection.isDragging() ||
       !!cropSnapshot ||
       textEditor.isEditing() ||
+      !!beautyWorkspace?.isDragging() ||
       confirmDialog.isOpen(),
     isCropping: () => tool === "crop",
   });
@@ -407,6 +470,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       requireCropResolution();
       return;
     }
+    if (next !== "select") finishBeauty();
     cancelDrawing();
     selection.clear();
     paint.discard();
@@ -415,6 +479,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     if (next !== "crop" && cropTransaction.active) cropTransaction.finish(false);
     if (next === "crop") cropTransaction.begin();
     tool = next;
+    if (next !== "crop" && beautyWorkspace?.isOpen())
+      beauty = rebaseBeauty(beauty, crop?.w ?? canvas.width, crop?.h ?? canvas.height);
     canvas.style.cursor = next === "select" ? "default" : "crosshair";
     drawing.reset();
     resetActiveMosaic();
@@ -423,6 +489,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cropOverlay.update();
     mosaicCursor.refresh();
     render();
+    beautyWorkspace?.sync();
   };
 
   const adjustAnnotation = (index: number) => {
@@ -468,6 +535,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cancelDrawing();
     selection.clear();
     cropOverlay.cancel();
+    finishBeauty();
     const previous = history.undo(snapshot());
     if (!previous) return;
     restore(previous);
@@ -479,6 +547,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cancelDrawing();
     selection.clear();
     cropOverlay.cancel();
+    finishBeauty();
     const next = history.redo(snapshot());
     if (!next) return;
     restore(next);
@@ -486,16 +555,27 @@ export function createImageEditorController(options: ImageEditorControllerOption
     render();
   };
   const reset = () => {
+    finishBeauty();
     cancelDrawing();
     selection.clear();
     cropOverlay.cancel();
     if (cropTransaction.active) cropTransaction.finish(false);
     textEditor.commit();
-    if (shapes.length || crop || rotation !== 0) {
+    if (
+      shapes.length ||
+      crop ||
+      rotation !== 0 ||
+      beauty.enabled ||
+      beauty.watermarks.length ||
+      beauty.frame.kind !== "none"
+    ) {
       checkpoint();
       shapes = [];
       crop = null;
       rotation = 0;
+      beauty = emptyBeauty();
+      toolbar.syncBeauty?.(false);
+      beautyWorkspace?.sync();
       rebuildSource();
       rasterizeAnnotations();
       markDirty();
@@ -504,16 +584,90 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cropViewport.fit();
   };
 
-  const exportCanvas = () => {
+  const exportCanvas = (includeScale = true) => {
     selection.cancel();
     if (cropTransaction.active) throw new Error(options.translate("editor.finishCropFirst"));
+    if (beauty.enabled || !includeScale)
+      checkBeautySize(crop?.w ?? sourceCanvas.width, crop?.h ?? sourceCanvas.height);
     return composeEditedImage({
       source: sourceCanvas,
       crop,
       shapes,
-      scale: Number(outputScale.value) / 100,
+      scale: includeScale ? Number(outputScale.value) / 100 : 1,
       drawShape,
     });
+  };
+
+  const openBeautify = async () => {
+    if (!image || beautyOpening || requireCropResolution() || saves.isBusy()) return;
+    if (beautyWorkspace?.isOpen()) {
+      beautyWorkspace.close();
+      return;
+    }
+    cancelDrawing();
+    selection.cancel();
+    textEditor.commit();
+    toolbar.closePanels();
+    setTool("select");
+    const current = session;
+    beautyOpening = true;
+    try {
+      const { createBeautyWorkspace } = await import("../image-beautify/workspace");
+      if (current !== session) return;
+      beauty = rebaseBeauty(beauty, crop?.w ?? canvas.width, crop?.h ?? canvas.height);
+      beautyWorkspace ??= createBeautyWorkspace({
+        workspace,
+        canvas,
+        surface,
+        t: options.translate,
+        getDocument: () => beauty,
+        getCrop: () => crop,
+        getTime: () => beautyTime,
+        getOutputScale: () => Number(outputScale.value) / 100,
+        getWhiteBackground: () => format.value === "jpeg",
+        isCropping: () => tool === "crop",
+        canDrag: () => tool === "select",
+        selectTool: () => setTool("select"),
+        edit: (update) => {
+          if (requireCropResolution()) return;
+          cancelDrawing();
+          selection.cancel();
+          textEditor.commit();
+          const next = cloneBeauty(beauty);
+          update(next);
+          if (JSON.stringify(next) === JSON.stringify(beauty)) return;
+          beautyTransaction.begin();
+          const visibilityChanged = next.enabled !== beauty.enabled;
+          beauty = next;
+          markDirty();
+          toolbar.syncBeauty?.(beauty.enabled);
+          refreshHistory();
+          beautyWorkspace?.refresh();
+          if (visibilityChanged) cropViewport.fit();
+        },
+        undo,
+        redo,
+        hasChanges: beautyTransaction.changed,
+        getBeforeDocument: beautyTransaction.before,
+        completeRound: finishBeauty,
+        revertRound: () => {
+          beautyTransaction.revert();
+          toolbar.syncBeauty?.(beauty.enabled);
+          beautyWorkspace?.sync();
+          beautyWorkspace?.refresh();
+          cropViewport.fit();
+          refreshHistory();
+        },
+        onLayout: () => cropViewport.fit(),
+        onOpen: (open) => toolbar.setBeautyOpen?.(open),
+      });
+      beautyWorkspace.open();
+    } catch (error) {
+      if (current === session)
+        options.toast(options.translate("beautify.failed", { msg: String(error) }), "error");
+    } finally {
+      if (current === session) beautyOpening = false;
+    }
   };
 
   const saves = createEditorSaveController({
@@ -521,8 +675,24 @@ export function createImageEditorController(options: ImageEditorControllerOption
     getFormat: () => format.value as EditedImageFormat,
     getSession: () => session,
     getRevision: () => revision,
-    prepare: textEditor.commit,
-    exportPng: () => canvasPng(exportCanvas()),
+    prepare: () => {
+      textEditor.commit();
+      finishBeauty();
+    },
+    exportPng: () => {
+      if (!beauty.enabled) return canvasPng(exportCanvas());
+      const document = cloneBeauty(beauty),
+        time = beautyTime;
+      const scale = Number(outputScale.value) / 100,
+        whiteBackground = format.value === "jpeg";
+      const source = exportCanvas(false);
+      return import("../image-beautify/renderer")
+        .then(({ composeBeauty }) => composeBeauty(source, document, time, scale, whiteBackground))
+        .then(canvasPng)
+        .finally(() => {
+          source.width = source.height = 0;
+        });
+    },
     choosePath: (source, outputFormat) => {
       const suffix = outputFormat === "jpeg" ? "jpg" : outputFormat;
       return save({
@@ -554,6 +724,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
       selection.cancel();
       cropOverlay.cancel();
       textEditor.commit();
+      finishBeauty();
       if (
         (revision !== savedRevision || cropTransaction.changed()) &&
         !(await confirmDialog.ask({
@@ -565,6 +736,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
       )
         return false;
       session++;
+      beautyTransaction.clear();
+      beautyWorkspace?.reset();
       loader.cancel();
       paint.discard();
       toolbar.closePanels();
@@ -590,6 +763,13 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
   };
 
+  canvas.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (image && event.button === 0 && tool !== "select" && tool !== "crop") finishBeauty();
+    },
+    true,
+  );
   canvas.addEventListener("pointerdown", (event) => {
     if (!image || event.button !== 0 || tool === "crop") return;
     if (tool !== "text" && tool !== "select") return;
@@ -618,8 +798,16 @@ export function createImageEditorController(options: ImageEditorControllerOption
   });
   window.addEventListener("blur", () => selection.cancel());
   window.addEventListener("keydown", (event) => {
-    if (options.root.classList.contains("hidden") || confirmDialog.isOpen()) return;
+    if (options.root.classList.contains("hidden") || confirmDialog.isOpen() || beautyOpening)
+      return;
     if (event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+    if (event.key === "Escape" && beautyWorkspace?.isOpen()) {
+      event.preventDefault();
+      beautyWorkspace.close();
+      return;
+    }
+    if ((event.target as HTMLElement)?.closest?.("input, textarea, select, [contenteditable]"))
+      return;
     if (event.key === "Escape" && selection.isDragging()) {
       event.preventDefault();
       selection.cancel();
@@ -640,7 +828,8 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
     if (event.ctrlKey && event.key.toLowerCase() === "z") {
       event.preventDefault();
-      undo();
+      if (event.shiftKey) redo();
+      else undo();
     } else if (event.ctrlKey && event.key.toLowerCase() === "y") {
       event.preventDefault();
       redo();
@@ -655,7 +844,11 @@ export function createImageEditorController(options: ImageEditorControllerOption
     }
   });
 
-  const open = async (nextEntry: ImageEntry, onReady: () => void) => {
+  const open = async (
+    nextEntry: ImageEntry,
+    onReady: () => void,
+    editContext?: ScreenshotEditContext,
+  ) => {
     const nextImage = await loader.load(nextEntry.path);
     if (!nextImage) return false;
     cropOverlay.cancel();
@@ -671,8 +864,15 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cropSnapshot = null;
     textEditor.reset();
     rotation = 0;
+    beautyWorkspace?.reset();
+    beautyOpening = false;
+    beauty = editContext ? cloneBeauty(editContext.document) : emptyBeauty();
+    beautyTime = new Date(editContext?.capturedAt ?? Date.now());
+    beautyTransaction.clear();
+    toolbar.syncBeauty?.(beauty.enabled);
     session++;
     revision = savedRevision = 0;
+    if (beauty.enabled) revision = 1;
     history.clear();
     rebuildSource();
     rasterizeAnnotations();
@@ -684,6 +884,7 @@ export function createImageEditorController(options: ImageEditorControllerOption
     cropViewport.fit();
     toolbar.resetSizes();
     cropOverlay.refreshImage();
+    if (editContext) await openBeautify();
     return true;
   };
 

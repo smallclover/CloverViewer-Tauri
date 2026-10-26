@@ -49,6 +49,9 @@ import { createToolbar } from "./screenshot/toolbar";
 import { createSelectionOverlay } from "./screenshot/selection-overlay";
 import { createViewportBounds } from "./screenshot/viewport";
 import { createScreenshotCoordinates } from "./screenshot/coordinates";
+import { createScreenshotBeauty } from "./screenshot/beautify-controller";
+import { selectionToCanvas } from "./screenshot/selection-image";
+import { checkBeautySize } from "./image-beautify/layout";
 
 // 截图标注器：交互绘制、放大镜、滚动截图与导出的组合根
 //
@@ -66,6 +69,7 @@ let scrollController: ReturnType<typeof createScrollCaptureController>;
 let screenshotLoadController: ReturnType<typeof createScreenshotLoadController>;
 let editorUi: ReturnType<typeof createEditorUiController>;
 let screenshotActions: ReturnType<typeof createScreenshotActionController>;
+let screenshotBeauty: ReturnType<typeof createScreenshotBeauty>;
 
 // ---------- 状态 ----------
 let totalW = 0;
@@ -120,14 +124,16 @@ const toolbarUi = createToolbar({
   onToolChange: setTool,
   onOcr: () => void runOcr(),
   onReselect: () => {
-    editorSession.selection = null;
-    editorSession.selectedIndex = null;
+    textInputUi.commit();
+    editorSession.reset();
+    screenshotBeauty.reset();
     setTool(null);
     render();
   },
   onCancel: () => void closeScreenshot(),
   onExport: (action) => void exportImage(action),
   onShare: () => void shareImage(),
+  onBeautify: () => void screenshotBeauty.open(),
   onColorChange: (next) => {
     editorSession.color = next;
     toolbarUi.syncColor(editorSession.color);
@@ -267,7 +273,37 @@ const editorRenderer = createEditorCanvasRenderer({
 root.prepend(editorRenderer.background);
 const editorPaint = createFrameUpdate(() => render());
 
+screenshotBeauty = createScreenshotBeauty({
+  getDocument: () => editorSession.beauty,
+  setDocument: (value, checkpoint = true) => {
+    if (checkpoint) editorSession.checkpoint();
+    editorSession.beauty = value;
+  },
+  compose: (preview = false) => {
+    const selection = editorSession.selection;
+    if (!selection) throw new Error(t("beautify.failed", { msg: t("shot.reselect") }));
+    if (preview || editorSession.beauty.enabled) checkBeautySize(selection.w, selection.h);
+    return selectionToCanvas({
+      selection,
+      screens: screenSources(),
+      drawAnnotations: (target) => {
+        for (const shape of editorSession.shapes) editorRenderer.drawShape(target, shape);
+      },
+    });
+  },
+  prepare: () => {
+    textInputUi.commit();
+    editorInput.reset();
+    editorSession.currentShape = null;
+  },
+  t,
+  changed: render,
+  fail: (message) => showScreenshotNotice(message, "error"),
+  setBusy: toolbarUi.setActionBusy,
+});
+
 screenshotActions = createScreenshotActionController({
+  getOutputPng: screenshotBeauty.output,
   getSelection: () => editorSession.selection,
   getScreens: screenSources,
   getShapes: () => editorSession.shapes,
@@ -289,6 +325,7 @@ screenshotActions = createScreenshotActionController({
 });
 
 function render() {
+  toolbarUi.syncBeauty(editorSession.beauty.enabled);
   const input = editorInput?.getFrameState();
   mosaicCursor?.update(input?.overUI ? null : (input?.lastMousePos ?? null));
   editorRenderer.setVisible(!scrollActive());
@@ -405,7 +442,7 @@ mosaicCursor = createMosaicCursor({
 let copyColorHotkey = "Alt+C";
 
 bindEditorShortcuts({
-  isTextEditing: () => textInput.classList.contains("editing"),
+  isTextEditing: () => textInput.classList.contains("editing") || screenshotBeauty.isOpen(),
   getScrollPhase: () => scroll.phase,
   getSelection: () => editorSession.selection,
   onStopScroll: stopScrollCaptureNow,
@@ -692,6 +729,7 @@ function resetScreenshotSession() {
     element.remove();
   });
   editorSession.reset();
+  screenshotBeauty.reset();
   for (const button of toolBtns.values()) button.classList.toggle("active", false);
   textInput.classList.remove("editing");
   lanSharePanel.hide();

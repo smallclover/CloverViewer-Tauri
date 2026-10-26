@@ -41,7 +41,8 @@ export async function bindOpenImageBridge(
         return;
       }
       if (isOcr) toast.hide();
-      else toast(translate("toast.opened"), "success");
+      else
+        toast(translate(payload.edit_context ? "toast.openedForEdit" : "toast.opened"), "success");
     } catch (error) {
       toast(String(error), "error");
     }

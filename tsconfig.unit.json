@@ -9,6 +9,9 @@
     "outDir": ".unit-test-dist/compiled"
   },
   "include": [
+    "src/image-beautify/model.ts",
+    "src/image-beautify/transaction.ts",
+    "src/image-beautify/layout.ts",
     "src/ocr/layout.ts",
     "src/ocr/selection.ts",
     "src/ocr/geometry.ts",

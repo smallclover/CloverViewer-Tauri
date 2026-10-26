@@ -21,12 +21,17 @@ interface ScreenshotActionControllerOptions {
   setActionBusy: (busy: boolean) => void;
   showNotice: (message: string, kind: "progress" | "success" | "error") => void;
   showLanShare: (info: LanShareInfo) => void;
+  getOutputPng?: () => Promise<string>;
 }
 
 /** 只负责常规截图导出与 OCR，不持有编辑器状态或界面布局。 */
 export function createScreenshotActionController(options: ScreenshotActionControllerOptions) {
   let busy = false;
   let generation = 0;
+  const errorText = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.startsWith("beautify.") ? options.translate(message) : String(error);
+  };
 
   const validSelection = () => {
     const selection = options.getSelection();
@@ -50,13 +55,14 @@ export function createScreenshotActionController(options: ScreenshotActionContro
       "progress",
     );
     try {
-      const png = await selectionToPngBase64({
-        selection,
-        screens: options.getScreens(),
-        drawAnnotations: (context) => {
-          for (const shape of options.getShapes()) options.drawShape(context, shape);
-        },
-      });
+      const png = await (options.getOutputPng?.() ??
+        selectionToPngBase64({
+          selection,
+          screens: options.getScreens(),
+          drawAnnotations: (context) => {
+            for (const shape of options.getShapes()) options.drawShape(context, shape);
+          },
+        }));
       if (current !== generation) return;
       await finishScreenshot(action, png, undefined, action !== "open");
       if (current !== generation || action === "open") return;
@@ -75,7 +81,7 @@ export function createScreenshotActionController(options: ScreenshotActionContro
             : action === "clipboard"
               ? "shot.copyFailed"
               : "shot.openFailed",
-          { msg: String(error) },
+          { msg: errorText(error) },
         ),
         "error",
       );
@@ -131,13 +137,14 @@ export function createScreenshotActionController(options: ScreenshotActionContro
     const current = generation;
     options.setActionBusy(true);
     try {
-      const png = await selectionToPngBase64({
-        selection,
-        screens: options.getScreens(),
-        drawAnnotations: (context) => {
-          for (const shape of options.getShapes()) options.drawShape(context, shape);
-        },
-      });
+      const png = await (options.getOutputPng?.() ??
+        selectionToPngBase64({
+          selection,
+          screens: options.getScreens(),
+          drawAnnotations: (context) => {
+            for (const shape of options.getShapes()) options.drawShape(context, shape);
+          },
+        }));
       if (current !== generation) return;
       const info = await startLanShare(png);
       if (current !== generation) {
@@ -147,7 +154,7 @@ export function createScreenshotActionController(options: ScreenshotActionContro
       options.showLanShare(info);
     } catch (error) {
       if (current !== generation) return;
-      options.showNotice(options.translate("shot.shareFailed", { msg: String(error) }), "error");
+      options.showNotice(options.translate("shot.shareFailed", { msg: errorText(error) }), "error");
     } finally {
       if (current === generation) {
         busy = false;

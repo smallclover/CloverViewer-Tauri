@@ -4,7 +4,7 @@ const { fitCropViewport, createCropViewport } = require("../../.unit-test-dist/c
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8);
 
-function withAnimatedViewport(run, reducedMotion = false, fixedCrop = false) {
+function withAnimatedViewport(run, reducedMotion = false, fixedCrop = false, displayBounds = null) {
   const originals = Object.fromEntries(["ResizeObserver", "requestAnimationFrame", "cancelAnimationFrame", "matchMedia"].map(key => [key, global[key]]));
   let resize, id = 0, crop = null, cropping = true;
   const frames = new Map();
@@ -15,7 +15,7 @@ function withAnimatedViewport(run, reducedMotion = false, fixedCrop = false) {
   global.matchMedia = () => ({ matches: reducedMotion });
   const canvas = { width: 4000, height: 3000, style: {} };
   const surface = { clientWidth: 900, clientHeight: 600 };
-  const viewport = createCropViewport({ canvas, surface, getCrop: () => crop, isCropping: () => cropping, onCropChange: fixedCrop ? value => { crop = value; } : undefined, onLayout: animating => layouts.push({ animating, style: { ...canvas.style } }) });
+  const viewport = createCropViewport({ canvas, surface, getCrop: () => crop, getDisplayBounds: () => displayBounds, isCropping: () => cropping, onCropChange: fixedCrop ? value => { crop = value; } : undefined, onLayout: animating => layouts.push({ animating, style: { ...canvas.style } }) });
   const tick = time => {
     const pending = [...frames.values()];
     frames.clear();
@@ -30,6 +30,19 @@ function withAnimatedViewport(run, reducedMotion = false, fixedCrop = false) {
     }
   }
 }
+
+test("decoration fits the whole frame while image coordinates and crop geometry remain unchanged", () => {
+  const frame={x:920,y:720,w:1760,h:1060}, original={x:1000,y:800,w:1600,h:900};
+  withAnimatedViewport(({canvas,viewport,crop,getCrop,setCropping})=>{
+    crop(original);setCropping(false);viewport.fit();
+    const scale=viewport.scale(), left=parseFloat(canvas.style.left)+frame.x*scale;
+    near(left,12);near(left+frame.w*scale,888);
+    near(parseFloat(canvas.style.left)+original.x*scale,left+80*scale);
+    assert.deepEqual(getCrop(),original);
+    setCropping(true);viewport.fit();
+    assert.notEqual(viewport.scale(),scale);assert.deepEqual(getCrop(),original);
+  },false,false,frame);
+});
 
 test("crop zoom and image panning keep the screen frame fixed and clamp before revealing blank pixels", () => {
   withAnimatedViewport(({canvas, viewport, crop, getCrop}) => {
